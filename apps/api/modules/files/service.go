@@ -69,7 +69,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 }
 
 func (s *Service) listFiles(ctx context.Context, folderID *int64, search string, linkedTo string, originApp string) ([]schemas.File, error) {
-	query := s.orm.WithContext(ctx).Order("created_at desc")
+	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("created_at desc")
 
 	if folderID != nil {
 		query = query.Where("folder_id = ?", *folderID)
@@ -98,7 +98,7 @@ func (s *Service) getFile(ctx context.Context, fileID string) (*schemas.File, er
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&record).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.NotFound("file not found")
 		}
@@ -126,12 +126,9 @@ func (s *Service) deleteFile(ctx context.Context, fileID string) error {
 		return err
 	}
 
-	if err := s.storage.DeleteObject(ctx, record.BucketKey); err != nil {
-		return errors.Internal("failed to delete file from storage", err)
-	}
-
-	if err := s.orm.WithContext(ctx).Delete(record).Error; err != nil {
-		return errors.Internal("failed to delete file record", err)
+	now := time.Now()
+	if err := s.orm.WithContext(ctx).Model(record).Update("deleted_at", now).Error; err != nil {
+		return errors.Internal("failed to soft delete file", err)
 	}
 	return nil
 }
@@ -217,7 +214,7 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 }
 
 func (s *Service) listFolders(ctx context.Context, parentID *int64) ([]schemas.Folder, error) {
-	query := s.orm.WithContext(ctx).Order("name asc")
+	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("name asc")
 
 	if parentID != nil {
 		query = query.Where("parent_id = ?", *parentID)
@@ -239,7 +236,7 @@ func (s *Service) getFolder(ctx context.Context, folderID string) (*schemas.Fold
 	}
 
 	var folder schemas.Folder
-	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&folder).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&folder).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, nil, errors.NotFound("folder not found")
 		}
@@ -247,12 +244,12 @@ func (s *Service) getFolder(ctx context.Context, folderID string) (*schemas.Fold
 	}
 
 	var childFiles []schemas.File
-	if err := s.orm.WithContext(ctx).Where("folder_id = ?", id).Order("created_at desc").Find(&childFiles).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("folder_id = ? AND deleted_at IS NULL", id).Order("created_at desc").Find(&childFiles).Error; err != nil {
 		return nil, nil, nil, errors.Internal("failed to list folder files", err)
 	}
 
 	var childFolders []schemas.Folder
-	if err := s.orm.WithContext(ctx).Where("parent_id = ?", id).Order("name asc").Find(&childFolders).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("parent_id = ? AND deleted_at IS NULL", id).Order("name asc").Find(&childFolders).Error; err != nil {
 		return nil, nil, nil, errors.Internal("failed to list subfolders", err)
 	}
 
@@ -308,8 +305,16 @@ func (s *Service) deleteFolder(ctx context.Context, folderID string) error {
 		return errors.Invalid("invalid folder id")
 	}
 
+	var folder schemas.Folder
+	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&folder).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.NotFound("folder not found")
+		}
+		return errors.Internal("failed to read folder", err)
+	}
+
 	var fileCount int64
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("folder_id = ?", id).Count(&fileCount).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("folder_id = ? AND deleted_at IS NULL", id).Count(&fileCount).Error; err != nil {
 		return errors.Internal("failed to check folder contents", err)
 	}
 	if fileCount > 0 {
@@ -317,19 +322,16 @@ func (s *Service) deleteFolder(ctx context.Context, folderID string) error {
 	}
 
 	var subfolderCount int64
-	if err := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("parent_id = ?", id).Count(&subfolderCount).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("parent_id = ? AND deleted_at IS NULL", id).Count(&subfolderCount).Error; err != nil {
 		return errors.Internal("failed to check subfolders", err)
 	}
 	if subfolderCount > 0 {
 		return errors.Failed("folder contains subfolders")
 	}
 
-	result := s.orm.WithContext(ctx).Delete(&schemas.Folder{}, id)
-	if result.Error != nil {
-		return errors.Internal("failed to delete folder", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return errors.NotFound("folder not found")
+	now := time.Now()
+	if err := s.orm.WithContext(ctx).Model(&folder).Update("deleted_at", now).Error; err != nil {
+		return errors.Internal("failed to soft delete folder", err)
 	}
 	return nil
 }

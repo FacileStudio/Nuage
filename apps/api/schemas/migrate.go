@@ -9,7 +9,7 @@ import (
 )
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&User{}, &Session{}, &ApiToken{}, &File{}, &Folder{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ApiToken{}, &File{}, &Folder{}, &Share{}, &Setting{}); err != nil {
 		return err
 	}
 	return usercolor.BackfillMissing(context.Background(), db)

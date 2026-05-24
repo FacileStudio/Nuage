@@ -54,6 +54,31 @@ export type FolderDetailResponse = {
 	folders: Folder[];
 };
 
+export type Share = {
+	id: number;
+	token: string;
+	file_id: number | null;
+	folder_id: number | null;
+	shared_by: number;
+	shared_with: number | null;
+	permission: string;
+	expires_at: string | null;
+	created_at: string;
+	file?: NuageFile;
+	folder?: Folder;
+};
+
+export type TrashResponse = {
+	files: NuageFile[];
+	folders: Folder[];
+};
+
+export type ApiToken = {
+	token: string;
+	name: string;
+	created_at: string;
+};
+
 type ApiErrorPayload = {
 	error?: { message?: string };
 };
@@ -190,5 +215,98 @@ export const backend = {
 
 	deleteFolder(token: string, id: number) {
 		return apiFetch<{ deleted: boolean }>(`/folders/${id}`, { method: 'DELETE' }, token);
+	},
+
+	listTrash(token: string) {
+		return apiFetch<TrashResponse>('/trash', {}, token);
+	},
+
+	restoreItem(token: string, type: 'file' | 'folder', id: number) {
+		return apiFetch<{}>(`/trash/${type}/${id}/restore`, { method: 'POST' }, token);
+	},
+
+	permanentDelete(token: string, type: 'file' | 'folder', id: number) {
+		return apiFetch<{}>(`/trash/${type}/${id}`, { method: 'DELETE' }, token);
+	},
+
+	createShare(token: string, data: { file_id?: number; folder_id?: number; shared_with?: number; permission?: string; expires_at?: string }) {
+		return apiFetch<Share>('/shares', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	listSharedWithMe(token: string) {
+		return apiFetch<{ shares: Share[] }>('/shares', {}, token);
+	},
+
+	listMyShares(token: string) {
+		return apiFetch<{ shares: Share[] }>('/shares/by-me', {}, token);
+	},
+
+	deleteShare(token: string, id: number) {
+		return apiFetch<{}>(`/shares/${id}`, { method: 'DELETE' }, token);
+	},
+
+	getSettings(token: string) {
+		return apiFetch<Record<string, string>>('/settings', {}, token);
+	},
+
+	updateSettings(token: string, data: Record<string, string>) {
+		return apiFetch<Record<string, string>>('/settings', {
+			method: 'PUT',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	testNook(token: string) {
+		return apiFetch<{ success: boolean; message?: string }>('/settings/test-nook', { method: 'POST' }, token);
+	},
+
+	updateProfile(token: string, data: { name?: string; email?: string }) {
+		return apiFetch<{ user: UserProfile }>('/users/me', {
+			method: 'PATCH',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	uploadAvatar(token: string, formData: FormData) {
+		const headers = new Headers();
+		headers.set('Authorization', `Bearer ${token}`);
+		return fetch(`${backendBaseUrl}/users/me/avatar`, {
+			method: 'POST',
+			body: formData,
+			headers
+		}).then(async (r) => {
+			if (!r.ok) {
+				let payload: ApiErrorPayload | undefined;
+				try {
+					payload = (await r.json()) as ApiErrorPayload;
+				} catch {
+					payload = undefined;
+				}
+				throw new Error(payload?.error?.message || `Upload failed with status ${r.status}`);
+			}
+			return (await r.json()) as { avatar_url: string };
+		});
+	},
+
+	deleteAvatar(token: string) {
+		return apiFetch<{}>('/users/me/avatar', { method: 'DELETE' }, token);
+	},
+
+	getApiToken(token: string) {
+		return apiFetch<{ tokens: ApiToken[] }>('/users/me/api-token', {}, token);
+	},
+
+	createApiToken(token: string, data: { name: string }) {
+		return apiFetch<ApiToken>('/users/me/api-token', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	deleteApiToken(token: string) {
+		return apiFetch<{}>('/users/me/api-token', { method: 'DELETE' }, token);
 	}
 };

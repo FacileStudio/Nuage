@@ -20,6 +20,9 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
+	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
+	"github.com/FacileStudio/Nuage/apps/api/modules/sharing"
+	"github.com/FacileStudio/Nuage/apps/api/modules/trash"
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
@@ -83,6 +86,9 @@ func main() {
 	authService := auth.NewService(db)
 	userService := users.NewService(db, appEnv.StorageDir)
 	fileService := files.NewService(db, storageClient)
+	trashService := trash.NewService(db, storageClient)
+	sharingService := sharing.NewService(db)
+	settingsService := settings.NewService(db)
 	docs := documentation.Response{
 		Modules: []documentation.Module{
 			auth.Documentation,
@@ -117,6 +123,9 @@ func main() {
 	auth.RegisterRoutes(router, authService, appEnv)
 	users.RegisterRoutes(router, userService, authService)
 	files.RegisterRoutes(router, fileService, authService)
+	trash.RegisterRoutes(router, trashService, authService)
+	sharing.RegisterRoutes(router, sharingService, authService)
+	settings.RegisterRoutes(router, settingsService, authService)
 
 	addr := ":" + appEnv.Port
 	server := &http.Server{

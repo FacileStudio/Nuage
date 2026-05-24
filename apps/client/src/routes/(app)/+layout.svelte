@@ -56,9 +56,10 @@
 	}
 
 	const navLinks: { href: string; label: string; icon: string; disabled: boolean }[] = [
-		{ href: '/drive', label: 'Drive', icon: 'solar:folder-bold-duotone', disabled: false },
-		{ href: '/shared', label: 'Shared', icon: 'solar:share-bold-duotone', disabled: true },
-		{ href: '/trash', label: 'Trash', icon: 'solar:trash-bin-2-bold-duotone', disabled: true }
+		{ href: '/drive', label: 'Drive', icon: 'solar:folder-linear', disabled: false },
+		{ href: '/shared', label: 'Shared', icon: 'solar:share-linear', disabled: false },
+		{ href: '/trash', label: 'Trash', icon: 'solar:trash-bin-2-linear', disabled: false },
+		{ href: '/settings', label: 'Settings', icon: 'solar:settings-linear', disabled: false }
 	];
 </script>
 
@@ -69,7 +70,7 @@
 			onclick={() => mobileMenuOpen = !mobileMenuOpen}
 			aria-label="Toggle menu"
 		>
-			<iconify-icon icon={mobileMenuOpen ? 'solar:close-circle-bold-duotone' : 'solar:hamburger-menu-bold-duotone'} width="20"></iconify-icon>
+			<iconify-icon icon={mobileMenuOpen ? 'solar:close-circle-linear' : 'solar:hamburger-menu-linear'} width="20"></iconify-icon>
 		</button>
 
 		{#if mobileMenuOpen}
@@ -127,7 +128,7 @@
 					onclick={logout}
 					class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-destructive hover:bg-destructive/10"
 				>
-					<iconify-icon icon="solar:logout-2-bold-duotone" width="16"></iconify-icon>
+					<iconify-icon icon="solar:logout-2-linear" width="16"></iconify-icon>
 					Logout
 				</button>
 			</div>

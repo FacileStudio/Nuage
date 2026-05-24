@@ -89,7 +89,7 @@
 			<div class="grid gap-6 md:grid-cols-3">
 				<div class="rounded-lg border border-border p-6">
 					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border">
-						<iconify-icon icon="solar:upload-bold-duotone" width="20"></iconify-icon>
+						<iconify-icon icon="solar:upload-linear" width="20"></iconify-icon>
 					</div>
 					<h3 class="text-base font-semibold">Upload anything</h3>
 					<p class="mt-1.5 text-sm text-muted-foreground">
@@ -99,7 +99,7 @@
 
 				<div class="rounded-lg border border-border p-6">
 					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border">
-						<iconify-icon icon="solar:folder-bold-duotone" width="20"></iconify-icon>
+						<iconify-icon icon="solar:folder-linear" width="20"></iconify-icon>
 					</div>
 					<h3 class="text-base font-semibold">Organize with folders</h3>
 					<p class="mt-1.5 text-sm text-muted-foreground">
@@ -109,7 +109,7 @@
 
 				<div class="rounded-lg border border-border p-6">
 					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border">
-						<iconify-icon icon="solar:lock-bold-duotone" width="20"></iconify-icon>
+						<iconify-icon icon="solar:lock-linear" width="20"></iconify-icon>
 					</div>
 					<h3 class="text-base font-semibold">Self-hosted</h3>
 					<p class="mt-1.5 text-sm text-muted-foreground">
