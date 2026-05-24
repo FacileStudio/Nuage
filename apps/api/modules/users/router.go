@@ -21,15 +21,6 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 			httpjson.WriteJSON(w, http.StatusOK, resp)
 		})
 
-		router.With(middleware.RequireAuth(authService)).Get("/{id}", func(w http.ResponseWriter, request *http.Request) {
-			resp, err := service.controller.get(request.Context(), chi.URLParam(request, "id"))
-			if err != nil {
-				httpjson.WriteError(w, err)
-				return
-			}
-			httpjson.WriteJSON(w, http.StatusOK, resp)
-		})
-
 		router.With(middleware.RequireAuth(authService)).Get("/me", func(w http.ResponseWriter, request *http.Request) {
 			resp, err := service.controller.me(request.Context())
 			if err != nil {
@@ -102,6 +93,15 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 				return
 			}
 			httpjson.WriteJSON(w, http.StatusOK, map[string]bool{"deleted": true})
+		})
+
+		router.With(middleware.RequireAuth(authService)).Get("/{id}", func(w http.ResponseWriter, request *http.Request) {
+			resp, err := service.controller.get(request.Context(), chi.URLParam(request, "id"))
+			if err != nil {
+				httpjson.WriteError(w, err)
+				return
+			}
+			httpjson.WriteJSON(w, http.StatusOK, resp)
 		})
 	})
 }

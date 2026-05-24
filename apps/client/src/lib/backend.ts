@@ -16,6 +16,8 @@ export type UserProfile = {
 	id: string;
 	email: string;
 	name: string;
+	avatar_url: string;
+	color: string;
 	created_at: string;
 };
 
@@ -24,31 +26,34 @@ export type MeResponse = {
 };
 
 export type NuageFile = {
-	id: string;
+	id: number;
+	facile_id: string;
 	name: string;
 	mime_type: string;
 	size: number;
-	folder_id: string | null;
-	user_id: string;
+	folder_id: number | null;
+	origin_app: string;
+	linked_to: string;
+	uploaded_by: number;
 	created_at: string;
 	updated_at: string;
 };
 
 export type Folder = {
-	id: string;
+	id: number;
+	facile_id: string;
 	name: string;
-	parent_id: string | null;
-	user_id: string;
+	parent_id: number | null;
+	owner_id: number;
 	created_at: string;
-	updated_at: string;
 };
 
-export type FileLink = {
-	id: string;
-	file_id: string;
-	token: string;
-	expires_at: string | null;
-	created_at: string;
+export type FolderResponse = Folder;
+
+export type FolderDetailResponse = {
+	folder: Folder;
+	files: NuageFile[];
+	folders: Folder[];
 };
 
 type ApiErrorPayload = {
@@ -103,10 +108,12 @@ export const backend = {
 		return apiFetch<MeResponse>('/users/me', {}, token);
 	},
 
-	listFiles(token: string, params?: { folder_id?: string; search?: string }) {
+	listFiles(token: string, params?: { folder_id?: number; search?: string; linked_to?: string; origin_app?: string }) {
 		const qs = new URLSearchParams();
-		if (params?.folder_id) qs.set('folder_id', params.folder_id);
+		if (params?.folder_id != null) qs.set('folder_id', String(params.folder_id));
 		if (params?.search) qs.set('search', params.search);
+		if (params?.linked_to) qs.set('linked_to', params.linked_to);
+		if (params?.origin_app) qs.set('origin_app', params.origin_app);
 		const query = qs.size ? `?${qs}` : '';
 		return apiFetch<{ files: NuageFile[] }>(`/files${query}`, {}, token);
 	},
@@ -128,62 +135,62 @@ export const backend = {
 				}
 				throw new Error(payload?.error?.message || `Upload failed with status ${r.status}`);
 			}
-			return (await r.json()) as { file: NuageFile };
+			return (await r.json()) as NuageFile;
 		});
 	},
 
-	getFile(token: string, id: string) {
-		return apiFetch<{ file: NuageFile }>(`/files/${id}`, {}, token);
+	getFile(token: string, id: number) {
+		return apiFetch<NuageFile>(`/files/${id}`, {}, token);
 	},
 
-	downloadUrl(token: string, id: string) {
+	downloadUrl(token: string, id: number): string {
 		return `${backendBaseUrl}/files/${id}/download?token=${encodeURIComponent(token)}`;
 	},
 
-	deleteFile(token: string, id: string) {
+	deleteFile(token: string, id: number) {
 		return apiFetch<{ deleted: boolean }>(`/files/${id}`, { method: 'DELETE' }, token);
 	},
 
-	updateFile(token: string, id: string, data: { name?: string; folder_id?: string | null }) {
-		return apiFetch<{ file: NuageFile }>(`/files/${id}`, {
+	updateFile(token: string, id: number, data: { name?: string; folder_id?: number | null }) {
+		return apiFetch<NuageFile>(`/files/${id}`, {
 			method: 'PUT',
 			body: JSON.stringify(data)
 		}, token);
 	},
 
-	linkFile(token: string, id: string, data?: { expires_in?: number }) {
-		return apiFetch<{ link: FileLink }>(`/files/${id}/link`, {
-			method: 'POST',
-			body: JSON.stringify(data ?? {})
-		}, token);
-	},
-
-	createFolder(token: string, data: { name: string; parent_id?: string | null }) {
-		return apiFetch<{ folder: Folder }>('/folders', {
+	linkFile(token: string, id: number, data: { linked_to: string }) {
+		return apiFetch<NuageFile>(`/files/${id}/link`, {
 			method: 'POST',
 			body: JSON.stringify(data)
 		}, token);
 	},
 
-	listFolders(token: string, params?: { parent_id?: string | null }) {
+	createFolder(token: string, data: { name: string; parent_id?: number | null }) {
+		return apiFetch<FolderResponse>('/folders', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	listFolders(token: string, params?: { parent_id?: number | null }) {
 		const qs = new URLSearchParams();
-		if (params?.parent_id) qs.set('parent_id', params.parent_id);
+		if (params?.parent_id != null) qs.set('parent_id', String(params.parent_id));
 		const query = qs.size ? `?${qs}` : '';
 		return apiFetch<{ folders: Folder[] }>(`/folders${query}`, {}, token);
 	},
 
-	getFolder(token: string, id: string) {
-		return apiFetch<{ folder: Folder }>(`/folders/${id}`, {}, token);
+	getFolder(token: string, id: number) {
+		return apiFetch<FolderDetailResponse>(`/folders/${id}`, {}, token);
 	},
 
-	updateFolder(token: string, id: string, data: { name?: string; parent_id?: string | null }) {
-		return apiFetch<{ folder: Folder }>(`/folders/${id}`, {
+	updateFolder(token: string, id: number, data: { name?: string; parent_id?: number | null }) {
+		return apiFetch<FolderResponse>(`/folders/${id}`, {
 			method: 'PUT',
 			body: JSON.stringify(data)
 		}, token);
 	},
 
-	deleteFolder(token: string, id: string) {
+	deleteFolder(token: string, id: number) {
 		return apiFetch<{ deleted: boolean }>(`/folders/${id}`, { method: 'DELETE' }, token);
 	}
 };

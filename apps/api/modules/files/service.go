@@ -26,7 +26,7 @@ func NewService(orm *gorm.DB, storageClient *storage.Client) *Service {
 	return &Service{orm: orm, storage: storageClient}
 }
 
-func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, size int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
+func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, _ int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
 	if folderID != nil {
 		var folder schemas.Folder
 		if err := s.orm.WithContext(ctx).Where("id = ?", *folderID).First(&folder).Error; err != nil {
@@ -40,15 +40,20 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 	facileID := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s/%s", userID, facileID, name)
 
-	if err := s.storage.PutObject(ctx, bucketKey, reader, size, mimeType); err != nil {
+	if err := s.storage.PutObject(ctx, bucketKey, reader, -1, mimeType); err != nil {
 		return nil, errors.Internal("failed to upload file", err)
+	}
+
+	info, err := s.storage.StatObject(ctx, bucketKey)
+	if err != nil {
+		return nil, errors.Internal("failed to stat uploaded file", err)
 	}
 
 	record := &schemas.File{
 		FacileID:   facileID,
 		Name:       name,
 		MimeType:   mimeType,
-		Size:       size,
+		Size:       info.Size,
 		BucketKey:  bucketKey,
 		FolderID:   folderID,
 		OriginApp:  originApp,

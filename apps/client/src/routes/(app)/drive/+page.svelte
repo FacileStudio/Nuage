@@ -8,14 +8,15 @@
 
 	let files = $state<NuageFile[]>([]);
 	let folders = $state<Folder[]>([]);
-	let breadcrumbs = $state<{ id: string | null; name: string }[]>([{ id: null, name: 'My Drive' }]);
-	let currentFolderId = $state<string | null>(null);
+	let breadcrumbs = $state<{ id: number | null; name: string }[]>([{ id: null, name: 'My Drive' }]);
+	let currentFolderId = $state<number | null>(null);
 	let viewMode = $state<'grid' | 'list'>('grid');
 	let loading = $state(true);
 	let searchQuery = $state('');
 	let searchTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 
-	let dragging = $state(false);
+	let dragCounter = $state(0);
+	let dragging = $derived(dragCounter > 0);
 	let uploading = $state(false);
 	let uploadProgress = $state('');
 
@@ -28,18 +29,21 @@
 	let showNewFolderDialog = $state(false);
 	let newFolderName = $state('');
 
-	let currentFolderIdFromUrl = $derived(page.url.searchParams.get('folder') || null);
+	let currentFolderIdFromUrl = $derived.by(() => {
+		const raw = page.url.searchParams.get('folder');
+		if (!raw) return null;
+		const parsed = Number(raw);
+		return Number.isFinite(parsed) ? parsed : null;
+	});
 
 	$effect(() => {
-		if (currentFolderIdFromUrl !== currentFolderId) {
-			currentFolderId = currentFolderIdFromUrl;
-			loadContents();
-			loadBreadcrumbs();
-		}
+		const urlFolderId = currentFolderIdFromUrl;
+		currentFolderId = urlFolderId;
+		loadContents();
+		loadBreadcrumbs();
 	});
 
 	onMount(() => {
-		loadContents();
 		document.addEventListener('click', closeContextMenu);
 		return () => document.removeEventListener('click', closeContextMenu);
 	});
@@ -52,9 +56,7 @@
 					folder_id: currentFolderId ?? undefined,
 					search: searchQuery || undefined
 				}),
-				backend.listFolders(app.token, {
-					parent_id: currentFolderId
-				})
+				backend.listFolders(app.token, currentFolderId != null ? { parent_id: currentFolderId } : undefined)
 			]);
 			files = fileRes.files ?? [];
 			folders = searchQuery ? [] : (folderRes.folders ?? []);
@@ -66,13 +68,13 @@
 	}
 
 	async function loadBreadcrumbs() {
-		if (!currentFolderId) {
+		if (currentFolderId == null) {
 			breadcrumbs = [{ id: null, name: 'My Drive' }];
 			return;
 		}
-		const trail: { id: string | null; name: string }[] = [];
-		let folderId: string | null = currentFolderId;
-		while (folderId) {
+		const trail: { id: number | null; name: string }[] = [];
+		let folderId: number | null = currentFolderId;
+		while (folderId != null) {
 			try {
 				const res = await backend.getFolder(app.token, folderId);
 				trail.unshift({ id: res.folder.id, name: res.folder.name });
@@ -85,8 +87,8 @@
 		breadcrumbs = trail;
 	}
 
-	function navigateToFolder(folderId: string | null) {
-		if (folderId) {
+	function navigateToFolder(folderId: number | null) {
+		if (folderId != null) {
 			goto(`/drive?folder=${folderId}`);
 		} else {
 			goto('/drive');
@@ -106,7 +108,7 @@
 
 	async function handleFileDrop(e: DragEvent) {
 		e.preventDefault();
-		dragging = false;
+		dragCounter = 0;
 		const droppedFiles = e.dataTransfer?.files;
 		if (!droppedFiles?.length) return;
 		await uploadFiles(droppedFiles);
@@ -114,11 +116,15 @@
 
 	function handleDragOver(e: DragEvent) {
 		e.preventDefault();
-		dragging = true;
+	}
+
+	function handleDragEnter(e: DragEvent) {
+		e.preventDefault();
+		dragCounter++;
 	}
 
 	function handleDragLeave() {
-		dragging = false;
+		dragCounter--;
 	}
 
 	async function handleFileInput(e: Event) {
@@ -136,7 +142,7 @@
 			uploadProgress = `Uploading ${done + 1}/${total}: ${file.name}`;
 			const formData = new FormData();
 			formData.set('file', file);
-			if (currentFolderId) formData.set('folder_id', currentFolderId);
+			if (currentFolderId != null) formData.set('folder_id', String(currentFolderId));
 			try {
 				await backend.uploadFile(app.token, formData);
 			} catch {}
@@ -289,6 +295,7 @@
 	class="relative flex h-full flex-col"
 	ondrop={handleFileDrop}
 	ondragover={handleDragOver}
+	ondragenter={handleDragEnter}
 	ondragleave={handleDragLeave}
 	role="application"
 >
@@ -505,7 +512,7 @@
 										</button>
 									</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">—</td>
-									<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(folder.updated_at)}</td>
+									<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(folder.created_at)}</td>
 									<td class="py-2.5">
 										<button
 											class="flex h-7 w-7 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"

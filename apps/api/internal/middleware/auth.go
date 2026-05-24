@@ -16,7 +16,14 @@ type Authenticator interface {
 func RequireAuth(authService Authenticator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-			userID, rawData, err := authService.Authenticate(request.Context(), request.Header.Get("Authorization"))
+			authorization := request.Header.Get("Authorization")
+			if authorization == "" {
+				if token := request.URL.Query().Get("token"); token != "" {
+					authorization = "Bearer " + token
+				}
+			}
+
+			userID, rawData, err := authService.Authenticate(request.Context(), authorization)
 			if err != nil {
 				httpjson.WriteError(w, err)
 				return
