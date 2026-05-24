@@ -2,6 +2,14 @@
 
 Cloud file storage for the Facile Suite.
 
+## Architecture
+
+Single public endpoint: the SvelteKit client handles all user traffic and proxies `/api/*` requests to the Go API internally. Postgres and MinIO are internal Docker services with hardcoded credentials — no configuration needed.
+
+```
+Internet → SvelteKit (:3000) → Go API (:4000) → Postgres / MinIO
+```
+
 ## Stack
 
 - `apps/api`: Go, Chi, GORM, PostgreSQL, MinIO
@@ -12,23 +20,14 @@ Cloud file storage for the Facile Suite.
 
 ### Docker
 
-1. Copy the root env file and adjust values if needed:
-
 ```sh
 cp .env.example .env
-```
-
-2. Start the full stack:
-
-```sh
 docker compose up --build
 ```
 
-3. Open the app:
+Open `http://localhost:3000`.
 
-- Client: `http://localhost:3000`
-- API: `http://localhost:4000`
-- MinIO Console: `http://localhost:9001`
+Postgres and MinIO are internal services with fixed credentials — there is nothing to configure for them.
 
 ### Local development
 
@@ -58,23 +57,18 @@ The client defaults to `http://localhost:5173` and talks to `http://localhost:40
 
 ## Configuration
 
+Only external-facing variables need configuration. Internal services (Postgres, MinIO) use hardcoded defaults inside Docker.
+
 | Variable | Description | Default |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgres://postgres:postgres@db:5432/nuage?sslmode=disable` |
+| `ORIGIN` | Public URL of the SvelteKit app (needed for CSRF) | `http://localhost:3000` |
 | `DOMAINS` | Allowed frontend origins for CORS | `http://localhost:3000` |
-| `PORT` | API port | `4000` |
 | `LOG_LEVEL` | `debug`, `info`, `warn`, or `error` | `info` |
-| `MINIO_ENDPOINT` | MinIO server address | `minio:9000` |
-| `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` |
-| `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
-| `MINIO_BUCKET` | S3 bucket name | `nuage` |
-| `MINIO_USE_SSL` | Use HTTPS for MinIO | `false` |
 | `OIDC_ISSUER` | OIDC provider issuer URL | — |
 | `OIDC_CLIENT_ID` | OIDC client ID | — |
 | `OIDC_CLIENT_SECRET` | OIDC client secret | — |
-| `OIDC_REDIRECT_URL` | OIDC callback URL | — |
-| `OIDC_SUCCESS_URL` | Post-login redirect | First `DOMAINS` entry |
+| `OIDC_REDIRECT_URL` | OIDC callback URL (e.g. `https://nuage.example.com/api/auth/oidc/callback`) | — |
+| `OIDC_SUCCESS_URL` | Post-login redirect | — |
 | `SSO_ONLY` | Hide password login | `false` |
-| `VITE_API_BASE_URL` | Client-side API base URL (build-time) | `http://localhost:4000` |
 
-See [`.env.example`](.env.example) and [`apps/api/.env.example`](apps/api/.env.example) for examples.
+See [`.env.example`](.env.example) for a production-ready template.

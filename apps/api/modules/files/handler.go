@@ -1,6 +1,7 @@
 package files
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -108,12 +109,18 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
-	url, err := h.service.downloadURL(r.Context(), chi.URLParam(r, "id"))
+	reader, record, err := h.service.downloadFile(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
 	}
-	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", record.MimeType)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+record.Name+`"`)
+	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, reader)
 }
 
 func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {

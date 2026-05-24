@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-nuage}
+      POSTGRES_USER: nuage
+      POSTGRES_PASSWORD: nuage-internal-db
+      POSTGRES_DB: nuage
     volumes:
       - db_data:/var/lib/postgresql/data
     expose:
       - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U nuage"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,8 +19,8 @@ services:
     image: minio/minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: nuage-minio
+      MINIO_ROOT_PASSWORD: nuage-internal-storage
     volumes:
       - storage_data:/data
     healthcheck:
@@ -40,21 +40,21 @@ services:
     expose:
       - "4000"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/nuage?sslmode=disable}
-      PORT: ${PORT:-4000}
+      DATABASE_URL: postgres://nuage:nuage-internal-db@db:5432/nuage?sslmode=disable
+      PORT: "4000"
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DOMAINS: ${DOMAINS:-http://localhost:3000,http://127.0.0.1:3000}
+      DOMAINS: ${DOMAINS:-http://localhost:3000}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
       OIDC_SUCCESS_URL: ${OIDC_SUCCESS_URL:-}
       SSO_ONLY: ${SSO_ONLY:-false}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      MINIO_BUCKET: ${MINIO_BUCKET:-nuage}
-      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: nuage-minio
+      MINIO_SECRET_KEY: nuage-internal-storage
+      MINIO_BUCKET: nuage
+      MINIO_USE_SSL: "false"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
       interval: 10s
@@ -72,10 +72,11 @@ services:
       context: apps/client
       dockerfile: Dockerfile
       network: host
-      args:
-        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:4000}
     expose:
-      - "80"
+      - "3000"
+    environment:
+      API_URL: http://api:4000
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
     depends_on:
       api:
         condition: service_healthy

@@ -107,17 +107,17 @@ func (s *Service) getFile(ctx context.Context, fileID string) (*schemas.File, er
 	return &record, nil
 }
 
-func (s *Service) downloadURL(ctx context.Context, fileID string) (string, error) {
+func (s *Service) downloadFile(ctx context.Context, fileID string) (io.ReadCloser, *schemas.File, error) {
 	record, err := s.getFile(ctx, fileID)
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
-	url, err := s.storage.PresignedGetURL(ctx, record.BucketKey, 15*time.Minute)
+	reader, err := s.storage.GetObject(ctx, record.BucketKey)
 	if err != nil {
-		return "", errors.Internal("failed to generate download url", err)
+		return nil, nil, errors.Internal("failed to read file from storage", err)
 	}
-	return url, nil
+	return reader, record, nil
 }
 
 func (s *Service) deleteFile(ctx context.Context, fileID string) error {

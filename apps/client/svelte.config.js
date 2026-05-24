@@ -1,17 +1,9 @@
-import adapterStatic from '@sveltejs/adapter-static';
+import adapter from '@sveltejs/adapter-node';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	kit: {
-		adapter: adapterStatic({
-			pages: 'build',
-			assets: 'build',
-			fallback: 'index.html',
-			precompress: false
-		}),
-		prerender: {
-			entries: []
-		}
+		adapter: adapter()
 	},
 	vitePlugin: {
 		dynamicCompileOptions: ({ filename }) =>
