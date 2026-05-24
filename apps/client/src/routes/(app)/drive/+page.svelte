@@ -8,7 +8,7 @@
 
 	let files = $state<NuageFile[]>([]);
 	let folders = $state<Folder[]>([]);
-	let breadcrumbs = $state<{ id: number | null; name: string }[]>([{ id: null, name: 'My Drive' }]);
+	let breadcrumbs = $state<{ id: number | null; name: string }[]>([{ id: null, name: 'Files' }]);
 	let currentFolderId = $state<number | null>(null);
 	let viewMode = $state<'grid' | 'list'>('grid');
 	let loading = $state(true);
@@ -108,7 +108,7 @@
 
 	async function loadBreadcrumbs() {
 		if (currentFolderId == null) {
-			breadcrumbs = [{ id: null, name: 'My Drive' }];
+			breadcrumbs = [{ id: null, name: 'Files' }];
 			return;
 		}
 		const trail: { id: number | null; name: string }[] = [];
@@ -122,7 +122,7 @@
 				break;
 			}
 		}
-		trail.unshift({ id: null, name: 'My Drive' });
+		trail.unshift({ id: null, name: 'Files' });
 		breadcrumbs = trail;
 	}
 
@@ -332,7 +332,7 @@
 </script>
 
 <svelte:head>
-	<title>Drive — Nuage</title>
+	<title>Files — Nuage</title>
 </svelte:head>
 
 <div
