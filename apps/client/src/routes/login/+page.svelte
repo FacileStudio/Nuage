@@ -17,7 +17,7 @@
 
 	onMount(async () => {
 		if (localStorage.getItem(TOKEN_KEY)) {
-			goto('/drive');
+			goto('/files');
 			return;
 		}
 		const raw = page.url.searchParams.get('tab');
@@ -42,7 +42,7 @@
 					? await backend.register(email, password)
 					: await backend.login(email, password);
 			localStorage.setItem(TOKEN_KEY, resp.token);
-			goto('/drive');
+			goto('/files');
 		} catch (err) {
 			message = err instanceof Error ? err.message : 'Something went wrong';
 		} finally {

@@ -128,9 +128,9 @@
 
 	function navigateToFolder(folderId: number | null) {
 		if (folderId != null) {
-			goto(`/drive?folder=${folderId}`);
+			goto(`/files?folder=${folderId}`);
 		} else {
-			goto('/drive');
+			goto('/files');
 		}
 	}
 

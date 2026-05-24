@@ -61,7 +61,7 @@
 			const url = backend.downloadUrl(app.token, share.file.id);
 			window.open(url, '_blank');
 		} else if (share.folder) {
-			window.location.href = `/drive?folder=${share.folder.id}`;
+			window.location.href = `/files?folder=${share.folder.id}`;
 		}
 	}
 </script>

@@ -56,7 +56,7 @@
 	}
 
 	const navLinks: { href: string; label: string; icon: string; disabled: boolean }[] = [
-		{ href: '/drive', label: 'Files', icon: 'solar:folder-linear', disabled: false },
+		{ href: '/files', label: 'Files', icon: 'solar:folder-linear', disabled: false },
 		{ href: '/shared', label: 'Shared', icon: 'solar:share-linear', disabled: false },
 		{ href: '/trash', label: 'Trash', icon: 'solar:trash-bin-2-linear', disabled: false },
 		{ href: '/settings', label: 'Settings', icon: 'solar:settings-linear', disabled: false }

@@ -13,11 +13,11 @@
 		const token = page.url.searchParams.get('token');
 		if (token) {
 			localStorage.setItem(TOKEN_KEY, token);
-			goto('/drive');
+			goto('/files');
 			return;
 		}
 		if (localStorage.getItem(TOKEN_KEY)) {
-			goto('/drive');
+			goto('/files');
 			return;
 		}
 
