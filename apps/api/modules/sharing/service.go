@@ -8,17 +8,19 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
+	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
 )
 
 type Service struct {
-	orm *gorm.DB
+	orm      *gorm.DB
+	notifier *nook.Notifier
 }
 
-func NewService(orm *gorm.DB) *Service {
-	return &Service{orm: orm}
+func NewService(orm *gorm.DB, notifier *nook.Notifier) *Service {
+	return &Service{orm: orm, notifier: notifier}
 }
 
 func (s *Service) createShare(ctx context.Context, userID int64, req CreateShareRequest) (*schemas.Share, error) {
@@ -56,6 +58,18 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {
 		return nil, errors.Internal("failed to create share", err)
 	}
+
+	var sharedWithEmail string
+	if record.SharedWith != nil {
+		var target schemas.User
+		if err := s.orm.WithContext(ctx).Where("id = ?", *record.SharedWith).First(&target).Error; err == nil {
+			sharedWithEmail = target.Email
+		}
+	}
+	s.notifier.Notify(ctx, userID, "share.created", nook.EventData{
+		Share: &nook.ShareData{ID: record.ID, SharedWithEmail: sharedWithEmail, Permission: record.Permission},
+	})
+
 	return record, nil
 }
 
@@ -89,13 +103,22 @@ func (s *Service) deleteShare(ctx context.Context, userID int64, shareID string)
 		return errors.Invalid("invalid share id")
 	}
 
-	result := s.orm.WithContext(ctx).Where("id = ? AND shared_by = ?", id, userID).Delete(&schemas.Share{})
-	if result.Error != nil {
-		return errors.Internal("failed to delete share", result.Error)
+	var share schemas.Share
+	if err := s.orm.WithContext(ctx).Where("id = ? AND shared_by = ?", id, userID).First(&share).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.NotFound("share not found")
+		}
+		return errors.Internal("failed to find share", err)
 	}
-	if result.RowsAffected == 0 {
-		return errors.NotFound("share not found")
+
+	if err := s.orm.WithContext(ctx).Delete(&share).Error; err != nil {
+		return errors.Internal("failed to delete share", err)
 	}
+
+	s.notifier.Notify(ctx, userID, "share.revoked", nook.EventData{
+		Share: &nook.ShareData{ID: share.ID, Permission: share.Permission},
+	})
+
 	return nil
 }
 

@@ -17,11 +17,13 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
 	"github.com/FacileStudio/Nuage/apps/api/internal/logger"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
+	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
 	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sharing"
+	"github.com/FacileStudio/Nuage/apps/api/modules/sync"
 	"github.com/FacileStudio/Nuage/apps/api/modules/trash"
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -83,11 +85,14 @@ func main() {
 		}
 	}()
 
+	notifier := nook.NewNotifier(db)
+
 	authService := auth.NewService(db)
 	userService := users.NewService(db, appEnv.StorageDir)
-	fileService := files.NewService(db, storageClient)
+	fileService := files.NewService(db, storageClient, notifier)
 	trashService := trash.NewService(db, storageClient)
-	sharingService := sharing.NewService(db)
+	syncService := sync.NewService(db)
+	sharingService := sharing.NewService(db, notifier)
 	settingsService := settings.NewService(db)
 	docs := documentation.Response{
 		Modules: []documentation.Module{
@@ -126,6 +131,7 @@ func main() {
 	trash.RegisterRoutes(router, trashService, authService)
 	sharing.RegisterRoutes(router, sharingService, authService)
 	settings.RegisterRoutes(router, settingsService, authService)
+	sync.RegisterRoutes(router, syncService, authService)
 
 	addr := ":" + appEnv.Port
 	server := &http.Server{

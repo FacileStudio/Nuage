@@ -97,8 +97,8 @@ func (s *Service) testNook(ctx context.Context) (bool, string, error) {
 	if err := s.orm.WithContext(ctx).Where("key = ?", "nook_webhook_secret").First(&secretSetting).Error; err == nil && secretSetting.Value != "" {
 		mac := hmac.New(sha256.New, []byte(secretSetting.Value))
 		mac.Write(body)
-		sig := hex.EncodeToString(mac.Sum(nil))
-		req.Header.Set("X-Nuage-Signature", sig)
+		sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+		req.Header.Set("X-Nuage-Signature-256", sig)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}

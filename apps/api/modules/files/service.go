@@ -2,6 +2,8 @@ package files
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	stderrors "errors"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
+	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
@@ -18,12 +21,13 @@ import (
 )
 
 type Service struct {
-	orm     *gorm.DB
-	storage *storage.Client
+	orm      *gorm.DB
+	storage  *storage.Client
+	notifier *nook.Notifier
 }
 
-func NewService(orm *gorm.DB, storageClient *storage.Client) *Service {
-	return &Service{orm: orm, storage: storageClient}
+func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier) *Service {
+	return &Service{orm: orm, storage: storageClient, notifier: notifier}
 }
 
 func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, _ int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
@@ -40,9 +44,14 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 	facileID := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s/%s", userID, facileID, name)
 
-	if err := s.storage.PutObject(ctx, bucketKey, reader, -1, mimeType); err != nil {
+	hasher := sha256.New()
+	tee := io.TeeReader(reader, hasher)
+
+	if err := s.storage.PutObject(ctx, bucketKey, tee, -1, mimeType); err != nil {
 		return nil, errors.Internal("failed to upload file", err)
 	}
+
+	fileHash := hex.EncodeToString(hasher.Sum(nil))
 
 	info, err := s.storage.StatObject(ctx, bucketKey)
 	if err != nil {
@@ -54,6 +63,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		Name:       name,
 		MimeType:   mimeType,
 		Size:       info.Size,
+		Hash:       fileHash,
 		BucketKey:  bucketKey,
 		FolderID:   folderID,
 		OriginApp:  originApp,
@@ -64,6 +74,10 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		_ = s.storage.DeleteObject(ctx, bucketKey)
 		return nil, errors.Internal("failed to save file record", err)
 	}
+
+	s.notifier.Notify(ctx, userID, "file.uploaded", nook.EventData{
+		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	})
 
 	return record, nil
 }
@@ -122,7 +136,7 @@ func (s *Service) downloadFile(ctx context.Context, fileID string) (io.ReadClose
 	return reader, record, nil
 }
 
-func (s *Service) deleteFile(ctx context.Context, fileID string) error {
+func (s *Service) deleteFile(ctx context.Context, userID int64, fileID string) error {
 	record, err := s.getFile(ctx, fileID)
 	if err != nil {
 		return err
@@ -132,6 +146,11 @@ func (s *Service) deleteFile(ctx context.Context, fileID string) error {
 	if err := s.orm.WithContext(ctx).Model(record).Update("deleted_at", now).Error; err != nil {
 		return errors.Internal("failed to soft delete file", err)
 	}
+
+	s.notifier.Notify(ctx, userID, "file.deleted", nook.EventData{
+		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	})
+
 	return nil
 }
 
@@ -212,6 +231,11 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {
 		return nil, errors.Internal("failed to create folder", err)
 	}
+
+	s.notifier.Notify(ctx, userID, "folder.created", nook.EventData{
+		Folder: &nook.FolderData{ID: record.ID, Name: record.Name},
+	})
+
 	return record, nil
 }
 
@@ -301,7 +325,7 @@ func (s *Service) updateFolder(ctx context.Context, folderID string, name *strin
 	return &record, nil
 }
 
-func (s *Service) deleteFolder(ctx context.Context, folderID string) error {
+func (s *Service) deleteFolder(ctx context.Context, userID int64, folderID string) error {
 	id, err := strconv.ParseInt(folderID, 10, 64)
 	if err != nil {
 		return errors.Invalid("invalid folder id")
@@ -335,6 +359,11 @@ func (s *Service) deleteFolder(ctx context.Context, folderID string) error {
 	if err := s.orm.WithContext(ctx).Model(&folder).Update("deleted_at", now).Error; err != nil {
 		return errors.Internal("failed to soft delete folder", err)
 	}
+
+	s.notifier.Notify(ctx, userID, "folder.deleted", nook.EventData{
+		Folder: &nook.FolderData{ID: folder.ID, Name: folder.Name},
+	})
+
 	return nil
 }
 
@@ -345,6 +374,7 @@ func mapFile(record schemas.File) FileResponse {
 		Name:       record.Name,
 		MimeType:   record.MimeType,
 		Size:       record.Size,
+		Hash:       record.Hash,
 		FolderID:   record.FolderID,
 		OriginApp:  record.OriginApp,
 		LinkedTo:   record.LinkedTo,
@@ -362,5 +392,6 @@ func mapFolder(record schemas.Folder) FolderResponse {
 		ParentID:  record.ParentID,
 		OwnerID:   record.OwnerID,
 		CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt: record.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }

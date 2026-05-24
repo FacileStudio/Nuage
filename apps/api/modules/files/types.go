@@ -6,6 +6,7 @@ type FileResponse struct {
 	Name       string  `json:"name"`
 	MimeType   string  `json:"mime_type"`
 	Size       int64   `json:"size"`
+	Hash       string  `json:"hash"`
 	FolderID   *int64  `json:"folder_id"`
 	OriginApp  string  `json:"origin_app"`
 	LinkedTo   string  `json:"linked_to"`
@@ -34,6 +35,7 @@ type FolderResponse struct {
 	ParentID  *int64 `json:"parent_id"`
 	OwnerID   int64  `json:"owner_id"`
 	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type FolderDetailResponse struct {

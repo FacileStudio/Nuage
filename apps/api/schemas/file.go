@@ -8,6 +8,7 @@ type File struct {
 	Name       string     `json:"name" gorm:"not null"`
 	MimeType   string     `json:"mime_type"`
 	Size       int64      `json:"size"`
+	Hash       string     `json:"hash" gorm:"index"`
 	BucketKey  string     `json:"-" gorm:"not null"`
 	FolderID   *int64     `json:"folder_id" gorm:"index"`
 	OriginApp  string     `json:"origin_app"`
