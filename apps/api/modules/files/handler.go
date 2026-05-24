@@ -142,6 +142,17 @@ func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateFile(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
 	var req UpdateFileRequest
 	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
 		httpjson.WriteError(w, err)
@@ -157,7 +168,7 @@ func (h *Handler) updateFile(w http.ResponseWriter, r *http.Request) {
 		req.Name = &trimmed
 	}
 
-	record, err := h.service.updateFile(r.Context(), chi.URLParam(r, "id"), req.Name, req.FolderID)
+	record, err := h.service.updateFile(r.Context(), userID, chi.URLParam(r, "id"), req.Name, req.FolderID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -264,6 +275,17 @@ func (h *Handler) getFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateFolder(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
 	var req UpdateFolderRequest
 	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
 		httpjson.WriteError(w, err)
@@ -279,7 +301,7 @@ func (h *Handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 		req.Name = &trimmed
 	}
 
-	record, err := h.service.updateFolder(r.Context(), chi.URLParam(r, "id"), req.Name, req.ParentID)
+	record, err := h.service.updateFolder(r.Context(), userID, chi.URLParam(r, "id"), req.Name, req.ParentID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

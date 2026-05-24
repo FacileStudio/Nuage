@@ -154,7 +154,7 @@ func (s *Service) deleteFile(ctx context.Context, userID int64, fileID string) e
 	return nil
 }
 
-func (s *Service) updateFile(ctx context.Context, fileID string, name *string, folderID *int64) (*schemas.File, error) {
+func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, name *string, folderID *int64) (*schemas.File, error) {
 	id, err := strconv.ParseInt(fileID, 10, 64)
 	if err != nil {
 		return nil, errors.Invalid("invalid file id")
@@ -191,6 +191,11 @@ func (s *Service) updateFile(ctx context.Context, fileID string, name *string, f
 	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read file", err)
 	}
+
+	s.notifier.Notify(ctx, userID, "file.updated", nook.EventData{
+		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	})
+
 	return &record, nil
 }
 
@@ -282,7 +287,7 @@ func (s *Service) getFolder(ctx context.Context, folderID string) (*schemas.Fold
 	return &folder, childFiles, childFolders, nil
 }
 
-func (s *Service) updateFolder(ctx context.Context, folderID string, name *string, parentID *int64) (*schemas.Folder, error) {
+func (s *Service) updateFolder(ctx context.Context, userID int64, folderID string, name *string, parentID *int64) (*schemas.Folder, error) {
 	id, err := strconv.ParseInt(folderID, 10, 64)
 	if err != nil {
 		return nil, errors.Invalid("invalid folder id")
@@ -322,6 +327,11 @@ func (s *Service) updateFolder(ctx context.Context, folderID string, name *strin
 	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read folder", err)
 	}
+
+	s.notifier.Notify(ctx, userID, "folder.updated", nook.EventData{
+		Folder: &nook.FolderData{ID: record.ID, Name: record.Name},
+	})
+
 	return &record, nil
 }
 
