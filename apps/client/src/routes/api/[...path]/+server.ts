@@ -13,6 +13,7 @@ export const fallback: RequestHandler = async ({ request, params, url }) => {
 	const init: RequestInit = {
 		method: request.method,
 		headers,
+		redirect: 'manual',
 	};
 
 	if (request.method !== 'GET' && request.method !== 'HEAD') {
