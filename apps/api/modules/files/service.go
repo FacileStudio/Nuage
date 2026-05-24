@@ -73,6 +73,8 @@ func (s *Service) listFiles(ctx context.Context, folderID *int64, search string,
 
 	if folderID != nil {
 		query = query.Where("folder_id = ?", *folderID)
+	} else if search == "" && linkedTo == "" && originApp == "" {
+		query = query.Where("folder_id IS NULL")
 	}
 	if search != "" {
 		query = query.Where("lower(name) LIKE ?", "%"+strings.ToLower(search)+"%")
