@@ -1,17 +1,17 @@
 services:
-  db:
+  nuage-db:
     ports:
       - "5432:5432"
 
-  minio:
+  nuage-minio:
     ports:
       - "9000:9000"
       - "9001:9001"
 
-  api:
+  nuage-api:
     ports:
       - "4000:4000"
 
-  client:
+  nuage-client:
     ports:
       - "3000:3000"

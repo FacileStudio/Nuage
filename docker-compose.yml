@@ -1,5 +1,6 @@
 services:
-  db:
+  nuage-db:
+    container_name: nuage-db
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: nuage
@@ -15,7 +16,8 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
+  nuage-minio:
+    container_name: nuage-minio
     image: minio/minio
     command: server /data --console-address ":9001"
     environment:
@@ -32,7 +34,8 @@ services:
       - "9000"
       - "9001"
 
-  api:
+  nuage-api:
+    container_name: nuage-api
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -40,7 +43,7 @@ services:
     expose:
       - "4000"
     environment:
-      DATABASE_URL: postgres://nuage:nuage-internal-db@db:5432/nuage?sslmode=disable
+      DATABASE_URL: postgres://nuage:nuage-internal-db@nuage-db:5432/nuage?sslmode=disable
       PORT: "4000"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
@@ -49,7 +52,7 @@ services:
       OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
       OIDC_SUCCESS_URL: ${OIDC_SUCCESS_URL:-}
       SSO_ONLY: ${SSO_ONLY:-false}
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: nuage-minio:9000
       MINIO_ACCESS_KEY: nuage-minio
       MINIO_SECRET_KEY: nuage-internal-storage
       MINIO_BUCKET: nuage
@@ -61,12 +64,13 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      db:
+      nuage-db:
         condition: service_healthy
-      minio:
+      nuage-minio:
         condition: service_healthy
 
-  client:
+  nuage-client:
+    container_name: nuage-client
     build:
       context: apps/client
       dockerfile: Dockerfile
@@ -74,10 +78,10 @@ services:
     expose:
       - "3000"
     environment:
-      API_URL: http://api:4000
+      API_URL: http://nuage-api:4000
       ORIGIN: ${ORIGIN:-http://localhost:3000}
     depends_on:
-      api:
+      nuage-api:
         condition: service_healthy
 
 volumes:
