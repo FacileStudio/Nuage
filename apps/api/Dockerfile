@@ -12,7 +12,9 @@ COPY apps/api ./
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} go build -o bin/api .
 
-FROM gcr.io/distroless/static-debian12
+FROM alpine:3.20
+
+RUN apk add --no-cache wget
 
 COPY --from=build /repo/apps/api/bin/api /api
 
