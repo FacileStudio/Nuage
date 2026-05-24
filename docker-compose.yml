@@ -43,7 +43,7 @@ services:
       DATABASE_URL: postgres://nuage:nuage-internal-db@db:5432/nuage?sslmode=disable
       PORT: "4000"
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DOMAINS: ${DOMAINS:-http://localhost:3000}
+      DOMAINS: "*"
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}

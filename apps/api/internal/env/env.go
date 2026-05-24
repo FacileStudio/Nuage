@@ -24,14 +24,13 @@ type MinIOConfig struct {
 }
 
 type Config struct {
-	DatabaseURL        string
-	Port               string
-	CORSAllowedOrigins []string
-	LogLevel           string
-	StorageDir         string
-	OIDC               *OIDCConfig
-	SSOOnly            bool
-	MinIO              MinIOConfig
+	DatabaseURL string
+	Port        string
+	LogLevel    string
+	StorageDir  string
+	OIDC        *OIDCConfig
+	SSOOnly     bool
+	MinIO       MinIOConfig
 }
 
 func Load() (Config, error) {
@@ -40,12 +39,6 @@ func Load() (Config, error) {
 		Port:        valueOrDefault("PORT", "4000"),
 		LogLevel:    valueOrDefault("LOG_LEVEL", "info"),
 		StorageDir:  valueOrDefault("STORAGE_DIR", "./data"),
-		CORSAllowedOrigins: csvOrDefault("DOMAINS", []string{
-			"http://localhost:3000",
-			"http://127.0.0.1:3000",
-			"http://localhost:5173",
-			"http://127.0.0.1:5173",
-		}),
 		MinIO: MinIOConfig{
 			Endpoint:  valueOrDefault("MINIO_ENDPOINT", "localhost:9000"),
 			AccessKey: valueOrDefault("MINIO_ACCESS_KEY", "minioadmin"),
@@ -59,9 +52,6 @@ func Load() (Config, error) {
 	if err != nil || port < 1 || port > 65535 {
 		return Config{}, fmt.Errorf("PORT must be a valid TCP port")
 	}
-	if err := validateOrigins(env.CORSAllowedOrigins); err != nil {
-		return Config{}, err
-	}
 	if err := validateLogLevel(env.LogLevel); err != nil {
 		return Config{}, err
 	}
@@ -72,12 +62,9 @@ func Load() (Config, error) {
 		clientID := os.Getenv("OIDC_CLIENT_ID")
 		clientSecret := os.Getenv("OIDC_CLIENT_SECRET")
 		redirectURL := os.Getenv("OIDC_REDIRECT_URL")
-		if clientID == "" || clientSecret == "" || redirectURL == "" {
-			return Config{}, fmt.Errorf("OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, and OIDC_REDIRECT_URL are required when OIDC_ISSUER is set")
-		}
 		successURL := os.Getenv("OIDC_SUCCESS_URL")
-		if successURL == "" && len(env.CORSAllowedOrigins) > 0 {
-			successURL = env.CORSAllowedOrigins[0]
+		if clientID == "" || clientSecret == "" || redirectURL == "" || successURL == "" {
+			return Config{}, fmt.Errorf("OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URL, and OIDC_SUCCESS_URL are required when OIDC_ISSUER is set")
 		}
 		env.OIDC = &OIDCConfig{
 			Issuer:       issuer,
@@ -96,44 +83,6 @@ func valueOrDefault(key string, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func csvOrDefault(key string, fallback []string) []string {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
-	}
-
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	if len(out) == 0 {
-		return []string{}
-	}
-	return out
-}
-
-func validateOrigins(origins []string) error {
-	if len(origins) == 0 {
-		return fmt.Errorf("DOMAINS must contain at least one origin")
-	}
-
-	for _, origin := range origins {
-		if origin == "*" {
-			continue
-		}
-		if strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://") {
-			continue
-		}
-		return fmt.Errorf("DOMAINS contains invalid origin %q", origin)
-	}
-
-	return nil
 }
 
 func validateLogLevel(level string) error {

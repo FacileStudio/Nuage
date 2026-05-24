@@ -94,7 +94,7 @@ func main() {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.RealIP)
-	router.Use(middleware.CORS(appEnv.CORSAllowedOrigins))
+	router.Use(middleware.CORS([]string{"*"}))
 	router.Use(middleware.RequestLogger(appLogger))
 	router.Use(chimiddleware.Recoverer)
 
