@@ -427,6 +427,13 @@
 			toggleSelect(type, item.id, index, e);
 			return;
 		}
+		selectedItems = new Set([itemKey(type, item.id)]);
+		lastClickedIndex = index;
+	}
+
+	function handleItemDblClick(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
+		e.preventDefault();
+		e.stopPropagation();
 		selectedItems = new Set();
 		lastClickedIndex = -1;
 		if (type === 'folder') openFolder(item as Folder);
@@ -604,6 +611,7 @@
 								<button
 									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {isSelected('folder', folder.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
 									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
+									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
 									<div class="absolute top-2 left-2 z-10 {isSelected('folder', folder.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
@@ -647,6 +655,7 @@
 								<button
 									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {isSelected('file', file.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
 									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
+									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
 									<div class="absolute top-2 left-2 z-10 {isSelected('file', file.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
@@ -717,6 +726,7 @@
 								<tr
 									class="group cursor-pointer border-b border-border/50 transition-colors {isSelected('folder', folder.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}"
 									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
+									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
@@ -763,6 +773,7 @@
 								<tr
 									class="group cursor-pointer border-b border-border/50 transition-colors {isSelected('file', file.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}"
 									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
+									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
