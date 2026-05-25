@@ -129,15 +129,17 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 		}
 		var versions []schemas.FileVersion
 		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Find(&versions)
+		var versionBytes int64
 		for _, v := range versions {
 			_ = s.storage.DeleteObject(ctx, v.BucketKey)
+			versionBytes += v.Size
 		}
 		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Delete(&schemas.FileVersion{})
 		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
 			return errors.Internal("failed to delete file record", err)
 		}
 		if s.quota != nil {
-			s.quota.UpdateUsage(ctx, userID, -record.Size)
+			s.quota.UpdateUsage(ctx, userID, -(record.Size + versionBytes))
 		}
 		if s.activity != nil {
 			s.activity.Log(ctx, activity.Entry{

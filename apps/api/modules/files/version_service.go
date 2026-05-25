@@ -7,6 +7,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -28,11 +29,17 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ? AND deleted_at IS NULL", id, userID).First(&record).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.NotFound("file not found")
 		}
 		return nil, errors.Internal("failed to read file", err)
+	}
+
+	if s.quota != nil && size > 0 {
+		if err := s.quota.CheckQuota(ctx, userID, size); err != nil {
+			return nil, err
+		}
 	}
 
 	var maxVersion int
@@ -70,6 +77,7 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 		return nil, errors.Internal("failed to stat new version", err)
 	}
 
+	oldSize := record.Size
 	updates := map[string]any{
 		"bucket_key": newBucketKey,
 		"hash":       fileHash,
@@ -82,7 +90,14 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 		return nil, errors.Internal("failed to update file record", err)
 	}
 
-	go s.cleanOldVersions(record.ID)
+	if s.quota != nil {
+		sizeDelta := info.Size - oldSize
+		if sizeDelta != 0 {
+			s.quota.UpdateUsage(ctx, userID, sizeDelta)
+		}
+	}
+
+	go s.cleanOldVersions(record.ID, userID)
 
 	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read updated file", err)
@@ -135,7 +150,7 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", fid).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ? AND deleted_at IS NULL", fid, userID).First(&record).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.NotFound("file not found")
 		}
@@ -178,6 +193,7 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 		return nil, errors.Internal("failed to stat restored file", err)
 	}
 
+	oldSize := record.Size
 	updates := map[string]any{
 		"bucket_key": newBucketKey,
 		"hash":       version.Hash,
@@ -189,17 +205,25 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 		return nil, errors.Internal("failed to update file record", err)
 	}
 
+	if s.quota != nil {
+		sizeDelta := info.Size - oldSize
+		if sizeDelta != 0 {
+			s.quota.UpdateUsage(ctx, userID, sizeDelta)
+		}
+	}
+
 	if err := s.orm.WithContext(ctx).Where("id = ?", fid).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read restored file", err)
 	}
 
-	go s.cleanOldVersions(fid)
+	go s.cleanOldVersions(fid, userID)
 
 	return &record, nil
 }
 
-func (s *Service) cleanOldVersions(fileID int64) {
-	ctx := context.Background()
+func (s *Service) cleanOldVersions(fileID int64, userID int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	maxVersions := defaultMaxVersions
 	var setting schemas.Setting
@@ -210,16 +234,27 @@ func (s *Service) cleanOldVersions(fileID int64) {
 	}
 
 	var versions []schemas.FileVersion
-	s.orm.WithContext(ctx).Where("file_id = ?", fileID).Order("version desc").Find(&versions)
+	if err := s.orm.WithContext(ctx).Where("file_id = ?", fileID).Order("version desc").Find(&versions).Error; err != nil {
+		slog.Warn("versioning: failed to list versions for cleanup", slog.Any("error", err))
+		return
+	}
 
 	if len(versions) <= maxVersions {
 		return
 	}
 
 	toDelete := versions[maxVersions:]
+	var freedBytes int64
 	for _, v := range toDelete {
-		_ = s.storage.DeleteObject(ctx, v.BucketKey)
+		if err := s.storage.DeleteObject(ctx, v.BucketKey); err != nil {
+			slog.Warn("versioning: failed to delete version from storage", slog.Any("error", err))
+		}
+		freedBytes += v.Size
 		s.orm.WithContext(ctx).Delete(&v)
+	}
+
+	if s.quota != nil && freedBytes > 0 {
+		s.quota.UpdateUsage(ctx, userID, -freedBytes)
 	}
 }
 

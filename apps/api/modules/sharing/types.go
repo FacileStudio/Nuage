@@ -25,9 +25,9 @@ type ShareListResponse struct {
 }
 
 type PublicShareResponse struct {
-	Token      string       `json:"token"`
-	Permission string       `json:"permission"`
-	File       *PublicFile  `json:"file,omitempty"`
+	Token      string        `json:"token"`
+	Permission string        `json:"permission"`
+	File       *PublicFile   `json:"file,omitempty"`
 	Folder     *PublicFolder `json:"folder,omitempty"`
 }
 

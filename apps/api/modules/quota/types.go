@@ -1,9 +1,9 @@
 package quota
 
 type UsageResponse struct {
-	UserID       int64  `json:"user_id"`
-	StorageUsed  int64  `json:"storage_used"`
-	StorageLimit int64  `json:"storage_limit"`
+	UserID       int64   `json:"user_id"`
+	StorageUsed  int64   `json:"storage_used"`
+	StorageLimit int64   `json:"storage_limit"`
 	Percentage   float64 `json:"percentage"`
 }
 

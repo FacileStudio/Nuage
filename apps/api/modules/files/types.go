@@ -1,18 +1,18 @@
 package files
 
 type FileResponse struct {
-	ID         int64   `json:"id"`
-	FacileID   string  `json:"facile_id"`
-	Name       string  `json:"name"`
-	MimeType   string  `json:"mime_type"`
-	Size       int64   `json:"size"`
-	Hash       string  `json:"hash"`
-	FolderID   *int64  `json:"folder_id"`
-	OriginApp  string  `json:"origin_app"`
-	LinkedTo   string  `json:"linked_to"`
-	UploadedBy int64   `json:"uploaded_by"`
-	CreatedAt  string  `json:"created_at"`
-	UpdatedAt  string  `json:"updated_at"`
+	ID         int64  `json:"id"`
+	FacileID   string `json:"facile_id"`
+	Name       string `json:"name"`
+	MimeType   string `json:"mime_type"`
+	Size       int64  `json:"size"`
+	Hash       string `json:"hash"`
+	FolderID   *int64 `json:"folder_id"`
+	OriginApp  string `json:"origin_app"`
+	LinkedTo   string `json:"linked_to"`
+	UploadedBy int64  `json:"uploaded_by"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 type FileListResponse struct {

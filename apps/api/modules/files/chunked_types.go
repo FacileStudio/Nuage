@@ -14,8 +14,8 @@ type InitUploadResponse struct {
 }
 
 type ChunkResponse struct {
-	PartNumber int   `json:"part_number"`
-	Size       int64 `json:"size"`
+	PartNumber int    `json:"part_number"`
+	Size       int64  `json:"size"`
 	Hash       string `json:"hash"`
 }
 

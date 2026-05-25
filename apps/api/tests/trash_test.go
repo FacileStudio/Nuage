@@ -14,7 +14,9 @@ func TestTrashAndRestore(t *testing.T) {
 	_, token := registerUser(ts, "trash@example.com", "password123")
 
 	resp := uploadFile(ts, token, "trashme.txt", "data", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(resp, &file)
 
 	doDelete(ts, fmt.Sprintf("/files/%d", file.ID), token)
@@ -45,7 +47,9 @@ func TestPermanentDelete(t *testing.T) {
 	_, token := registerUser(ts, "permdelete@example.com", "password123")
 
 	resp := uploadFile(ts, token, "goodbye.txt", "data", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(resp, &file)
 
 	doDelete(ts, fmt.Sprintf("/files/%d", file.ID), token)

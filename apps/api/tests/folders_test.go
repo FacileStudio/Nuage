@@ -31,7 +31,9 @@ func TestNestedFolders(t *testing.T) {
 	_, token := registerUser(ts, "nested@example.com", "password123")
 
 	resp := doJSON(ts, "POST", "/folders", map[string]string{"name": "parent"}, token)
-	var parent struct{ ID int64 `json:"id"` }
+	var parent struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(resp, &parent)
 
 	resp = doJSON(ts, "POST", "/folders", map[string]any{"name": "child", "parent_id": parent.ID}, token)
@@ -50,7 +52,9 @@ func TestGetFolderContents(t *testing.T) {
 	_, token := registerUser(ts, "contents@example.com", "password123")
 
 	folderResp := doJSON(ts, "POST", "/folders", map[string]string{"name": "stuff"}, token)
-	var folder struct{ ID int64 `json:"id"` }
+	var folder struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(folderResp, &folder)
 
 	uploadFile(ts, token, "inside.txt", "content", &folder.ID)
@@ -73,7 +77,9 @@ func TestDeleteEmptyFolder(t *testing.T) {
 	_, token := registerUser(ts, "delfolder@example.com", "password123")
 
 	resp := doJSON(ts, "POST", "/folders", map[string]string{"name": "empty"}, token)
-	var folder struct{ ID int64 `json:"id"` }
+	var folder struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(resp, &folder)
 
 	delResp := doDelete(ts, fmt.Sprintf("/folders/%d", folder.ID), token)
@@ -85,7 +91,9 @@ func TestDeleteNonEmptyFolder(t *testing.T) {
 	_, token := registerUser(ts, "nonempty@example.com", "password123")
 
 	resp := doJSON(ts, "POST", "/folders", map[string]string{"name": "notempty"}, token)
-	var folder struct{ ID int64 `json:"id"` }
+	var folder struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(resp, &folder)
 
 	uploadFile(ts, token, "blocker.txt", "content", &folder.ID)

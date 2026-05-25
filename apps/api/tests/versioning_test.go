@@ -65,7 +65,9 @@ func TestRestoreVersion(t *testing.T) {
 
 	versionsResp := doGet(ts, fmt.Sprintf("/files/%d/versions", file.ID), token)
 	var versionList struct {
-		Versions []struct{ ID int64 `json:"id"` } `json:"versions"`
+		Versions []struct {
+			ID int64 `json:"id"`
+		} `json:"versions"`
 	}
 	parseJSON(versionsResp, &versionList)
 	require.Len(t, versionList.Versions, 1)
@@ -75,7 +77,9 @@ func TestRestoreVersion(t *testing.T) {
 		nil, token)
 	require.Equal(t, http.StatusOK, restoreResp.StatusCode)
 
-	var restored struct{ Hash string `json:"hash"` }
+	var restored struct {
+		Hash string `json:"hash"`
+	}
 	parseJSON(restoreResp, &restored)
 	assert.Equal(t, originalHash, restored.Hash)
 }

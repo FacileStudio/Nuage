@@ -14,8 +14,8 @@ import (
 )
 
 type Handler struct {
-	service        *Service
-	storageClient  *storage.Client
+	service       *Service
+	storageClient *storage.Client
 }
 
 func newHandler(service *Service, storageClient *storage.Client) *Handler {

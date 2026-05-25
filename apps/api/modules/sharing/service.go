@@ -157,19 +157,6 @@ func (s *Service) getByToken(ctx context.Context, token string) (*schemas.Share,
 	return &record, nil
 }
 
-func (s *Service) checkPermission(ctx context.Context, token string, requiredPermission string) (*schemas.Share, error) {
-	share, err := s.getByToken(ctx, token)
-	if err != nil {
-		return nil, err
-	}
-
-	if requiredPermission == "edit" && share.Permission != "edit" {
-		return nil, errors.Forbidden("insufficient share permission")
-	}
-
-	return share, nil
-}
-
 func (s *Service) getSharedFile(ctx context.Context, token string, fileID int64) (*schemas.File, *schemas.Share, error) {
 	share, err := s.getByToken(ctx, token)
 	if err != nil {
@@ -238,10 +225,14 @@ func (s *Service) listSharedFolderContents(ctx context.Context, token string, fo
 	}
 
 	var files []schemas.File
-	s.orm.WithContext(ctx).Where("folder_id = ? AND deleted_at IS NULL", targetID).Order("created_at desc").Find(&files)
+	if err := s.orm.WithContext(ctx).Where("folder_id = ? AND deleted_at IS NULL", targetID).Order("created_at desc").Find(&files).Error; err != nil {
+		return nil, nil, nil, errors.Internal("failed to list shared folder files", err)
+	}
 
 	var folders []schemas.Folder
-	s.orm.WithContext(ctx).Where("parent_id = ? AND deleted_at IS NULL", targetID).Order("name asc").Find(&folders)
+	if err := s.orm.WithContext(ctx).Where("parent_id = ? AND deleted_at IS NULL", targetID).Order("name asc").Find(&folders).Error; err != nil {
+		return nil, nil, nil, errors.Internal("failed to list shared subfolders", err)
+	}
 
 	return files, folders, share, nil
 }

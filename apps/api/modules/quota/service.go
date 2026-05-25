@@ -33,17 +33,13 @@ func (s *Service) getDefaultLimit() int64 {
 
 func (s *Service) ensureQuota(ctx context.Context, userID int64) *schemas.UserQuota {
 	var quota schemas.UserQuota
-	err := s.orm.WithContext(ctx).Where("user_id = ?", userID).First(&quota).Error
-	if err == nil {
-		return &quota
+	result := s.orm.WithContext(ctx).
+		Where(schemas.UserQuota{UserID: userID}).
+		Attrs(schemas.UserQuota{StorageUsed: 0, StorageLimit: 0}).
+		FirstOrCreate(&quota)
+	if result.Error != nil {
+		quota = schemas.UserQuota{UserID: userID, StorageUsed: 0, StorageLimit: 0}
 	}
-
-	quota = schemas.UserQuota{
-		UserID:       userID,
-		StorageUsed:  0,
-		StorageLimit: 0,
-	}
-	s.orm.WithContext(ctx).Create(&quota)
 	return &quota
 }
 
@@ -131,19 +127,34 @@ func (s *Service) ListAllUsage(ctx context.Context) ([]UsageResponse, error) {
 		return nil, errors.Internal("failed to list users", err)
 	}
 
+	userIDs := make([]int64, len(users))
+	for i, u := range users {
+		userIDs[i] = u.ID
+	}
+
+	var quotas []schemas.UserQuota
+	s.orm.WithContext(ctx).Where("user_id IN ?", userIDs).Find(&quotas)
+	quotaMap := make(map[int64]*schemas.UserQuota, len(quotas))
+	for i := range quotas {
+		quotaMap[quotas[i].UserID] = &quotas[i]
+	}
+
 	defaultLimit := s.getDefaultLimit()
 	results := make([]UsageResponse, 0, len(users))
 
 	for _, u := range users {
-		quota := s.ensureQuota(ctx, u.ID)
-		limit := quota.StorageLimit
+		q, ok := quotaMap[u.ID]
+		if !ok {
+			q = &schemas.UserQuota{UserID: u.ID, StorageUsed: 0, StorageLimit: 0}
+		}
+		limit := q.StorageLimit
 		if limit == 0 {
 			limit = defaultLimit
 		}
 
 		var pct float64
 		if limit > 0 {
-			pct = float64(quota.StorageUsed) / float64(limit) * 100
+			pct = float64(q.StorageUsed) / float64(limit) * 100
 			if pct > 100 {
 				pct = 100
 			}
@@ -151,7 +162,7 @@ func (s *Service) ListAllUsage(ctx context.Context) ([]UsageResponse, error) {
 
 		results = append(results, UsageResponse{
 			UserID:       u.ID,
-			StorageUsed:  quota.StorageUsed,
+			StorageUsed:  q.StorageUsed,
 			StorageLimit: limit,
 			Percentage:   pct,
 		})

@@ -102,13 +102,17 @@ func TestUpdateFile(t *testing.T) {
 	_, token := registerUser(ts, "update@example.com", "password123")
 
 	resp := uploadFile(ts, token, "old.txt", "content", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(resp, &file)
 
 	updateResp := doJSON(ts, "PUT", fmt.Sprintf("/files/%d", file.ID), map[string]string{"name": "new.txt"}, token)
 	require.Equal(t, http.StatusOK, updateResp.StatusCode)
 
-	var updated struct{ Name string `json:"name"` }
+	var updated struct {
+		Name string `json:"name"`
+	}
 	parseJSON(updateResp, &updated)
 	assert.Equal(t, "new.txt", updated.Name)
 }
@@ -118,7 +122,9 @@ func TestDeleteFile(t *testing.T) {
 	_, token := registerUser(ts, "delete@example.com", "password123")
 
 	resp := uploadFile(ts, token, "deleteme.txt", "bye", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(resp, &file)
 
 	delResp := doDelete(ts, fmt.Sprintf("/files/%d", file.ID), token)

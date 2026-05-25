@@ -28,7 +28,14 @@ type Entry struct {
 }
 
 func (l *Logger) Log(ctx context.Context, entry Entry) {
-	go l.insert(entry)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("activity: panic in logger", slog.Any("panic", r))
+			}
+		}()
+		l.insert(entry)
+	}()
 }
 
 func (l *Logger) insert(entry Entry) {

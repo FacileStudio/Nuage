@@ -15,7 +15,9 @@ func TestCreateShareLink(t *testing.T) {
 	_, token := registerUser(ts, "sharer@example.com", "password123")
 
 	fileResp := uploadFile(ts, token, "shared.txt", "shared content", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(fileResp, &file)
 
 	resp := doJSON(ts, "POST", "/shares", map[string]any{
@@ -37,13 +39,17 @@ func TestPublicShareAccess(t *testing.T) {
 	_, token := registerUser(ts, "pub-share@example.com", "password123")
 
 	fileResp := uploadFile(ts, token, "public.txt", "public data", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(fileResp, &file)
 
 	shareResp := doJSON(ts, "POST", "/shares", map[string]any{
 		"file_id": file.ID, "permission": "view",
 	}, token)
-	var share struct{ Token string `json:"token"` }
+	var share struct {
+		Token string `json:"token"`
+	}
 	parseJSON(shareResp, &share)
 
 	resp := doGet(ts, "/shared/"+share.Token, "")
@@ -66,13 +72,17 @@ func TestSharedFileDownload(t *testing.T) {
 
 	content := "downloadable content"
 	fileResp := uploadFile(ts, token, "download.txt", content, nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(fileResp, &file)
 
 	shareResp := doJSON(ts, "POST", "/shares", map[string]any{
 		"file_id": file.ID, "permission": "view",
 	}, token)
-	var share struct{ Token string `json:"token"` }
+	var share struct {
+		Token string `json:"token"`
+	}
 	parseJSON(shareResp, &share)
 
 	resp := doGet(ts, fmt.Sprintf("/shared/%s/download/%d", share.Token, file.ID), "")
@@ -89,7 +99,9 @@ func TestSharePermissionEnforcement(t *testing.T) {
 	_, viewerToken := registerUser(ts, "viewer@example.com", "password123")
 
 	fileResp := uploadFile(ts, ownerToken, "protected.txt", "secret", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(fileResp, &file)
 
 	_ = viewerToken
@@ -97,7 +109,9 @@ func TestSharePermissionEnforcement(t *testing.T) {
 	shareResp := doJSON(ts, "POST", "/shares", map[string]any{
 		"file_id": file.ID, "permission": "view",
 	}, ownerToken)
-	var share struct{ Token string `json:"token"` }
+	var share struct {
+		Token string `json:"token"`
+	}
 	parseJSON(shareResp, &share)
 
 	dlResp := doGet(ts, fmt.Sprintf("/shared/%s/download/%d", share.Token, file.ID), "")
@@ -110,7 +124,9 @@ func TestListSharedByMe(t *testing.T) {
 	_, token := registerUser(ts, "by-me@example.com", "password123")
 
 	fileResp := uploadFile(ts, token, "mine.txt", "data", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(fileResp, &file)
 
 	doJSON(ts, "POST", "/shares", map[string]any{
@@ -132,7 +148,9 @@ func TestRevokeShare(t *testing.T) {
 	_, token := registerUser(ts, "revoke@example.com", "password123")
 
 	fileResp := uploadFile(ts, token, "revokable.txt", "data", nil)
-	var file struct{ ID int64 `json:"id"` }
+	var file struct {
+		ID int64 `json:"id"`
+	}
 	parseJSON(fileResp, &file)
 
 	shareResp := doJSON(ts, "POST", "/shares", map[string]any{

@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"sort"
+	"log/slog"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
@@ -60,7 +60,6 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 	}
 
 	if time.Now().After(session.ExpiresAt) {
-		s.orm.WithContext(ctx).Model(&session).Update("status", "expired")
 		return nil, errors.Failed("upload session has expired")
 	}
 
@@ -122,24 +121,16 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	}
 
 	var totalSize int64
+	chunkKeys := make([]string, 0, len(chunks))
 	for _, c := range chunks {
 		totalSize += c.Size
+		chunkKeys = append(chunkKeys, c.BucketKey)
 	}
 
 	if s.quota != nil {
 		if err := s.quota.CheckQuota(ctx, userID, totalSize); err != nil {
 			return nil, err
 		}
-	}
-
-	chunkKeys := make([]string, 0, len(chunks))
-
-	sort.Slice(chunks, func(i, j int) bool {
-		return chunks[i].PartNumber < chunks[j].PartNumber
-	})
-	chunkKeys = chunkKeys[:0]
-	for _, c := range chunks {
-		chunkKeys = append(chunkKeys, c.BucketKey)
 	}
 
 	name := s.deduplicateFileName(ctx, session.FileName, session.FolderID)
@@ -152,6 +143,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 
 	info, err := s.storage.StatObject(ctx, bucketKey)
 	if err != nil {
+		_ = s.storage.DeleteObject(ctx, bucketKey)
 		return nil, errors.Internal("failed to verify assembled file", err)
 	}
 
@@ -174,9 +166,14 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	s.orm.WithContext(ctx).Model(&session).Update("status", "completed")
 
 	go func() {
-		bgCtx := context.Background()
-		_ = s.storage.DeletePrefix(bgCtx, fmt.Sprintf("chunks/%s/", sessionID))
-		s.orm.Where("session_id = ?", sessionID).Delete(&schemas.UploadChunk{})
+		cleanCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.storage.DeletePrefix(cleanCtx, fmt.Sprintf("chunks/%s/", sessionID)); err != nil {
+			slog.Warn("chunked: failed to clean chunks from storage", slog.Any("error", err))
+		}
+		if err := s.orm.WithContext(cleanCtx).Where("session_id = ?", sessionID).Delete(&schemas.UploadChunk{}).Error; err != nil {
+			slog.Warn("chunked: failed to clean chunk records", slog.Any("error", err))
+		}
 	}()
 
 	if s.quota != nil {
@@ -220,9 +217,14 @@ func (s *Service) abortUpload(ctx context.Context, userID int64, sessionID strin
 	s.orm.WithContext(ctx).Model(&session).Update("status", "aborted")
 
 	go func() {
-		bgCtx := context.Background()
-		_ = s.storage.DeletePrefix(bgCtx, fmt.Sprintf("chunks/%s/", sessionID))
-		s.orm.Where("session_id = ?", sessionID).Delete(&schemas.UploadChunk{})
+		cleanCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.storage.DeletePrefix(cleanCtx, fmt.Sprintf("chunks/%s/", sessionID)); err != nil {
+			slog.Warn("chunked: failed to clean chunks on abort", slog.Any("error", err))
+		}
+		if err := s.orm.WithContext(cleanCtx).Where("session_id = ?", sessionID).Delete(&schemas.UploadChunk{}).Error; err != nil {
+			slog.Warn("chunked: failed to clean chunk records on abort", slog.Any("error", err))
+		}
 	}()
 
 	return nil

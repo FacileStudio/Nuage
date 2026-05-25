@@ -19,8 +19,8 @@ func (UploadSession) TableName() string { return "upload_sessions" }
 
 type UploadChunk struct {
 	ID         int64     `json:"id" gorm:"primaryKey"`
-	SessionID  string    `json:"session_id" gorm:"index;not null"`
-	PartNumber int       `json:"part_number" gorm:"not null"`
+	SessionID  string    `json:"session_id" gorm:"uniqueIndex:idx_chunk_session_part;not null"`
+	PartNumber int       `json:"part_number" gorm:"uniqueIndex:idx_chunk_session_part;not null"`
 	BucketKey  string    `json:"-" gorm:"not null"`
 	Size       int64     `json:"size"`
 	Hash       string    `json:"hash"`
