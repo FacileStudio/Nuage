@@ -41,6 +41,7 @@ export type Folder = {
 	id: number;
 	facile_id: string;
 	name: string;
+	size: number;
 	parent_id: number | null;
 	owner_id: number;
 	created_at: string;

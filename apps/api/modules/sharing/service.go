@@ -285,6 +285,39 @@ func (s *Service) resolveShareResourceName(ctx context.Context, fileID, folderID
 	return "", "share"
 }
 
+func (s *Service) folderSizes(ctx context.Context, folderIDs []int64) (map[int64]int64, error) {
+	if len(folderIDs) == 0 {
+		return map[int64]int64{}, nil
+	}
+
+	type sizeRow struct {
+		RootID    int64 `gorm:"column:root_id"`
+		TotalSize int64 `gorm:"column:total_size"`
+	}
+
+	var rows []sizeRow
+	err := s.orm.WithContext(ctx).Raw(`
+		WITH RECURSIVE folder_tree AS (
+			SELECT id, id AS root_id FROM folders WHERE id IN ? AND deleted_at IS NULL
+			UNION ALL
+			SELECT f.id, ft.root_id FROM folders f INNER JOIN folder_tree ft ON f.parent_id = ft.id WHERE f.deleted_at IS NULL
+		)
+		SELECT ft.root_id, COALESCE(SUM(fi.size), 0) AS total_size
+		FROM folder_tree ft
+		LEFT JOIN files fi ON fi.folder_id = ft.id AND fi.deleted_at IS NULL
+		GROUP BY ft.root_id
+	`, folderIDs).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[int64]int64, len(rows))
+	for _, r := range rows {
+		result[r.RootID] = r.TotalSize
+	}
+	return result, nil
+}
+
 func mapShare(record schemas.Share) ShareResponse {
 	resp := ShareResponse{
 		ID:         record.ID,

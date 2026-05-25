@@ -43,6 +43,7 @@ type PublicFolder struct {
 	ID       int64  `json:"id"`
 	FacileID string `json:"facile_id"`
 	Name     string `json:"name"`
+	Size     int64  `json:"size"`
 }
 
 type SharedFolderContentsResponse struct {

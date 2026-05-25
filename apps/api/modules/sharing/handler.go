@@ -121,10 +121,12 @@ func (h *Handler) getPublic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if record.Folder != nil {
+		sizes, _ := h.service.folderSizes(r.Context(), []int64{record.Folder.ID})
 		resp.Folder = &PublicFolder{
 			ID:       record.Folder.ID,
 			FacileID: record.Folder.FacileID,
 			Name:     record.Folder.Name,
+			Size:     sizes[record.Folder.ID],
 		}
 	}
 
@@ -189,9 +191,18 @@ func (h *Handler) listSharedFolder(w http.ResponseWriter, r *http.Request) {
 			MimeType: f.MimeType, Size: f.Size,
 		})
 	}
+	folderIDs := make([]int64, len(folders))
+	for i, f := range folders {
+		folderIDs[i] = f.ID
+	}
+	sizes, sErr := h.service.folderSizes(r.Context(), folderIDs)
+	if sErr != nil {
+		httpjson.WriteError(w, sErr)
+		return
+	}
 	for _, f := range folders {
 		resp.Folders = append(resp.Folders, PublicFolder{
-			ID: f.ID, FacileID: f.FacileID, Name: f.Name,
+			ID: f.ID, FacileID: f.FacileID, Name: f.Name, Size: sizes[f.ID],
 		})
 	}
 

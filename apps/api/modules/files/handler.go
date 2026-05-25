@@ -226,7 +226,7 @@ func (h *Handler) createFolder(w http.ResponseWriter, r *http.Request) {
 		httpjson.WriteError(w, err)
 		return
 	}
-	httpjson.WriteJSON(w, http.StatusCreated, mapFolder(*record))
+	httpjson.WriteJSON(w, http.StatusCreated, mapFolder(*record, 0))
 }
 
 func (h *Handler) listFolders(w http.ResponseWriter, r *http.Request) {
@@ -246,9 +246,19 @@ func (h *Handler) listFolders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	folderIDs := make([]int64, len(records))
+	for i, rec := range records {
+		folderIDs[i] = rec.ID
+	}
+	sizes, err := h.service.folderSizes(r.Context(), folderIDs)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
 	resp := FolderListResponse{Folders: make([]FolderResponse, 0, len(records))}
 	for _, record := range records {
-		resp.Folders = append(resp.Folders, mapFolder(record))
+		resp.Folders = append(resp.Folders, mapFolder(record, sizes[record.ID]))
 	}
 	httpjson.WriteJSON(w, http.StatusOK, resp)
 }
@@ -260,8 +270,19 @@ func (h *Handler) getFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	folderIDs := make([]int64, 0, 1+len(childFolders))
+	folderIDs = append(folderIDs, folder.ID)
+	for _, f := range childFolders {
+		folderIDs = append(folderIDs, f.ID)
+	}
+	sizes, err := h.service.folderSizes(r.Context(), folderIDs)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
 	resp := FolderDetailResponse{
-		Folder:  mapFolder(*folder),
+		Folder:  mapFolder(*folder, sizes[folder.ID]),
 		Files:   make([]FileResponse, 0, len(childFiles)),
 		Folders: make([]FolderResponse, 0, len(childFolders)),
 	}
@@ -269,7 +290,7 @@ func (h *Handler) getFolder(w http.ResponseWriter, r *http.Request) {
 		resp.Files = append(resp.Files, mapFile(f))
 	}
 	for _, f := range childFolders {
-		resp.Folders = append(resp.Folders, mapFolder(f))
+		resp.Folders = append(resp.Folders, mapFolder(f, sizes[f.ID]))
 	}
 	httpjson.WriteJSON(w, http.StatusOK, resp)
 }
@@ -306,7 +327,12 @@ func (h *Handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 		httpjson.WriteError(w, err)
 		return
 	}
-	httpjson.WriteJSON(w, http.StatusOK, mapFolder(*record))
+	sizes, sErr := h.service.folderSizes(r.Context(), []int64{record.ID})
+	if sErr != nil {
+		httpjson.WriteError(w, sErr)
+		return
+	}
+	httpjson.WriteJSON(w, http.StatusOK, mapFolder(*record, sizes[record.ID]))
 }
 
 func (h *Handler) deleteFolder(w http.ResponseWriter, r *http.Request) {
