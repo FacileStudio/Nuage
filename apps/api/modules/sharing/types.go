@@ -8,14 +8,16 @@ type CreateShareRequest struct {
 }
 
 type ShareResponse struct {
-	ID         int64   `json:"id"`
-	Token      string  `json:"token"`
-	FileID     *int64  `json:"file_id"`
-	FolderID   *int64  `json:"folder_id"`
-	SharedBy   int64   `json:"shared_by"`
-	Permission string  `json:"permission"`
-	ExpiresAt  *string `json:"expires_at"`
-	CreatedAt  string  `json:"created_at"`
+	ID         int64        `json:"id"`
+	Token      string       `json:"token"`
+	FileID     *int64       `json:"file_id"`
+	FolderID   *int64       `json:"folder_id"`
+	SharedBy   int64        `json:"shared_by"`
+	Permission string       `json:"permission"`
+	ExpiresAt  *string      `json:"expires_at"`
+	CreatedAt  string       `json:"created_at"`
+	File       *PublicFile   `json:"file,omitempty"`
+	Folder     *PublicFolder `json:"folder,omitempty"`
 }
 
 type ShareListResponse struct {

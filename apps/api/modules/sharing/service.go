@@ -253,5 +253,21 @@ func mapShare(record schemas.Share) ShareResponse {
 		formatted := record.ExpiresAt.UTC().Format(time.RFC3339)
 		resp.ExpiresAt = &formatted
 	}
+	if record.File != nil {
+		resp.File = &PublicFile{
+			ID:       record.File.ID,
+			FacileID: record.File.FacileID,
+			Name:     record.File.Name,
+			MimeType: record.File.MimeType,
+			Size:     record.File.Size,
+		}
+	}
+	if record.Folder != nil {
+		resp.Folder = &PublicFolder{
+			ID:       record.Folder.ID,
+			FacileID: record.Folder.FacileID,
+			Name:     record.Folder.Name,
+		}
+	}
 	return resp
 }
