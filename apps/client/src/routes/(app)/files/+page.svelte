@@ -46,6 +46,8 @@
 	});
 
 	let contextMenu = $state<{ x: number; y: number; type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
+	let bgContextMenu = $state<{ x: number; y: number } | null>(null);
+	let fileInputRef = $state<HTMLInputElement | null>(null);
 	let renameTarget = $state<{ type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
 	let renameValue = $state('');
 
@@ -397,6 +399,7 @@
 	function openContextMenu(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
 		e.preventDefault();
 		e.stopPropagation();
+		bgContextMenu = null;
 		if (!isSelected(type, item.id)) {
 			selectedKeys = [];
 			lastClickedIndex = -1;
@@ -404,8 +407,15 @@
 		contextMenu = { x: e.clientX, y: e.clientY, type, item };
 	}
 
+	function openBgContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		contextMenu = null;
+		bgContextMenu = { x: e.clientX, y: e.clientY };
+	}
+
 	function closeContextMenu() {
 		contextMenu = null;
+		bgContextMenu = null;
 	}
 
 	async function downloadItem() {
@@ -827,7 +837,7 @@
 		</div>
 	{/if}
 
-	<div class="flex-1 overflow-auto px-4 py-4 md:px-8 md:py-6">
+	<div class="flex-1 overflow-auto px-4 py-4 md:px-8 md:py-6" oncontextmenu={openBgContextMenu}>
 		{#if loading}
 			<div class="flex h-64 items-center justify-center">
 				<div class="h-6 w-6 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
@@ -1129,6 +1139,31 @@
 			</button>
 		</div>
 	{/if}
+
+	{#if bgContextMenu}
+		<div
+			class="fixed z-50 min-w-[160px] rounded-md border border-border bg-background py-1 shadow-lg"
+			style="left: {bgContextMenu.x}px; top: {bgContextMenu.y}px;"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<button
+				class="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
+				onclick={() => { bgContextMenu = null; fileInputRef?.click(); }}
+			>
+				<iconify-icon icon="solar:upload-linear" width="16" class="text-muted-foreground"></iconify-icon>
+				Upload
+			</button>
+			<button
+				class="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
+				onclick={() => { bgContextMenu = null; showNewFolderDialog = true; }}
+			>
+				<iconify-icon icon="solar:add-folder-linear" width="16" class="text-muted-foreground"></iconify-icon>
+				New folder
+			</button>
+		</div>
+	{/if}
+
+	<input type="file" multiple class="hidden" bind:this={fileInputRef} onchange={handleFileInput} />
 
 	{#if previewFile}
 		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog">
