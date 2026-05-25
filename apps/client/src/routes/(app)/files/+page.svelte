@@ -10,7 +10,7 @@
 	let folders = $state<Folder[]>([]);
 	let breadcrumbs = $state<{ id: number | null; name: string }[]>([{ id: null, name: 'Files' }]);
 	let currentFolderId = $state<number | null>(null);
-	let viewMode = $state<'grid' | 'list'>('grid');
+	let viewMode = $state<'grid' | 'list'>('list');
 	let loading = $state(true);
 	let searchQuery = $state('');
 	let searchTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
