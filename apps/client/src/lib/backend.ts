@@ -80,6 +80,48 @@ export type ApiToken = {
 	created_at: string;
 };
 
+export type QuotaResponse = {
+	user_id: number;
+	storage_used: number;
+	storage_limit: number;
+	percentage: number;
+};
+
+export type InitUploadResponse = {
+	session_id: string;
+	expires_at: string;
+};
+
+export type ChunkResponse = {
+	part_number: number;
+	size: number;
+	hash: string;
+};
+
+export type CompleteUploadResponse = {
+	file: NuageFile;
+};
+
+export type ActivityEntry = {
+	id: number;
+	user_id: number;
+	event_type: string;
+	resource_type: string;
+	resource_id: number;
+	resource_name: string;
+	metadata: string;
+	created_at: string;
+};
+
+export type ActivityListResponse = {
+	activities: ActivityEntry[];
+	total: number;
+	page: number;
+	per_page: number;
+};
+
+export type UploadProgressCallback = (loaded: number, total: number) => void;
+
 type ApiErrorPayload = {
 	error?: { message?: string };
 };
@@ -312,5 +354,90 @@ export const backend = {
 
 	deleteApiToken(token: string, tokenId: number) {
 		return apiFetch<{}>(`/users/me/api-token/${tokenId}`, { method: 'DELETE' }, token);
+	},
+
+	getQuota(token: string) {
+		return apiFetch<QuotaResponse>('/quota/me', {}, token);
+	},
+
+	uploadFileWithProgress(token: string, formData: FormData, onProgress?: UploadProgressCallback): Promise<NuageFile> {
+		return new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			xhr.open('POST', `${backendBaseUrl}/files`);
+			xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+			if (onProgress) {
+				xhr.upload.addEventListener('progress', (e) => {
+					if (e.lengthComputable) onProgress(e.loaded, e.total);
+				});
+			}
+			xhr.addEventListener('load', () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					resolve(JSON.parse(xhr.responseText) as NuageFile);
+				} else {
+					let msg = `Upload failed with status ${xhr.status}`;
+					try {
+						const payload = JSON.parse(xhr.responseText);
+						if (payload?.error?.message) msg = payload.error.message;
+					} catch {}
+					reject(new Error(msg));
+				}
+			});
+			xhr.addEventListener('error', () => reject(new Error('Upload network error')));
+			xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+			xhr.send(formData);
+		});
+	},
+
+	initUpload(token: string, data: { file_name: string; mime_type: string; total_size: number; folder_id?: number | null }) {
+		return apiFetch<InitUploadResponse>('/files/upload/init', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	uploadChunk(token: string, sessionId: string, partNumber: number, blob: Blob) {
+		return new Promise<ChunkResponse>((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			xhr.open('PUT', `${backendBaseUrl}/files/upload/${sessionId}/part/${partNumber}`);
+			xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+			xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+			xhr.addEventListener('load', () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					resolve(JSON.parse(xhr.responseText) as ChunkResponse);
+				} else {
+					let msg = `Chunk upload failed with status ${xhr.status}`;
+					try {
+						const payload = JSON.parse(xhr.responseText);
+						if (payload?.error?.message) msg = payload.error.message;
+					} catch {}
+					reject(new Error(msg));
+				}
+			});
+			xhr.addEventListener('error', () => reject(new Error('Chunk upload network error')));
+			xhr.addEventListener('abort', () => reject(new Error('Chunk upload aborted')));
+			xhr.send(blob);
+		});
+	},
+
+	completeUpload(token: string, sessionId: string) {
+		return apiFetch<CompleteUploadResponse>(`/files/upload/${sessionId}/complete`, {
+			method: 'POST'
+		}, token);
+	},
+
+	abortUpload(token: string, sessionId: string) {
+		return apiFetch<{ aborted: boolean }>(`/files/upload/${sessionId}`, {
+			method: 'DELETE'
+		}, token);
+	},
+
+	listActivity(token: string, params?: { page?: number; per_page?: number; event_type?: string; resource_type?: string }) {
+		const qs = new URLSearchParams();
+		if (params?.page != null) qs.set('page', String(params.page));
+		if (params?.per_page != null) qs.set('per_page', String(params.per_page));
+		if (params?.event_type) qs.set('event_type', params.event_type);
+		if (params?.resource_type) qs.set('resource_type', params.resource_type);
+		const query = qs.size ? `?${qs}` : '';
+		return apiFetch<ActivityListResponse>(`/activity/me${query}`, {}, token);
 	}
 };

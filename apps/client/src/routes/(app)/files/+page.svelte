@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { backend, type NuageFile, type Folder } from '$lib/backend';
 
-	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
+	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null; refreshQuota: () => void }>('app');
 
 	let files = $state<NuageFile[]>([]);
 	let folders = $state<Folder[]>([]);
@@ -15,10 +15,35 @@
 	let searchQuery = $state('');
 	let searchTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 
+	const CHUNK_SIZE = 5 * 1024 * 1024;
+	const CHUNKED_THRESHOLD = 10 * 1024 * 1024;
+
+	type FileUploadState = {
+		name: string;
+		size: number;
+		loaded: number;
+		chunksTotal: number;
+		chunksDone: number;
+		status: 'pending' | 'uploading' | 'done' | 'error';
+	};
+
 	let dragCounter = $state(0);
 	let dragging = $derived(dragCounter > 0);
 	let uploading = $state(false);
-	let uploadProgress = $state('');
+	let uploadQueue = $state<FileUploadState[]>([]);
+	let currentUploadIndex = $state(0);
+	let currentFile = $derived(uploadQueue[currentUploadIndex] as FileUploadState | undefined);
+	let overallDone = $derived(uploadQueue.filter(f => f.status === 'done').length);
+	let overallPercent = $derived.by(() => {
+		const totalBytes = uploadQueue.reduce((s, f) => s + f.size, 0);
+		if (totalBytes === 0) return 0;
+		const loadedBytes = uploadQueue.reduce((s, f) => s + f.loaded, 0);
+		return Math.round((loadedBytes / totalBytes) * 100);
+	});
+	let currentFilePercent = $derived.by(() => {
+		if (!currentFile || currentFile.size === 0) return 0;
+		return Math.round((currentFile.loaded / currentFile.size) * 100);
+	});
 
 	let contextMenu = $state<{ x: number; y: number; type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
 	let renameTarget = $state<{ type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
@@ -206,21 +231,71 @@
 
 	async function uploadFiles(fileList: FileList) {
 		uploading = true;
-		const total = fileList.length;
-		let done = 0;
-		for (const file of fileList) {
-			uploadProgress = `Uploading ${done + 1}/${total}: ${file.name}`;
-			const formData = new FormData();
-			formData.set('file', file);
-			if (currentFolderId != null) formData.set('folder_id', String(currentFolderId));
+		uploadQueue = Array.from(fileList).map(f => ({
+			name: f.name,
+			size: f.size,
+			loaded: 0,
+			chunksTotal: f.size > CHUNKED_THRESHOLD ? Math.ceil(f.size / CHUNK_SIZE) : 0,
+			chunksDone: 0,
+			status: 'pending' as const
+		}));
+		currentUploadIndex = 0;
+
+		for (let i = 0; i < fileList.length; i++) {
+			const file = fileList[i];
+			currentUploadIndex = i;
+			uploadQueue[i].status = 'uploading';
+
 			try {
-				await backend.uploadFile(app.token, formData);
-			} catch {}
-			done++;
+				if (file.size > CHUNKED_THRESHOLD) {
+					await uploadChunked(file, i);
+				} else {
+					await uploadSimple(file, i);
+				}
+				uploadQueue[i].loaded = file.size;
+				uploadQueue[i].status = 'done';
+			} catch {
+				uploadQueue[i].status = 'error';
+			}
 		}
+
 		uploading = false;
-		uploadProgress = '';
+		uploadQueue = [];
+		currentUploadIndex = 0;
 		await loadContents();
+		app.refreshQuota();
+	}
+
+	async function uploadSimple(file: File, index: number) {
+		const formData = new FormData();
+		formData.set('file', file);
+		if (currentFolderId != null) formData.set('folder_id', String(currentFolderId));
+		await backend.uploadFileWithProgress(app.token, formData, (loaded) => {
+			uploadQueue[index].loaded = loaded;
+		});
+	}
+
+	async function uploadChunked(file: File, index: number) {
+		const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+		uploadQueue[index].chunksTotal = totalChunks;
+
+		const session = await backend.initUpload(app.token, {
+			file_name: file.name,
+			mime_type: file.type || 'application/octet-stream',
+			total_size: file.size,
+			folder_id: currentFolderId
+		});
+
+		for (let part = 0; part < totalChunks; part++) {
+			const start = part * CHUNK_SIZE;
+			const end = Math.min(start + CHUNK_SIZE, file.size);
+			const blob = file.slice(start, end);
+			await backend.uploadChunk(app.token, session.session_id, part + 1, blob);
+			uploadQueue[index].chunksDone = part + 1;
+			uploadQueue[index].loaded = end;
+		}
+
+		await backend.completeUpload(app.token, session.session_id);
 	}
 
 	async function createFolder() {
@@ -305,6 +380,7 @@
 		selectedKeys = [];
 		lastClickedIndex = -1;
 		await loadContents();
+		app.refreshQuota();
 	}
 
 	function openPreview(file: NuageFile) {
@@ -512,6 +588,7 @@
 		showDeleteConfirm = false;
 		selectMode = false;
 		await loadContents();
+		app.refreshQuota();
 	}
 </script>
 
@@ -631,11 +708,38 @@
 		</div>
 	</div>
 
-	{#if uploading}
-		<div class="border-b border-border bg-muted/50 px-4 py-2.5 md:px-8">
-			<div class="flex items-center gap-3">
-				<div class="h-4 w-4 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
-				<span class="text-sm text-muted-foreground">{uploadProgress}</span>
+	{#if uploading && uploadQueue.length > 0}
+		<div class="border-b border-border bg-muted/50 px-4 py-3 md:px-8">
+			<div class="flex flex-col gap-2">
+				{#if uploadQueue.length > 1}
+					<div class="flex items-center justify-between text-xs text-muted-foreground">
+						<span>Overall: {overallDone}/{uploadQueue.length} files</span>
+						<span>{overallPercent}%</span>
+					</div>
+					<div class="h-1.5 w-full overflow-hidden rounded-full bg-border">
+						<div
+							class="h-full rounded-full bg-primary transition-[width] duration-200"
+							style="width: {overallPercent}%"
+						></div>
+					</div>
+				{/if}
+				{#if currentFile && currentFile.status === 'uploading'}
+					<div class="flex items-center gap-3">
+						<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent shrink-0"></div>
+						<div class="flex-1 min-w-0">
+							<div class="flex items-center justify-between gap-2">
+								<span class="truncate text-sm font-medium">{currentFile.name}</span>
+								<span class="shrink-0 text-xs tabular-nums text-muted-foreground">{currentFilePercent}%</span>
+							</div>
+							<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-border">
+								<div
+									class="h-full rounded-full bg-primary transition-[width] duration-200"
+									style="width: {currentFilePercent}%"
+								></div>
+							</div>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}

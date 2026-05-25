@@ -2,7 +2,7 @@
 	import { onMount, setContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { backend, type UserProfile } from '$lib/backend';
+	import { backend, type UserProfile, type QuotaResponse } from '$lib/backend';
 
 	let { children } = $props();
 
@@ -12,15 +12,26 @@
 	let user = $state<UserProfile | null>(null);
 	let loaded = $state(false);
 	let mobileMenuOpen = $state(false);
+	let quota = $state<QuotaResponse | null>(null);
 
 	function setUser(nextUser: UserProfile) {
 		user = nextUser;
 	}
 
+	async function refreshQuota() {
+		if (!token) return;
+		try {
+			quota = await backend.getQuota(token);
+		} catch {
+			quota = null;
+		}
+	}
+
 	setContext('app', {
 		get token() { return token; },
 		get user() { return user; },
-		setUser
+		setUser,
+		refreshQuota
 	});
 
 	onMount(async () => {
@@ -34,6 +45,7 @@
 			token = stored;
 			user = result.user;
 			loaded = true;
+			refreshQuota();
 		} catch {
 			goto('/login');
 		}
@@ -55,10 +67,26 @@
 		goto('/login');
 	}
 
+	function formatSize(bytes: number): string {
+		if (bytes === 0) return '0 B';
+		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(1024));
+		return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+	}
+
+	let quotaPercentage = $derived(quota ? Math.min(quota.percentage, 100) : 0);
+	let quotaBarColor = $derived(
+		quotaPercentage >= 90 ? 'bg-red-500' :
+		quotaPercentage >= 80 ? 'bg-amber-500' :
+		'bg-primary'
+	);
+	let hasLimit = $derived(quota != null && quota.storage_limit > 0);
+
 	const navLinks: { href: string; label: string; icon: string; disabled: boolean }[] = [
 		{ href: '/files', label: 'Files', icon: 'solar:folder-linear', disabled: false },
 		{ href: '/shared', label: 'Shared', icon: 'solar:share-linear', disabled: false },
 		{ href: '/trash', label: 'Trash', icon: 'solar:trash-bin-2-linear', disabled: false },
+		{ href: '/activity', label: 'Activity', icon: 'solar:history-linear', disabled: false },
 		{ href: '/settings', label: 'Settings', icon: 'solar:settings-linear', disabled: false }
 	];
 </script>
@@ -113,6 +141,28 @@
 			</nav>
 
 			<div class="h-px bg-border"></div>
+
+			{#if quota}
+				<div class="px-4 pt-3">
+					{#if hasLimit}
+						<div class="flex items-center justify-between text-[11px] text-muted-foreground">
+							<span>{formatSize(quota.storage_used)} / {formatSize(quota.storage_limit)}</span>
+							<span>{Math.round(quotaPercentage)}%</span>
+						</div>
+						<div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+							<div
+								class="h-full rounded-full transition-all duration-300 {quotaBarColor}"
+								style="width: {quotaPercentage}%"
+							></div>
+						</div>
+					{:else}
+						<div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+							<iconify-icon icon="solar:cloud-bold-duotone" width="14"></iconify-icon>
+							<span>{formatSize(quota.storage_used)} used</span>
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="flex flex-col gap-2 p-4">
 				<div class="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/40 p-2.5">
