@@ -149,7 +149,11 @@
 		testingNook = true;
 		nookTestResult = null;
 		try {
-			const res = await backend.testNook(app.token);
+			const res = await backend.testNook(app.token, {
+				url: nookWebhookUrl,
+				secret: nookSecret,
+				enabled: nookEnabled
+			});
 			nookTestResult = res;
 		} catch (e: any) {
 			nookTestResult = { success: false, message: e.message || 'Connection failed' };
@@ -179,21 +183,24 @@
 		<h1 class="text-lg font-semibold">Settings</h1>
 		<div class="mt-4 flex gap-1">
 			<button
-				class="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'profile' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+				class="inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'profile' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 				onclick={() => activeTab = 'profile'}
 			>
+				<iconify-icon icon="solar:user-circle-linear" width="18"></iconify-icon>
 				Profile
 			</button>
 			<button
-				class="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'developers' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+				class="inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'developers' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 				onclick={() => activeTab = 'developers'}
 			>
+				<iconify-icon icon="solar:code-square-linear" width="18"></iconify-icon>
 				Developers
 			</button>
 			<button
-				class="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'instance' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+				class="inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'instance' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 				onclick={() => activeTab = 'instance'}
 			>
+				<iconify-icon icon="solar:server-linear" width="18"></iconify-icon>
 				Instance
 			</button>
 		</div>

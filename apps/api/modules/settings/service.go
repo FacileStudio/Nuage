@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
@@ -65,20 +66,21 @@ func (s *Service) updateSettings(ctx context.Context, values map[string]string) 
 	return s.listSettings(ctx)
 }
 
-func (s *Service) testNook(ctx context.Context) (bool, string, error) {
-	var urlSetting schemas.Setting
-	if err := s.orm.WithContext(ctx).Where("key = ?", "nook_webhook_url").First(&urlSetting).Error; err != nil {
-		return false, "nook_webhook_url not configured", nil
-	}
-	if urlSetting.Value == "" {
-		return false, "nook_webhook_url is empty", nil
+func (s *Service) testNook(ctx context.Context, input TestNookRequest) (bool, string, error) {
+	webhookURL := input.URL
+	secret := input.Secret
+
+	if webhookURL == "" {
+		return false, "webhook URL is empty", nil
 	}
 
-	var enabledSetting schemas.Setting
-	if err := s.orm.WithContext(ctx).Where("key = ?", "nook_enabled").First(&enabledSetting).Error; err == nil {
-		if enabledSetting.Value != "true" {
-			return false, "nook is disabled", nil
-		}
+	if !input.Enabled {
+		return false, "nook is disabled", nil
+	}
+
+	parsed, err := url.Parse(webhookURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return false, "invalid webhook URL: must start with http:// or https://", nil
 	}
 
 	payload := map[string]string{
@@ -87,15 +89,14 @@ func (s *Service) testNook(ctx context.Context) (bool, string, error) {
 	}
 	body, _ := json.Marshal(payload)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlSetting.Value, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
 	if err != nil {
 		return false, "failed to build request: " + err.Error(), nil
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	var secretSetting schemas.Setting
-	if err := s.orm.WithContext(ctx).Where("key = ?", "nook_webhook_secret").First(&secretSetting).Error; err == nil && secretSetting.Value != "" {
-		mac := hmac.New(sha256.New, []byte(secretSetting.Value))
+	if secret != "" {
+		mac := hmac.New(sha256.New, []byte(secret))
 		mac.Write(body)
 		sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 		req.Header.Set("X-Nuage-Signature-256", sig)

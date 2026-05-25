@@ -14,6 +14,12 @@ type UpdateSettingsRequest struct {
 	Settings map[string]string `json:"settings"`
 }
 
+type TestNookRequest struct {
+	URL     string `json:"url"`
+	Secret  string `json:"secret"`
+	Enabled bool   `json:"enabled"`
+}
+
 type TestNookResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`

@@ -64,7 +64,13 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) testNook(w http.ResponseWriter, r *http.Request) {
-	success, message, err := h.service.testNook(r.Context())
+	var req TestNookRequest
+	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	success, message, err := h.service.testNook(r.Context(), req)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

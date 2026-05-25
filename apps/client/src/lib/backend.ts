@@ -260,8 +260,11 @@ export const backend = {
 		}, token);
 	},
 
-	testNook(token: string) {
-		return apiFetch<{ success: boolean; message?: string }>('/settings/test-nook', { method: 'POST' }, token);
+	testNook(token: string, data: { url: string; secret: string; enabled: boolean }) {
+		return apiFetch<{ success: boolean; message?: string }>('/settings/test-nook', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		}, token);
 	},
 
 	updateProfile(token: string, data: { name?: string; email?: string }) {
