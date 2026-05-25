@@ -25,6 +25,19 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Delete("/{id}", handler.deleteFile)
 		r.Put("/{id}", handler.updateFile)
 		r.Post("/{id}/link", handler.linkFile)
+
+		r.Post("/{id}/reupload", func(w http.ResponseWriter, req *http.Request) {
+			req.Body = http.MaxBytesReader(w, req.Body, 100<<20)
+			handler.reupload(w, req)
+		})
+		r.Get("/{id}/versions", handler.listVersions)
+		r.Post("/{id}/versions/{versionId}/restore", handler.restoreVersion)
+
+		r.Post("/upload/init", handler.initUpload)
+		r.Put("/upload/{sessionId}/part/{partNumber}", handler.uploadChunk)
+		r.Post("/upload/{sessionId}/complete", handler.completeUpload)
+		r.Get("/upload/{sessionId}/status", handler.getUploadStatus)
+		r.Delete("/upload/{sessionId}", handler.abortUpload)
 	})
 
 	router.Route("/folders", func(r chi.Router) {

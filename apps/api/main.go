@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	documentation "github.com/FacileStudio/Nuage/apps/api/internal/documentation"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
@@ -19,8 +20,10 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
+	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sharing"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sync"
@@ -86,14 +89,17 @@ func main() {
 	}()
 
 	notifier := nook.NewNotifier(db)
+	actLogger := activity.NewLogger(db)
 
 	authService := auth.NewService(db)
 	userService := users.NewService(db, appEnv.StorageDir)
-	fileService := files.NewService(db, storageClient, notifier)
-	trashService := trash.NewService(db, storageClient)
+	quotaService := quota.NewService(db)
+	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService)
+	trashService := trash.NewService(db, storageClient, actLogger, quotaService)
 	syncService := sync.NewService(db)
-	sharingService := sharing.NewService(db, notifier)
+	sharingService := sharing.NewService(db, notifier, actLogger)
 	settingsService := settings.NewService(db)
+	activityService := activitymod.NewService(db)
 	docs := documentation.Response{
 		Modules: []documentation.Module{
 			auth.Documentation,
@@ -135,17 +141,19 @@ func main() {
 	users.RegisterRoutes(router, userService, authService)
 	files.RegisterRoutes(router, fileService, authService)
 	trash.RegisterRoutes(router, trashService, authService)
-	sharing.RegisterRoutes(router, sharingService, authService)
+	sharing.RegisterRoutes(router, sharingService, authService, storageClient)
 	settings.RegisterRoutes(router, settingsService, authService)
 	sync.RegisterRoutes(router, syncService, authService)
+	quota.RegisterRoutes(router, quotaService, authService)
+	activitymod.RegisterRoutes(router, activityService, authService)
 
 	addr := ":" + appEnv.Port
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
+		ReadTimeout:       5 * time.Minute,
+		WriteTimeout:      10 * time.Minute,
 		IdleTimeout:       120 * time.Second,
 	}
 	serverErrCh := make(chan error, 1)

@@ -6,20 +6,24 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
 )
 
 type Service struct {
-	orm     *gorm.DB
-	storage *storage.Client
+	orm      *gorm.DB
+	storage  *storage.Client
+	activity *activity.Logger
+	quota    *quota.Service
 }
 
-func NewService(orm *gorm.DB, storageClient *storage.Client) *Service {
-	return &Service{orm: orm, storage: storageClient}
+func NewService(orm *gorm.DB, storageClient *storage.Client, actLogger *activity.Logger, quotaService *quota.Service) *Service {
+	return &Service{orm: orm, storage: storageClient, activity: actLogger, quota: quotaService}
 }
 
 func (s *Service) listTrash(ctx context.Context, userID int64) ([]TrashItem, error) {
@@ -73,6 +77,15 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 		if err := s.orm.WithContext(ctx).Model(&record).Update("deleted_at", nil).Error; err != nil {
 			return errors.Internal("failed to restore file", err)
 		}
+		if s.quota != nil {
+			s.quota.UpdateUsage(ctx, userID, record.Size)
+		}
+		if s.activity != nil {
+			s.activity.Log(ctx, activity.Entry{
+				UserID: userID, EventType: "file.restored", ResourceType: "file",
+				ResourceID: record.ID, ResourceName: record.Name,
+			})
+		}
 	case "folder":
 		var record schemas.Folder
 		if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ? AND deleted_at IS NOT NULL", id, userID).First(&record).Error; err != nil {
@@ -83,6 +96,12 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 		}
 		if err := s.orm.WithContext(ctx).Model(&record).Update("deleted_at", nil).Error; err != nil {
 			return errors.Internal("failed to restore folder", err)
+		}
+		if s.activity != nil {
+			s.activity.Log(ctx, activity.Entry{
+				UserID: userID, EventType: "folder.restored", ResourceType: "folder",
+				ResourceID: record.ID, ResourceName: record.Name,
+			})
 		}
 	default:
 		return errors.Invalid("type must be file or folder")
@@ -108,8 +127,23 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 		if err := s.storage.DeleteObject(ctx, record.BucketKey); err != nil {
 			return errors.Internal("failed to delete file from storage", err)
 		}
+		var versions []schemas.FileVersion
+		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Find(&versions)
+		for _, v := range versions {
+			_ = s.storage.DeleteObject(ctx, v.BucketKey)
+		}
+		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Delete(&schemas.FileVersion{})
 		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
 			return errors.Internal("failed to delete file record", err)
+		}
+		if s.quota != nil {
+			s.quota.UpdateUsage(ctx, userID, -record.Size)
+		}
+		if s.activity != nil {
+			s.activity.Log(ctx, activity.Entry{
+				UserID: userID, EventType: "file.permanently_deleted", ResourceType: "file",
+				ResourceID: record.ID, ResourceName: record.Name,
+			})
 		}
 	case "folder":
 		var record schemas.Folder
@@ -121,6 +155,12 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 		}
 		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
 			return errors.Internal("failed to delete folder record", err)
+		}
+		if s.activity != nil {
+			s.activity.Log(ctx, activity.Entry{
+				UserID: userID, EventType: "folder.permanently_deleted", ResourceType: "folder",
+				ResourceID: record.ID, ResourceName: record.Name,
+			})
 		}
 	default:
 		return errors.Invalid("type must be file or folder")

@@ -1,22 +1,25 @@
 package sharing
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
+	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
-	service *Service
+	service        *Service
+	storageClient  *storage.Client
 }
 
-func newHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func newHandler(service *Service, storageClient *storage.Client) *Handler {
+	return &Handler{service: service, storageClient: storageClient}
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +152,73 @@ func (h *Handler) getPublic(w http.ResponseWriter, r *http.Request) {
 			FacileID: record.Folder.FacileID,
 			Name:     record.Folder.Name,
 		}
+	}
+
+	httpjson.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) downloadSharedFile(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	fileID, err := strconv.ParseInt(chi.URLParam(r, "fileId"), 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Invalid("invalid file id"))
+		return
+	}
+
+	file, _, err := h.service.getSharedFile(r.Context(), token, fileID)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	reader, err := h.storageClient.GetObject(r.Context(), file.BucketKey)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to read file", err))
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", file.MimeType)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+file.Name+`"`)
+	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, reader)
+}
+
+func (h *Handler) listSharedFolder(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+
+	var folderID int64
+	if raw := r.URL.Query().Get("folder_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			httpjson.WriteError(w, errors.Invalid("invalid folder_id"))
+			return
+		}
+		folderID = id
+	}
+
+	files, folders, share, err := h.service.listSharedFolderContents(r.Context(), token, folderID)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	resp := SharedFolderContentsResponse{
+		Permission: share.Permission,
+		Files:      make([]PublicFile, 0, len(files)),
+		Folders:    make([]PublicFolder, 0, len(folders)),
+	}
+	for _, f := range files {
+		resp.Files = append(resp.Files, PublicFile{
+			ID: f.ID, FacileID: f.FacileID, Name: f.Name,
+			MimeType: f.MimeType, Size: f.Size,
+		})
+	}
+	for _, f := range folders {
+		resp.Folders = append(resp.Folders, PublicFolder{
+			ID: f.ID, FacileID: f.FacileID, Name: f.Name,
+		})
 	}
 
 	httpjson.WriteJSON(w, http.StatusOK, resp)

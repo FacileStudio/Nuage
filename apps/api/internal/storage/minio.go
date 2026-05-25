@@ -102,3 +102,48 @@ func (c *Client) StatObject(ctx context.Context, key string) (ObjectInfo, error)
 		LastModified: info.LastModified,
 	}, nil
 }
+
+func (c *Client) AssembleChunks(ctx context.Context, destKey string, chunkKeys []string, totalSize int64, contentType string) error {
+	readers := make([]io.Reader, 0, len(chunkKeys))
+	closers := make([]io.ReadCloser, 0, len(chunkKeys))
+	defer func() {
+		for _, cl := range closers {
+			cl.Close()
+		}
+	}()
+
+	for _, key := range chunkKeys {
+		r, err := c.GetObject(ctx, key)
+		if err != nil {
+			return err
+		}
+		readers = append(readers, r)
+		closers = append(closers, r)
+	}
+
+	multi := io.MultiReader(readers...)
+	return c.PutObject(ctx, destKey, multi, totalSize, contentType)
+}
+
+func (c *Client) DeletePrefix(ctx context.Context, prefix string) error {
+	objectsCh := c.mc.ListObjects(ctx, c.bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	})
+	for obj := range objectsCh {
+		if obj.Err != nil {
+			return obj.Err
+		}
+		if err := c.mc.RemoveObject(ctx, c.bucket, obj.Key, minio.RemoveObjectOptions{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) CopyObject(ctx context.Context, srcKey, destKey string) error {
+	src := minio.CopySrcOptions{Bucket: c.bucket, Object: srcKey}
+	dst := minio.CopyDestOptions{Bucket: c.bucket, Object: destKey}
+	_, err := c.mc.CopyObject(ctx, dst, src)
+	return err
+}

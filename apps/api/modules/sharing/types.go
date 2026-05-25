@@ -44,3 +44,9 @@ type PublicFolder struct {
 	FacileID string `json:"facile_id"`
 	Name     string `json:"name"`
 }
+
+type SharedFolderContentsResponse struct {
+	Permission string         `json:"permission"`
+	Files      []PublicFile   `json:"files"`
+	Folders    []PublicFolder `json:"folders"`
+}

@@ -11,10 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
@@ -24,10 +26,12 @@ type Service struct {
 	orm      *gorm.DB
 	storage  *storage.Client
 	notifier *nook.Notifier
+	activity *activity.Logger
+	quota    *quota.Service
 }
 
-func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier) *Service {
-	return &Service{orm: orm, storage: storageClient, notifier: notifier}
+func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier, actLogger *activity.Logger, quotaService *quota.Service) *Service {
+	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService}
 }
 
 func (s *Service) deduplicateFileName(ctx context.Context, name string, folderID *int64) string {
@@ -87,7 +91,7 @@ func (s *Service) deduplicateFolderName(ctx context.Context, name string, parent
 	}
 }
 
-func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, _ int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
+func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
 	if folderID != nil {
 		var folder schemas.Folder
 		if err := s.orm.WithContext(ctx).Where("id = ?", *folderID).First(&folder).Error; err != nil {
@@ -95,6 +99,12 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 				return nil, errors.NotFound("folder not found")
 			}
 			return nil, errors.Internal("failed to verify folder", err)
+		}
+	}
+
+	if s.quota != nil && estimatedSize > 0 {
+		if err := s.quota.CheckQuota(ctx, userID, estimatedSize); err != nil {
+			return nil, err
 		}
 	}
 
@@ -133,9 +143,20 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		return nil, errors.Internal("failed to save file record", err)
 	}
 
+	if s.quota != nil {
+		s.quota.UpdateUsage(ctx, userID, info.Size)
+	}
+
 	s.notifier.Notify(ctx, userID, "file.uploaded", nook.EventData{
 		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
+
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "file.uploaded", ResourceType: "file",
+			ResourceID: record.ID, ResourceName: record.Name,
+		})
+	}
 
 	return record, nil
 }
@@ -209,6 +230,13 @@ func (s *Service) deleteFile(ctx context.Context, userID int64, fileID string) e
 		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
 
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "file.deleted", ResourceType: "file",
+			ResourceID: record.ID, ResourceName: record.Name,
+		})
+	}
+
 	return nil
 }
 
@@ -253,6 +281,13 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 	s.notifier.Notify(ctx, userID, "file.updated", nook.EventData{
 		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
+
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "file.updated", ResourceType: "file",
+			ResourceID: record.ID, ResourceName: record.Name,
+		})
+	}
 
 	return &record, nil
 }
@@ -299,6 +334,13 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 	s.notifier.Notify(ctx, userID, "folder.created", nook.EventData{
 		Folder: &nook.FolderData{ID: record.ID, Name: record.Name},
 	})
+
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "folder.created", ResourceType: "folder",
+			ResourceID: record.ID, ResourceName: record.Name,
+		})
+	}
 
 	return record, nil
 }
@@ -391,6 +433,13 @@ func (s *Service) updateFolder(ctx context.Context, userID int64, folderID strin
 		Folder: &nook.FolderData{ID: record.ID, Name: record.Name},
 	})
 
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "folder.updated", ResourceType: "folder",
+			ResourceID: record.ID, ResourceName: record.Name,
+		})
+	}
+
 	return &record, nil
 }
 
@@ -432,6 +481,13 @@ func (s *Service) deleteFolder(ctx context.Context, userID int64, folderID strin
 	s.notifier.Notify(ctx, userID, "folder.deleted", nook.EventData{
 		Folder: &nook.FolderData{ID: folder.ID, Name: folder.Name},
 	})
+
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "folder.deleted", ResourceType: "folder",
+			ResourceID: folder.ID, ResourceName: folder.Name,
+		})
+	}
 
 	return nil
 }

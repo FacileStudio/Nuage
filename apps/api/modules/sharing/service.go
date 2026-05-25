@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
@@ -17,10 +18,11 @@ import (
 type Service struct {
 	orm      *gorm.DB
 	notifier *nook.Notifier
+	activity *activity.Logger
 }
 
-func NewService(orm *gorm.DB, notifier *nook.Notifier) *Service {
-	return &Service{orm: orm, notifier: notifier}
+func NewService(orm *gorm.DB, notifier *nook.Notifier, actLogger *activity.Logger) *Service {
+	return &Service{orm: orm, notifier: notifier, activity: actLogger}
 }
 
 func (s *Service) createShare(ctx context.Context, userID int64, req CreateShareRequest) (*schemas.Share, error) {
@@ -69,6 +71,13 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 	s.notifier.Notify(ctx, userID, "share.created", nook.EventData{
 		Share: &nook.ShareData{ID: record.ID, SharedWithEmail: sharedWithEmail, Permission: record.Permission},
 	})
+
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "share.created", ResourceType: "share",
+			ResourceID: record.ID, ResourceName: sharedWithEmail,
+		})
+	}
 
 	return record, nil
 }
@@ -119,6 +128,13 @@ func (s *Service) deleteShare(ctx context.Context, userID int64, shareID string)
 		Share: &nook.ShareData{ID: share.ID, Permission: share.Permission},
 	})
 
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "share.revoked", ResourceType: "share",
+			ResourceID: share.ID,
+		})
+	}
+
 	return nil
 }
 
@@ -139,6 +155,117 @@ func (s *Service) getByToken(ctx context.Context, token string) (*schemas.Share,
 	}
 
 	return &record, nil
+}
+
+func (s *Service) checkPermission(ctx context.Context, token string, requiredPermission string) (*schemas.Share, error) {
+	share, err := s.getByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	if requiredPermission == "edit" && share.Permission != "edit" {
+		return nil, errors.Forbidden("insufficient share permission")
+	}
+
+	return share, nil
+}
+
+func (s *Service) getSharedFile(ctx context.Context, token string, fileID int64) (*schemas.File, *schemas.Share, error) {
+	share, err := s.getByToken(ctx, token)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var file schemas.File
+	if share.FileID != nil && *share.FileID == fileID {
+		if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", fileID).First(&file).Error; err != nil {
+			return nil, nil, errors.NotFound("file not found")
+		}
+		return &file, share, nil
+	}
+
+	if share.FolderID != nil {
+		if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", fileID).First(&file).Error; err != nil {
+			return nil, nil, errors.NotFound("file not found")
+		}
+		if s.isFileInSharedFolder(ctx, file, *share.FolderID) {
+			return &file, share, nil
+		}
+	}
+
+	return nil, nil, errors.Forbidden("file not accessible via this share")
+}
+
+func (s *Service) isFileInSharedFolder(ctx context.Context, file schemas.File, sharedFolderID int64) bool {
+	if file.FolderID == nil {
+		return false
+	}
+
+	folderID := *file.FolderID
+	for i := 0; i < 50; i++ {
+		if folderID == sharedFolderID {
+			return true
+		}
+		var folder schemas.Folder
+		if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", folderID).First(&folder).Error; err != nil {
+			return false
+		}
+		if folder.ParentID == nil {
+			return false
+		}
+		folderID = *folder.ParentID
+	}
+	return false
+}
+
+func (s *Service) listSharedFolderContents(ctx context.Context, token string, folderID int64) ([]schemas.File, []schemas.Folder, *schemas.Share, error) {
+	share, err := s.getByToken(ctx, token)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if share.FolderID == nil {
+		return nil, nil, nil, errors.Invalid("this share is not a folder share")
+	}
+
+	targetID := folderID
+	if targetID == 0 {
+		targetID = *share.FolderID
+	} else {
+		if !s.isFolderInSharedFolder(ctx, targetID, *share.FolderID) {
+			return nil, nil, nil, errors.Forbidden("folder not accessible via this share")
+		}
+	}
+
+	var files []schemas.File
+	s.orm.WithContext(ctx).Where("folder_id = ? AND deleted_at IS NULL", targetID).Order("created_at desc").Find(&files)
+
+	var folders []schemas.Folder
+	s.orm.WithContext(ctx).Where("parent_id = ? AND deleted_at IS NULL", targetID).Order("name asc").Find(&folders)
+
+	return files, folders, share, nil
+}
+
+func (s *Service) isFolderInSharedFolder(ctx context.Context, folderID, sharedFolderID int64) bool {
+	if folderID == sharedFolderID {
+		return true
+	}
+
+	currentID := folderID
+	for i := 0; i < 50; i++ {
+		var folder schemas.Folder
+		if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", currentID).First(&folder).Error; err != nil {
+			return false
+		}
+		if folder.ParentID == nil {
+			return false
+		}
+		if *folder.ParentID == sharedFolderID {
+			return true
+		}
+		currentID = *folder.ParentID
+	}
+	return false
 }
 
 func mapShare(record schemas.Share) ShareResponse {

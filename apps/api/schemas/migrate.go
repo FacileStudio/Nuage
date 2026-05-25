@@ -12,7 +12,20 @@ func Migrate(db *gorm.DB) error {
 	if err := preMigrate(db); err != nil {
 		return err
 	}
-	if err := db.AutoMigrate(&User{}, &Session{}, &ApiToken{}, &File{}, &Folder{}, &Share{}, &Setting{}); err != nil {
+	if err := db.AutoMigrate(
+		&User{},
+		&Session{},
+		&ApiToken{},
+		&File{},
+		&Folder{},
+		&Share{},
+		&Setting{},
+		&FileVersion{},
+		&UploadSession{},
+		&UploadChunk{},
+		&UserQuota{},
+		&ActivityLog{},
+	); err != nil {
 		return err
 	}
 	return usercolor.BackfillMissing(context.Background(), db)
