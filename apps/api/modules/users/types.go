@@ -25,15 +25,14 @@ type UpdateRequest struct {
 }
 
 type ApiTokenResponse struct {
-	Token     string `json:"token"`
+	ID        int64  `json:"id"`
+	Token     string `json:"token,omitempty"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
 }
 
-type ApiTokenStatusResponse struct {
-	HasToken  bool   `json:"has_token"`
-	Name      string `json:"name,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
+type ApiTokenListResponse struct {
+	Tokens []ApiTokenResponse `json:"tokens"`
 }
 
 type CreateApiTokenRequest struct {

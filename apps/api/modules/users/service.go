@@ -259,8 +259,6 @@ func (service *Service) createApiToken(context context.Context, userID string, n
 		return "", nil, errors.Internal("failed to parse user id", err)
 	}
 
-	service.orm.WithContext(context).Where("user_id = ?", id).Delete(&schemas.ApiToken{})
-
 	rawToken, err := authcrypto.NewToken()
 	if err != nil {
 		return "", nil, errors.Internal("failed to generate token", err)
@@ -279,30 +277,29 @@ func (service *Service) createApiToken(context context.Context, userID string, n
 	return rawToken, record, nil
 }
 
-func (service *Service) getApiToken(context context.Context, userID string) (*schemas.ApiToken, error) {
+func (service *Service) getApiTokens(context context.Context, userID string) ([]schemas.ApiToken, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return nil, errors.Internal("failed to parse user id", err)
 	}
 
-	var record schemas.ApiToken
-	err = service.orm.WithContext(context).Where("user_id = ?", id).First(&record).Error
-	if stderrors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
+	var records []schemas.ApiToken
+	if err := service.orm.WithContext(context).Where("user_id = ?", id).Order("created_at desc").Find(&records).Error; err != nil {
+		return nil, errors.Internal("failed to read api tokens", err)
 	}
-	if err != nil {
-		return nil, errors.Internal("failed to read api token", err)
-	}
-	return &record, nil
+	return records, nil
 }
 
-func (service *Service) deleteApiToken(context context.Context, userID string) error {
+func (service *Service) deleteApiToken(context context.Context, userID string, tokenID int64) error {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return errors.Internal("failed to parse user id", err)
 	}
 
-	service.orm.WithContext(context).Where("user_id = ?", id).Delete(&schemas.ApiToken{})
+	result := service.orm.WithContext(context).Where("id = ? AND user_id = ?", tokenID, id).Delete(&schemas.ApiToken{})
+	if result.RowsAffected == 0 {
+		return errors.NotFound("token not found")
+	}
 	return nil
 }
 

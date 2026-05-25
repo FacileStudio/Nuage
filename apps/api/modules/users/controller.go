@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -156,23 +157,24 @@ func (controller *Controller) uploadAvatar(context context.Context, request *htt
 	return &MeResponse{User: *user}, nil
 }
 
-func (controller *Controller) getApiToken(context context.Context) (*ApiTokenStatusResponse, error) {
+func (controller *Controller) getApiToken(context context.Context) (*ApiTokenListResponse, error) {
 	identity, ok := authcontext.IdentityFromContext(context)
 	if !ok {
 		return nil, errors.Unauthorized("missing auth")
 	}
-	record, err := controller.service.getApiToken(context, identity.UserID)
+	records, err := controller.service.getApiTokens(context, identity.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if record == nil {
-		return &ApiTokenStatusResponse{HasToken: false}, nil
+	tokens := make([]ApiTokenResponse, 0, len(records))
+	for _, r := range records {
+		tokens = append(tokens, ApiTokenResponse{
+			ID:        r.ID,
+			Name:      r.Name,
+			CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
+		})
 	}
-	return &ApiTokenStatusResponse{
-		HasToken:  true,
-		Name:      record.Name,
-		CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339),
-	}, nil
+	return &ApiTokenListResponse{Tokens: tokens}, nil
 }
 
 func (controller *Controller) createApiToken(context context.Context, req *CreateApiTokenRequest) (*ApiTokenResponse, error) {
@@ -189,16 +191,21 @@ func (controller *Controller) createApiToken(context context.Context, req *Creat
 		return nil, err
 	}
 	return &ApiTokenResponse{
+		ID:        record.ID,
 		Token:     rawToken,
 		Name:      record.Name,
 		CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339),
 	}, nil
 }
 
-func (controller *Controller) deleteApiToken(context context.Context) error {
+func (controller *Controller) deleteApiToken(context context.Context, tokenID string) error {
 	identity, ok := authcontext.IdentityFromContext(context)
 	if !ok {
 		return errors.Unauthorized("missing auth")
 	}
-	return controller.service.deleteApiToken(context, identity.UserID)
+	id, err := strconv.ParseInt(tokenID, 10, 64)
+	if err != nil {
+		return errors.Invalid("invalid token id")
+	}
+	return controller.service.deleteApiToken(context, identity.UserID, id)
 }

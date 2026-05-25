@@ -87,8 +87,8 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 			httpjson.WriteJSON(w, http.StatusCreated, resp)
 		})
 
-		router.With(middleware.RequireAuth(authService)).Delete("/me/api-token", func(w http.ResponseWriter, request *http.Request) {
-			if err := service.controller.deleteApiToken(request.Context()); err != nil {
+		router.With(middleware.RequireAuth(authService)).Delete("/me/api-token/{id}", func(w http.ResponseWriter, request *http.Request) {
+			if err := service.controller.deleteApiToken(request.Context(), chi.URLParam(request, "id")); err != nil {
 				httpjson.WriteError(w, err)
 				return
 			}
