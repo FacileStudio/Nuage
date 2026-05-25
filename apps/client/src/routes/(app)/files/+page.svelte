@@ -53,6 +53,11 @@
 		return { update(v: boolean) { node.indeterminate = v; } };
 	}
 
+	function setChecked(node: HTMLInputElement, value: boolean) {
+		node.checked = !!value;
+		return { update(v: boolean) { node.checked = !!v; } };
+	}
+
 	async function loadPdf(url: string) {
 		pdfPageNum = 1;
 		pdfScale = 1.0;
@@ -632,7 +637,7 @@
 									<div class="absolute top-2 left-2 z-10 {selectedMap[`folder:${folder.id}`] ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
 										<input
 											type="checkbox"
-											checked={selectedMap[`folder:${folder.id}`]}
+											use:setChecked={!!selectedMap[`folder:${folder.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 											tabindex={-1}
@@ -676,7 +681,7 @@
 									<div class="absolute top-2 left-2 z-10 {selectedMap[`file:${file.id}`] ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
 										<input
 											type="checkbox"
-											checked={selectedMap[`file:${file.id}`]}
+											use:setChecked={!!selectedMap[`file:${file.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 											tabindex={-1}
@@ -747,7 +752,7 @@
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
 										<input
 											type="checkbox"
-											checked={selectedMap[`folder:${folder.id}`]}
+											use:setChecked={!!selectedMap[`folder:${folder.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 										/>
@@ -794,7 +799,7 @@
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
 										<input
 											type="checkbox"
-											checked={selectedMap[`file:${file.id}`]}
+											use:setChecked={!!selectedMap[`file:${file.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 										/>
