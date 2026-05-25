@@ -32,12 +32,17 @@
 	let pdfCanvas = $state<HTMLCanvasElement | null>(null);
 	let pdfFitScale = $state(1.0);
 
-	let selectedItems = $state<Record<string, true>>({});
+	let selectedKeys = $state<string[]>([]);
 	let lastClickedIndex = $state(-1);
 	let showDeleteConfirm = $state(false);
 	let bulkDeleting = $state(false);
 	let isMac = $state(false);
-	let selectionCount = $derived(Object.keys(selectedItems).length);
+	let selectedMap = $derived.by(() => {
+		const m: Record<string, true> = {};
+		for (const k of selectedKeys) m[k] = true;
+		return m;
+	});
+	let selectionCount = $derived(selectedKeys.length);
 	let allItemsList = $derived([
 		...folders.map(f => ({ type: 'folder' as const, id: f.id })),
 		...files.map(f => ({ type: 'file' as const, id: f.id }))
@@ -117,7 +122,7 @@
 
 	async function loadContents() {
 		loading = true;
-		selectedItems = {};
+		selectedKeys = [];
 		lastClickedIndex = -1;
 		try {
 			const [fileRes, folderRes] = await Promise.all([
@@ -239,7 +244,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 		if (!isSelected(type, item.id)) {
-			selectedItems = {};
+			selectedKeys = [];
 			lastClickedIndex = -1;
 		}
 		contextMenu = { x: e.clientX, y: e.clientY, type, item };
@@ -301,7 +306,7 @@
 				await backend.deleteFolder(app.token, (item as Folder).id);
 			}
 		} catch {}
-		selectedItems = {};
+		selectedKeys = [];
 		lastClickedIndex = -1;
 		await loadContents();
 	}
@@ -376,7 +381,7 @@
 	}
 
 	function isSelected(type: 'file' | 'folder', id: number): boolean {
-		return itemKey(type, id) in selectedItems;
+		return !!selectedMap[itemKey(type, id)];
 	}
 
 	function toggleSelect(type: 'file' | 'folder', id: number, index: number, e: MouseEvent) {
@@ -386,16 +391,22 @@
 			const items = allItemsList;
 			const start = Math.min(lastClickedIndex, index);
 			const end = Math.max(lastClickedIndex, index);
-			const next: Record<string, true> = modKey ? { ...selectedItems } : {};
-			for (let i = start; i <= end; i++) next[itemKey(items[i].type, items[i].id)] = true;
-			selectedItems = next;
+			const base = modKey ? [...selectedKeys] : [];
+			const existing = new Set(base);
+			for (let i = start; i <= end; i++) {
+				const k = itemKey(items[i].type, items[i].id);
+				if (!existing.has(k)) base.push(k);
+			}
+			selectedKeys = base;
 		} else if (modKey) {
-			const next = { ...selectedItems };
-			if (key in next) delete next[key]; else next[key] = true;
-			selectedItems = next;
+			if (selectedKeys.includes(key)) {
+				selectedKeys = selectedKeys.filter(k => k !== key);
+			} else {
+				selectedKeys = [...selectedKeys, key];
+			}
 			lastClickedIndex = index;
 		} else {
-			selectedItems = { [key]: true };
+			selectedKeys = [key];
 			lastClickedIndex = index;
 		}
 	}
@@ -404,18 +415,22 @@
 		e.preventDefault();
 		e.stopPropagation();
 		const key = itemKey(type, id);
-		const next = { ...selectedItems };
 		if (e.shiftKey && lastClickedIndex >= 0) {
 			const items = allItemsList;
 			const start = Math.min(lastClickedIndex, index);
 			const end = Math.max(lastClickedIndex, index);
-			for (let i = start; i <= end; i++) next[itemKey(items[i].type, items[i].id)] = true;
-		} else if (key in next) {
-			delete next[key];
+			const next = [...selectedKeys];
+			const existing = new Set(next);
+			for (let i = start; i <= end; i++) {
+				const k = itemKey(items[i].type, items[i].id);
+				if (!existing.has(k)) next.push(k);
+			}
+			selectedKeys = next;
+		} else if (selectedKeys.includes(key)) {
+			selectedKeys = selectedKeys.filter(k => k !== key);
 		} else {
-			next[key] = true;
+			selectedKeys = [...selectedKeys, key];
 		}
-		selectedItems = next;
 		lastClickedIndex = index;
 	}
 
@@ -427,27 +442,25 @@
 			toggleSelect(type, item.id, index, e);
 			return;
 		}
-		selectedItems = { [itemKey(type, item.id)]: true };
+		selectedKeys = [itemKey(type, item.id)];
 		lastClickedIndex = index;
 	}
 
 	function handleItemDblClick(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
 		e.preventDefault();
 		e.stopPropagation();
-		selectedItems = {};
+		selectedKeys = [];
 		lastClickedIndex = -1;
 		if (type === 'folder') openFolder(item as Folder);
 		else openPreview(item as NuageFile);
 	}
 
 	function selectAll() {
-		const next: Record<string, true> = {};
-		for (const i of allItemsList) next[itemKey(i.type, i.id)] = true;
-		selectedItems = next;
+		selectedKeys = allItemsList.map(i => itemKey(i.type, i.id));
 	}
 
 	function clearSelection() {
-		selectedItems = {};
+		selectedKeys = [];
 		lastClickedIndex = -1;
 	}
 
@@ -470,17 +483,17 @@
 	}
 
 	async function bulkDelete() {
-		if (Object.keys(selectedItems).length === 0) return;
+		if (selectedKeys.length === 0) return;
 		bulkDeleting = true;
 		const promises: Promise<unknown>[] = [];
-		for (const key of Object.keys(selectedItems)) {
+		for (const key of selectedKeys) {
 			const [type, idStr] = key.split(':');
 			const id = Number(idStr);
 			if (type === 'file') promises.push(backend.deleteFile(app.token, id));
 			else promises.push(backend.deleteFolder(app.token, id));
 		}
 		await Promise.allSettled(promises);
-		selectedItems = {};
+		selectedKeys = [];
 		lastClickedIndex = -1;
 		bulkDeleting = false;
 		showDeleteConfirm = false;
@@ -611,15 +624,15 @@
 						<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 							{#each folders as folder, i}
 								<button
-									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {isSelected('folder', folder.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
+									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {selectedMap[`folder:${folder.id}`] ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
 									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
 									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
-									<div class="absolute top-2 left-2 z-10 {isSelected('folder', folder.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
+									<div class="absolute top-2 left-2 z-10 {selectedMap[`folder:${folder.id}`] ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
 										<input
 											type="checkbox"
-											checked={isSelected('folder', folder.id)}
+											checked={selectedMap[`folder:${folder.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 											tabindex={-1}
@@ -655,15 +668,15 @@
 							{#each files as file, j}
 								{@const fileIdx = folders.length + j}
 								<button
-									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {isSelected('file', file.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
+									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {selectedMap[`file:${file.id}`] ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
 									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
 									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
-									<div class="absolute top-2 left-2 z-10 {isSelected('file', file.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
+									<div class="absolute top-2 left-2 z-10 {selectedMap[`file:${file.id}`] ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
 										<input
 											type="checkbox"
-											checked={isSelected('file', file.id)}
+											checked={selectedMap[`file:${file.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 											tabindex={-1}
@@ -726,7 +739,7 @@
 						<tbody>
 							{#each folders as folder, i}
 								<tr
-									class="group cursor-pointer border-b border-border/50 transition-colors {isSelected('folder', folder.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}"
+									class="group cursor-pointer border-b border-border/50 transition-colors {selectedMap[`folder:${folder.id}`] ? 'bg-primary/5' : 'hover:bg-muted/50'}"
 									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
 									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
@@ -734,7 +747,7 @@
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
 										<input
 											type="checkbox"
-											checked={isSelected('folder', folder.id)}
+											checked={selectedMap[`folder:${folder.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 										/>
@@ -773,7 +786,7 @@
 							{#each files as file, j}
 								{@const fileIdx = folders.length + j}
 								<tr
-									class="group cursor-pointer border-b border-border/50 transition-colors {isSelected('file', file.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}"
+									class="group cursor-pointer border-b border-border/50 transition-colors {selectedMap[`file:${file.id}`] ? 'bg-primary/5' : 'hover:bg-muted/50'}"
 									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
 									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
@@ -781,7 +794,7 @@
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
 										<input
 											type="checkbox"
-											checked={isSelected('file', file.id)}
+											checked={selectedMap[`file:${file.id}`]}
 											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
 											class="h-4 w-4 cursor-pointer accent-primary"
 										/>
