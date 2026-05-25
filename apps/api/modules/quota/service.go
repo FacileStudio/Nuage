@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultQuotaBytes int64 = 5 * 1024 * 1024 * 1024
+const defaultQuotaBytes int64 = 50 * 1024 * 1024 * 1024
 
 type Service struct {
 	orm *gorm.DB
