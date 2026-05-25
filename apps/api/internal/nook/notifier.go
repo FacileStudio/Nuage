@@ -42,7 +42,12 @@ type FolderData struct {
 
 type ShareData struct {
 	ID         int64  `json:"id"`
+	Token      string `json:"token"`
 	Permission string `json:"permission"`
+	FileID     *int64 `json:"file_id,omitempty"`
+	FolderID   *int64 `json:"folder_id,omitempty"`
+	FileName   string `json:"file_name,omitempty"`
+	FolderName string `json:"folder_name,omitempty"`
 }
 
 type Event struct {

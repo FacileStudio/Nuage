@@ -60,14 +60,29 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 		return nil, errors.Internal("failed to create share", err)
 	}
 
+	resName, resType := s.resolveShareResourceName(ctx, record.FileID, record.FolderID)
+
+	shareData := &nook.ShareData{
+		ID:         record.ID,
+		Token:      record.Token,
+		Permission: record.Permission,
+		FileID:     record.FileID,
+		FolderID:   record.FolderID,
+	}
+	if resType == "file" {
+		shareData.FileName = resName
+	} else if resType == "folder" {
+		shareData.FolderName = resName
+	}
+
 	s.notifier.Notify(ctx, userID, "share.created", nook.EventData{
-		Share: &nook.ShareData{ID: record.ID, Permission: record.Permission},
+		Share: shareData,
 	})
 
 	if s.activity != nil {
 		s.activity.Log(ctx, activity.Entry{
-			UserID: userID, EventType: "share.created", ResourceType: "share",
-			ResourceID: record.ID,
+			UserID: userID, EventType: "share.created", ResourceType: resType,
+			ResourceID: record.ID, ResourceName: resName,
 		})
 	}
 
@@ -104,14 +119,29 @@ func (s *Service) deleteShare(ctx context.Context, userID int64, shareID string)
 		return errors.Internal("failed to delete share", err)
 	}
 
+	resName, resType := s.resolveShareResourceName(ctx, share.FileID, share.FolderID)
+
+	shareData := &nook.ShareData{
+		ID:         share.ID,
+		Token:      share.Token,
+		Permission: share.Permission,
+		FileID:     share.FileID,
+		FolderID:   share.FolderID,
+	}
+	if resType == "file" {
+		shareData.FileName = resName
+	} else if resType == "folder" {
+		shareData.FolderName = resName
+	}
+
 	s.notifier.Notify(ctx, userID, "share.revoked", nook.EventData{
-		Share: &nook.ShareData{ID: share.ID, Permission: share.Permission},
+		Share: shareData,
 	})
 
 	if s.activity != nil {
 		s.activity.Log(ctx, activity.Entry{
-			UserID: userID, EventType: "share.revoked", ResourceType: "share",
-			ResourceID: share.ID,
+			UserID: userID, EventType: "share.revoked", ResourceType: resType,
+			ResourceID: share.ID, ResourceName: resName,
 		})
 	}
 
@@ -237,6 +267,22 @@ func (s *Service) isFolderInSharedFolder(ctx context.Context, folderID, sharedFo
 		currentID = *folder.ParentID
 	}
 	return false
+}
+
+func (s *Service) resolveShareResourceName(ctx context.Context, fileID, folderID *int64) (string, string) {
+	if fileID != nil {
+		var file schemas.File
+		if err := s.orm.WithContext(ctx).Select("name").Where("id = ?", *fileID).First(&file).Error; err == nil {
+			return file.Name, "file"
+		}
+	}
+	if folderID != nil {
+		var folder schemas.Folder
+		if err := s.orm.WithContext(ctx).Select("name").Where("id = ?", *folderID).First(&folder).Error; err == nil {
+			return folder.Name, "folder"
+		}
+	}
+	return "", "share"
 }
 
 func mapShare(record schemas.Share) ShareResponse {
