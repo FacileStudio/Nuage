@@ -36,6 +36,7 @@
 	let lastClickedIndex = $state(-1);
 	let showDeleteConfirm = $state(false);
 	let bulkDeleting = $state(false);
+	let selectMode = $state(false);
 	let isMac = $state(false);
 	let selectedMap = $derived.by(() => {
 		const m: Record<string, true> = {};
@@ -429,6 +430,11 @@
 	}
 
 	function handleItemClick(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder, index: number) {
+		if (!selectMode) {
+			if (type === 'folder') openFolder(item as Folder);
+			else openPreview(item as NuageFile);
+			return;
+		}
 		const modKey = isMac ? e.metaKey : e.ctrlKey;
 		if (modKey || e.shiftKey) {
 			e.preventDefault();
@@ -436,15 +442,20 @@
 			toggleSelect(type, item.id, index, e);
 			return;
 		}
-		selectedKeys = [itemKey(type, item.id)];
+		const key = itemKey(type, item.id);
+		if (selectedKeys.includes(key)) {
+			selectedKeys = selectedKeys.filter(k => k !== key);
+		} else {
+			selectedKeys = [...selectedKeys, key];
+		}
 		lastClickedIndex = index;
 	}
 
 	function handleItemDblClick(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
+		if (!selectMode) return;
 		e.preventDefault();
 		e.stopPropagation();
-		selectedKeys = [];
-		lastClickedIndex = -1;
+		exitSelectMode();
 		if (type === 'folder') openFolder(item as Folder);
 		else openPreview(item as NuageFile);
 	}
@@ -458,21 +469,29 @@
 		lastClickedIndex = -1;
 	}
 
+	function enterSelectMode() {
+		selectMode = true;
+	}
+
+	function exitSelectMode() {
+		selectMode = false;
+		selectedKeys = [];
+		lastClickedIndex = -1;
+	}
+
 	function handleGlobalKeydown(e: KeyboardEvent) {
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 		if (previewFile || showNewFolderDialog || showDeleteConfirm) return;
 		const modKey = isMac ? e.metaKey : e.ctrlKey;
-		if (modKey && e.key === 'a') {
+		if (modKey && e.key === 'a' && selectMode) {
 			e.preventDefault();
 			selectAll();
 		} else if (e.key === 'Escape') {
-			if (selectionCount > 0) clearSelection();
+			if (selectMode) exitSelectMode();
 			else closeContextMenu();
-		} else if (e.key === 'Delete' || e.key === 'Backspace') {
-			if (selectionCount > 0) {
-				e.preventDefault();
-				showDeleteConfirm = true;
-			}
+		} else if ((e.key === 'Delete' || e.key === 'Backspace') && selectMode && selectionCount > 0) {
+			e.preventDefault();
+			showDeleteConfirm = true;
 		}
 	}
 
@@ -491,6 +510,7 @@
 		lastClickedIndex = -1;
 		bulkDeleting = false;
 		showDeleteConfirm = false;
+		selectMode = false;
 		await loadContents();
 	}
 </script>
@@ -568,21 +588,46 @@
 		</div>
 
 		<div class="flex items-center gap-2">
-			<label
-				class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-			>
-				<iconify-icon icon="solar:upload-linear" width="16"></iconify-icon>
-				Upload
-				<input type="file" multiple class="hidden" onchange={handleFileInput} />
-			</label>
+			{#if selectMode}
+				<button
+					class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+					onclick={exitSelectMode}
+				>
+					Cancel
+				</button>
+				<span class="text-sm text-muted-foreground">{selectionCount} selected</span>
+				<div class="flex-1"></div>
+				<button
+					class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+					onclick={() => selectionCount === allItemsList.length ? clearSelection() : selectAll()}
+				>
+					{selectionCount === allItemsList.length ? 'Deselect all' : 'Select all'}
+				</button>
+			{:else}
+				<label
+					class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+				>
+					<iconify-icon icon="solar:upload-linear" width="16"></iconify-icon>
+					Upload
+					<input type="file" multiple class="hidden" onchange={handleFileInput} />
+				</label>
 
-			<button
-				class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-				onclick={() => showNewFolderDialog = true}
-			>
-				<iconify-icon icon="mdi:plus" width="16"></iconify-icon>
-				New folder
-			</button>
+				<button
+					class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+					onclick={() => showNewFolderDialog = true}
+				>
+					<iconify-icon icon="mdi:plus" width="16"></iconify-icon>
+					New folder
+				</button>
+
+				<button
+					class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+					onclick={enterSelectMode}
+				>
+					<iconify-icon icon="solar:check-circle-linear" width="16"></iconify-icon>
+					Select
+				</button>
+			{/if}
 		</div>
 	</div>
 
@@ -624,13 +669,13 @@
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
 									<div
-										class="absolute top-2 left-2 z-10 flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-all {selectedMap[`folder:${folder.id}`] ? 'opacity-100 border-primary bg-primary text-primary-foreground' : 'opacity-0 group-hover:opacity-100 border-muted-foreground/40 bg-background'}"
+										class="absolute top-2 left-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition-all duration-200 {selectMode ? (selectedMap[`folder:${folder.id}`] ? 'opacity-100 scale-100 border-primary bg-primary text-primary-foreground' : 'opacity-100 scale-100 border-muted-foreground/40 bg-white/80') : 'opacity-0 scale-75 pointer-events-none'}"
 										onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
 										role="checkbox"
 										aria-checked={!!selectedMap[`folder:${folder.id}`]}
 									>
 										{#if selectedMap[`folder:${folder.id}`]}
-											<iconify-icon icon="mdi:check" width="12"></iconify-icon>
+											<iconify-icon icon="mdi:check" width="14"></iconify-icon>
 										{/if}
 									</div>
 									{#if renameTarget?.type === 'folder' && (renameTarget.item as Folder).id === folder.id}
@@ -669,13 +714,13 @@
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
 									<div
-										class="absolute top-2 left-2 z-10 flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-all {selectedMap[`file:${file.id}`] ? 'opacity-100 border-primary bg-primary text-primary-foreground' : 'opacity-0 group-hover:opacity-100 border-muted-foreground/40 bg-background'}"
+										class="absolute top-2 left-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition-all duration-200 {selectMode ? (selectedMap[`file:${file.id}`] ? 'opacity-100 scale-100 border-primary bg-primary text-primary-foreground' : 'opacity-100 scale-100 border-muted-foreground/40 bg-white/80') : 'opacity-0 scale-75 pointer-events-none'}"
 										onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
 										role="checkbox"
 										aria-checked={!!selectedMap[`file:${file.id}`]}
 									>
 										{#if selectedMap[`file:${file.id}`]}
-											<iconify-icon icon="mdi:check" width="12"></iconify-icon>
+											<iconify-icon icon="mdi:check" width="14"></iconify-icon>
 										{/if}
 									</div>
 									{#if renameTarget?.type === 'file' && (renameTarget.item as NuageFile).id === file.id}
@@ -716,22 +761,26 @@
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-								<th class="pb-3 pr-2 w-10">
-									<div
-										class="flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-colors {selectionCount > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
-										onclick={() => selectionCount === allItemsList.length ? clearSelection() : selectAll()}
-										role="checkbox"
-										aria-checked={selectionCount > 0 && selectionCount === allItemsList.length}
-										aria-label="Select all"
-									>
-										{#if selectionCount > 0 && selectionCount === allItemsList.length}
-											<iconify-icon icon="mdi:check" width="12"></iconify-icon>
-										{:else if selectionCount > 0}
-											<iconify-icon icon="mdi:minus" width="12"></iconify-icon>
-										{/if}
+								<th class="pb-3 pr-4">
+									<div class="flex items-center">
+										<div class="shrink-0 overflow-hidden transition-all duration-200 {selectMode ? 'w-8 opacity-100' : 'w-0 opacity-0'}">
+											<div
+												class="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition-colors {selectionCount > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
+												onclick={() => selectionCount === allItemsList.length ? clearSelection() : selectAll()}
+												role="checkbox"
+												aria-checked={selectionCount > 0 && selectionCount === allItemsList.length}
+												aria-label="Select all"
+											>
+												{#if selectionCount > 0 && selectionCount === allItemsList.length}
+													<iconify-icon icon="mdi:check" width="14"></iconify-icon>
+												{:else if selectionCount > 0}
+													<iconify-icon icon="mdi:minus" width="14"></iconify-icon>
+												{/if}
+											</div>
+										</div>
+										Name
 									</div>
 								</th>
-								<th class="pb-3 pr-4">Name</th>
 								<th class="hidden pb-3 pr-4 sm:table-cell">Size</th>
 								<th class="hidden pb-3 pr-4 md:table-cell">Modified</th>
 								<th class="pb-3 w-10"></th>
@@ -745,34 +794,36 @@
 									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
-									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
-										<div
-											class="flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-colors {selectedMap[`folder:${folder.id}`] ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
-											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
-											role="checkbox"
-											aria-checked={!!selectedMap[`folder:${folder.id}`]}
-										>
-											{#if selectedMap[`folder:${folder.id}`]}
-												<iconify-icon icon="mdi:check" width="12"></iconify-icon>
-											{/if}
-										</div>
-									</td>
 									<td class="py-2.5 pr-4">
-										<div class="flex items-center gap-3">
-											<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
-											{#if renameTarget?.type === 'folder' && (renameTarget.item as Folder).id === folder.id}
-												<input
-													type="text"
-													bind:value={renameValue}
-													onkeydown={handleRenameKeydown}
-													onblur={cancelRename}
-													onclick={(e) => e.stopPropagation()}
-													class="rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-													autofocus
-												/>
-											{:else}
-												<span class="truncate font-medium">{folder.name}</span>
-											{/if}
+										<div class="flex items-center">
+											<div class="shrink-0 overflow-hidden transition-all duration-200 {selectMode ? 'w-8 opacity-100' : 'w-0 opacity-0'}" onclick={(e) => e.stopPropagation()}>
+												<div
+													class="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition-colors {selectedMap[`folder:${folder.id}`] ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
+													onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
+													role="checkbox"
+													aria-checked={!!selectedMap[`folder:${folder.id}`]}
+												>
+													{#if selectedMap[`folder:${folder.id}`]}
+														<iconify-icon icon="mdi:check" width="14"></iconify-icon>
+													{/if}
+												</div>
+											</div>
+											<div class="flex items-center gap-3 min-w-0">
+												<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
+												{#if renameTarget?.type === 'folder' && (renameTarget.item as Folder).id === folder.id}
+													<input
+														type="text"
+														bind:value={renameValue}
+														onkeydown={handleRenameKeydown}
+														onblur={cancelRename}
+														onclick={(e) => e.stopPropagation()}
+														class="rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+														autofocus
+													/>
+												{:else}
+													<span class="truncate font-medium">{folder.name}</span>
+												{/if}
+											</div>
 										</div>
 									</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">—</td>
@@ -796,34 +847,36 @@
 									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
-									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
-										<div
-											class="flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-colors {selectedMap[`file:${file.id}`] ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
-											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
-											role="checkbox"
-											aria-checked={!!selectedMap[`file:${file.id}`]}
-										>
-											{#if selectedMap[`file:${file.id}`]}
-												<iconify-icon icon="mdi:check" width="12"></iconify-icon>
-											{/if}
-										</div>
-									</td>
 									<td class="py-2.5 pr-4">
-										<div class="flex items-center gap-3">
-											<iconify-icon icon={fileIcon(file.mime_type)} width="20" class="{fileIconColor(file.mime_type)} shrink-0"></iconify-icon>
-											{#if renameTarget?.type === 'file' && (renameTarget.item as NuageFile).id === file.id}
-												<input
-													type="text"
-													bind:value={renameValue}
-													onkeydown={handleRenameKeydown}
-													onblur={cancelRename}
-													onclick={(e) => e.stopPropagation()}
-													class="rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-													autofocus
-												/>
-											{:else}
-												<span class="truncate font-medium">{file.name}</span>
-											{/if}
+										<div class="flex items-center">
+											<div class="shrink-0 overflow-hidden transition-all duration-200 {selectMode ? 'w-8 opacity-100' : 'w-0 opacity-0'}" onclick={(e) => e.stopPropagation()}>
+												<div
+													class="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition-colors {selectedMap[`file:${file.id}`] ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
+													onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
+													role="checkbox"
+													aria-checked={!!selectedMap[`file:${file.id}`]}
+												>
+													{#if selectedMap[`file:${file.id}`]}
+														<iconify-icon icon="mdi:check" width="14"></iconify-icon>
+													{/if}
+												</div>
+											</div>
+											<div class="flex items-center gap-3 min-w-0">
+												<iconify-icon icon={fileIcon(file.mime_type)} width="20" class="{fileIconColor(file.mime_type)} shrink-0"></iconify-icon>
+												{#if renameTarget?.type === 'file' && (renameTarget.item as NuageFile).id === file.id}
+													<input
+														type="text"
+														bind:value={renameValue}
+														onkeydown={handleRenameKeydown}
+														onblur={cancelRename}
+														onclick={(e) => e.stopPropagation()}
+														class="rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+														autofocus
+													/>
+												{:else}
+													<span class="truncate font-medium">{file.name}</span>
+												{/if}
+											</div>
 										</div>
 									</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">{formatSize(file.size)}</td>
@@ -1003,12 +1056,12 @@
 			</button>
 			<div class="h-4 w-px bg-border"></div>
 			<span class="hidden text-xs text-muted-foreground sm:inline">
-				{isMac ? '⌘' : 'Ctrl+'}A all · {isMac ? '⌫' : 'Del'} delete · Esc clear
+				{isMac ? '⌘' : 'Ctrl+'}A all · {isMac ? '⌫' : 'Del'} delete · Esc exit
 			</span>
 			<button
 				class="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted"
-				onclick={clearSelection}
-				aria-label="Deselect all"
+				onclick={exitSelectMode}
+				aria-label="Exit select mode"
 			>
 				<iconify-icon icon="solar:close-circle-linear" width="16" class="text-muted-foreground"></iconify-icon>
 			</button>
