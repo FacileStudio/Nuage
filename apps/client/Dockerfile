@@ -12,5 +12,6 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/package.json ./
 ENV PORT=3000
 ENV ORIGIN=http://localhost:3000
+ENV BODY_SIZE_LIMIT=Infinity
 EXPOSE 3000
 CMD ["bun", "./build/index.js"]

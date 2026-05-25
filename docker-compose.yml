@@ -83,6 +83,7 @@ services:
     environment:
       API_URL: http://nuage-api:4000
       ORIGIN: ${ORIGIN:-http://localhost:3000}
+      BODY_SIZE_LIMIT: Infinity
     depends_on:
       nuage-api:
         condition: service_healthy
