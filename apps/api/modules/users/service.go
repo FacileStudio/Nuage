@@ -136,7 +136,7 @@ func (service *Service) storeAvatar(context context.Context, userID string, read
 		return nil, err
 	}
 
-	newAvatarURL := "/files/" + strings.ReplaceAll(relativePath, string(filepath.Separator), "/")
+	newAvatarURL := "/api/" + strings.ReplaceAll(relativePath, string(filepath.Separator), "/")
 	oldAvatarURL := record.AvatarURL
 	record.AvatarURL = newAvatarURL
 
@@ -217,7 +217,8 @@ func (service *Service) persistAvatarFile(userID int64, reader io.Reader, conten
 }
 
 func (service *Service) removeAvatarFile(avatarURL string) {
-	oldPath := strings.TrimPrefix(avatarURL, "/files/")
+	oldPath := strings.TrimPrefix(avatarURL, "/api/")
+	oldPath = strings.TrimPrefix(oldPath, "/files/")
 	oldAbsolutePath := filepath.Join(service.storageDir, filepath.Clean(oldPath))
 	if strings.HasPrefix(oldAbsolutePath, filepath.Clean(filepath.Join(service.storageDir, "avatars"))) {
 		_ = os.Remove(oldAbsolutePath)

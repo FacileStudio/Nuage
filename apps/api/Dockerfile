@@ -16,8 +16,10 @@ FROM alpine:3.20
 
 RUN apk add --no-cache wget
 
-COPY --from=build /repo/apps/api/bin/api /api
+WORKDIR /app
+
+COPY --from=build /repo/apps/api/bin/api /app/api
 
 EXPOSE 4000
 
-ENTRYPOINT ["/api"]
+ENTRYPOINT ["/app/api"]

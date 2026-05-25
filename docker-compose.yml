@@ -46,6 +46,7 @@ services:
       DATABASE_URL: postgres://nuage:nuage-internal-db@nuage-db:5432/nuage?sslmode=disable
       PORT: "4000"
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      STORAGE_DIR: /app/data
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
@@ -57,6 +58,8 @@ services:
       MINIO_SECRET_KEY: nuage-internal-storage
       MINIO_BUCKET: nuage
       MINIO_USE_SSL: "false"
+    volumes:
+      - api_data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
       interval: 10s
@@ -89,3 +92,5 @@ volumes:
     name: nuage_db_data
   storage_data:
     name: nuage_storage_data
+  api_data:
+    name: nuage_api_data

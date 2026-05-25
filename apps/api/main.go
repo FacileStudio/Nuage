@@ -125,6 +125,12 @@ func main() {
 		httpjson.WriteJSON(w, http.StatusOK, docs)
 	})
 
+	avatarFS := http.StripPrefix("/avatars/", http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
+	router.Get("/avatars/*", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+		avatarFS.ServeHTTP(w, r)
+	})
+
 	auth.RegisterRoutes(router, authService, appEnv)
 	users.RegisterRoutes(router, userService, authService)
 	files.RegisterRoutes(router, fileService, authService)
