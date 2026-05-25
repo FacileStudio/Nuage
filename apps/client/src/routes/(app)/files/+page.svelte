@@ -116,6 +116,156 @@
 	function pdfZoomOut() { pdfScale = Math.max(pdfScale - 0.25, 0.25); renderPdfPage(); }
 	function pdfFitToWidth() { pdfScale = pdfFitScale; renderPdfPage(); }
 
+	let dndItem = $state<{ type: 'file' | 'folder'; id: number } | null>(null);
+	let dndTargetFolderId = $state<number | null | 'root'>(null);
+	let dndCounter = $state<Record<string, number>>({});
+	let moveToast = $state<string | null>(null);
+	let moveToastTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
+
+	function isDndInternal(e: DragEvent): boolean {
+		return e.dataTransfer?.types.includes('application/x-nuage-move') ?? false;
+	}
+
+	function handleItemDragStart(e: DragEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
+		if (selectMode) { e.preventDefault(); return; }
+		dndItem = { type, id: item.id };
+		e.dataTransfer!.effectAllowed = 'move';
+		e.dataTransfer!.setData('application/x-nuage-move', JSON.stringify({ type, id: item.id }));
+		e.dataTransfer!.setData('text/plain', item.name);
+	}
+
+	function handleItemDragEnd() {
+		dndItem = null;
+		dndTargetFolderId = null;
+		dndCounter = {};
+	}
+
+	function isDescendantDrop(targetFolderId: number): boolean {
+		if (!dndItem || dndItem.type !== 'folder') return false;
+		if (dndItem.id === targetFolderId) return true;
+		let fid: number | null = targetFolderId;
+		const visited = new Set<number>();
+		while (fid != null) {
+			if (visited.has(fid)) break;
+			visited.add(fid);
+			if (fid === dndItem.id) return true;
+			const f = folders.find(fo => fo.id === fid);
+			if (f) fid = f.parent_id;
+			else break;
+		}
+		return false;
+	}
+
+	function handleFolderDragOver(e: DragEvent, folderId: number) {
+		if (!isDndInternal(e)) return;
+		if (dndItem && dndItem.type === 'folder' && isDescendantDrop(folderId)) return;
+		if (dndItem && dndItem.type === 'folder' && dndItem.id === folderId) return;
+		e.preventDefault();
+		e.dataTransfer!.dropEffect = 'move';
+	}
+
+	function handleFolderDragEnter(e: DragEvent, folderId: number) {
+		if (!isDndInternal(e)) return;
+		e.preventDefault();
+		const key = `folder:${folderId}`;
+		dndCounter = { ...dndCounter, [key]: (dndCounter[key] ?? 0) + 1 };
+		if (dndItem && dndItem.type === 'folder' && (dndItem.id === folderId || isDescendantDrop(folderId))) return;
+		dndTargetFolderId = folderId;
+	}
+
+	function handleFolderDragLeave(e: DragEvent, folderId: number) {
+		if (!isDndInternal(e)) return;
+		const key = `folder:${folderId}`;
+		const next = (dndCounter[key] ?? 0) - 1;
+		dndCounter = { ...dndCounter, [key]: next };
+		if (next <= 0 && dndTargetFolderId === folderId) {
+			dndTargetFolderId = null;
+		}
+	}
+
+	async function handleFolderDrop(e: DragEvent, folderId: number) {
+		if (!isDndInternal(e)) return;
+		e.preventDefault();
+		e.stopPropagation();
+		dndTargetFolderId = null;
+		dndCounter = {};
+		if (!dndItem) return;
+		if (dndItem.type === 'folder' && (dndItem.id === folderId || isDescendantDrop(folderId))) return;
+		try {
+			if (dndItem.type === 'file') {
+				await backend.updateFile(app.token, dndItem.id, { folder_id: folderId });
+			} else {
+				await backend.updateFolder(app.token, dndItem.id, { parent_id: folderId });
+			}
+			showMoveToast(folderId);
+			await loadContents();
+		} catch {}
+		dndItem = null;
+	}
+
+	function handleBreadcrumbDragOver(e: DragEvent, folderId: number | null) {
+		if (!isDndInternal(e)) return;
+		if (dndItem && dndItem.type === 'folder' && folderId !== null && isDescendantDrop(folderId)) return;
+		e.preventDefault();
+		e.dataTransfer!.dropEffect = 'move';
+	}
+
+	function handleBreadcrumbDragEnter(e: DragEvent, folderId: number | null) {
+		if (!isDndInternal(e)) return;
+		e.preventDefault();
+		const key = folderId === null ? 'root' : `bc:${folderId}`;
+		dndCounter = { ...dndCounter, [key]: (dndCounter[key] ?? 0) + 1 };
+		if (dndItem && dndItem.type === 'folder' && folderId !== null && isDescendantDrop(folderId)) return;
+		dndTargetFolderId = folderId === null ? 'root' : folderId;
+	}
+
+	function handleBreadcrumbDragLeave(e: DragEvent, folderId: number | null) {
+		if (!isDndInternal(e)) return;
+		const key = folderId === null ? 'root' : `bc:${folderId}`;
+		const next = (dndCounter[key] ?? 0) - 1;
+		dndCounter = { ...dndCounter, [key]: next };
+		const target = folderId === null ? 'root' : folderId;
+		if (next <= 0 && dndTargetFolderId === target) {
+			dndTargetFolderId = null;
+		}
+	}
+
+	async function handleBreadcrumbDrop(e: DragEvent, folderId: number | null) {
+		if (!isDndInternal(e)) return;
+		e.preventDefault();
+		e.stopPropagation();
+		dndTargetFolderId = null;
+		dndCounter = {};
+		if (!dndItem) return;
+		if (dndItem.type === 'folder' && folderId !== null && isDescendantDrop(folderId)) return;
+		const currentParent = currentFolderId;
+		const targetId = folderId;
+		if (targetId === currentParent) { dndItem = null; return; }
+		try {
+			if (dndItem.type === 'file') {
+				await backend.updateFile(app.token, dndItem.id, { folder_id: targetId });
+			} else {
+				await backend.updateFolder(app.token, dndItem.id, { parent_id: targetId });
+			}
+			showMoveToast(targetId);
+			await loadContents();
+		} catch {}
+		dndItem = null;
+	}
+
+	function showMoveToast(targetFolderId: number | null | 'root') {
+		if (moveToastTimeout) clearTimeout(moveToastTimeout);
+		if (targetFolderId === null || targetFolderId === 'root') {
+			moveToast = 'Moved to Files (root)';
+		} else {
+			const f = folders.find(fo => fo.id === targetFolderId);
+			const bc = breadcrumbs.find(b => b.id === targetFolderId);
+			const name = f?.name ?? bc?.name ?? 'folder';
+			moveToast = `Moved to ${name}`;
+		}
+		moveToastTimeout = setTimeout(() => { moveToast = null; }, 2500);
+	}
+
 	let shareTarget = $state<{ type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
 	let shareLoading = $state(false);
 	let existingShare = $state<Share | null>(null);
@@ -287,6 +437,7 @@
 	}
 
 	async function handleFileDrop(e: DragEvent) {
+		if (isDndInternal(e)) return;
 		e.preventDefault();
 		dragCounter = 0;
 		const droppedFiles = e.dataTransfer?.files;
@@ -295,15 +446,18 @@
 	}
 
 	function handleDragOver(e: DragEvent) {
+		if (isDndInternal(e)) return;
 		e.preventDefault();
 	}
 
 	function handleDragEnter(e: DragEvent) {
+		if (isDndInternal(e)) return;
 		e.preventDefault();
 		dragCounter++;
 	}
 
-	function handleDragLeave() {
+	function handleDragLeave(e: DragEvent) {
+		if (isDndInternal(e)) return;
 		dragCounter--;
 	}
 
@@ -714,11 +868,22 @@
 						<iconify-icon icon="solar:alt-arrow-right-linear" width="14" class="text-muted-foreground shrink-0"></iconify-icon>
 					{/if}
 					{#if i === breadcrumbs.length - 1}
-						<span class="font-medium truncate">{crumb.name}</span>
+						<span
+							class="font-medium truncate rounded px-1 py-0.5 transition-colors {dndItem && dndTargetFolderId === (crumb.id === null ? 'root' : crumb.id) ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}"
+							role="listitem"
+							ondragover={(e) => handleBreadcrumbDragOver(e, crumb.id)}
+							ondragenter={(e) => handleBreadcrumbDragEnter(e, crumb.id)}
+							ondragleave={(e) => handleBreadcrumbDragLeave(e, crumb.id)}
+							ondrop={(e) => handleBreadcrumbDrop(e, crumb.id)}
+						>{crumb.name}</span>
 					{:else}
 						<button
-							class="truncate text-muted-foreground hover:text-foreground transition-colors"
+							class="truncate text-muted-foreground hover:text-foreground transition-colors rounded px-1 py-0.5 {dndItem && dndTargetFolderId === (crumb.id === null ? 'root' : crumb.id) ? 'bg-primary/15 !text-primary ring-1 ring-primary/40' : ''}"
 							onclick={() => navigateToFolder(crumb.id)}
+							ondragover={(e) => handleBreadcrumbDragOver(e, crumb.id)}
+							ondragenter={(e) => handleBreadcrumbDragEnter(e, crumb.id)}
+							ondragleave={(e) => handleBreadcrumbDragLeave(e, crumb.id)}
+							ondrop={(e) => handleBreadcrumbDrop(e, crumb.id)}
 						>
 							{crumb.name}
 						</button>
@@ -860,10 +1025,17 @@
 						<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 							{#each folders as folder, i}
 								<button
-									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {selectedMap[`folder:${folder.id}`] ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
+									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {dndTargetFolderId === folder.id ? 'border-primary bg-primary/10 ring-2 ring-primary/50 scale-[1.02]' : selectedMap[`folder:${folder.id}`] ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'} {dndItem?.id === folder.id && dndItem?.type === 'folder' ? 'opacity-40' : ''}"
 									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
 									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
+									draggable={!selectMode}
+									ondragstart={(e) => handleItemDragStart(e, 'folder', folder)}
+									ondragend={handleItemDragEnd}
+									ondragover={(e) => handleFolderDragOver(e, folder.id)}
+									ondragenter={(e) => handleFolderDragEnter(e, folder.id)}
+									ondragleave={(e) => handleFolderDragLeave(e, folder.id)}
+									ondrop={(e) => handleFolderDrop(e, folder.id)}
 								>
 									<div
 										class="absolute top-2 left-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition-all duration-200 {selectMode ? (selectedMap[`folder:${folder.id}`] ? 'opacity-100 scale-100 border-primary bg-primary text-primary-foreground' : 'opacity-100 scale-100 border-muted-foreground/40 bg-white/80') : 'opacity-0 scale-75 pointer-events-none'}"
@@ -905,10 +1077,13 @@
 							{#each files as file, j}
 								{@const fileIdx = folders.length + j}
 								<button
-									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {selectedMap[`file:${file.id}`] ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
+									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {selectedMap[`file:${file.id}`] ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'} {dndItem?.id === file.id && dndItem?.type === 'file' ? 'opacity-40' : ''}"
 									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
 									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
+									draggable={!selectMode}
+									ondragstart={(e) => handleItemDragStart(e, 'file', file)}
+									ondragend={handleItemDragEnd}
 								>
 									<div
 										class="absolute top-2 left-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition-all duration-200 {selectMode ? (selectedMap[`file:${file.id}`] ? 'opacity-100 scale-100 border-primary bg-primary text-primary-foreground' : 'opacity-100 scale-100 border-muted-foreground/40 bg-white/80') : 'opacity-0 scale-75 pointer-events-none'}"
@@ -986,10 +1161,17 @@
 						<tbody>
 							{#each folders as folder, i}
 								<tr
-									class="group cursor-pointer border-b border-border/50 transition-colors {selectedMap[`folder:${folder.id}`] ? 'bg-primary/5' : 'hover:bg-muted/50'}"
+									class="group cursor-pointer border-b border-border/50 transition-colors {dndTargetFolderId === folder.id ? 'bg-primary/10 outline outline-2 outline-primary/50' : selectedMap[`folder:${folder.id}`] ? 'bg-primary/5' : 'hover:bg-muted/50'} {dndItem?.id === folder.id && dndItem?.type === 'folder' ? 'opacity-40' : ''}"
 									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
 									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
+									draggable={!selectMode}
+									ondragstart={(e) => handleItemDragStart(e, 'folder', folder)}
+									ondragend={handleItemDragEnd}
+									ondragover={(e) => handleFolderDragOver(e, folder.id)}
+									ondragenter={(e) => handleFolderDragEnter(e, folder.id)}
+									ondragleave={(e) => handleFolderDragLeave(e, folder.id)}
+									ondrop={(e) => handleFolderDrop(e, folder.id)}
 								>
 									<td class="py-2.5 pr-4">
 										<div class="flex items-center">
@@ -1039,10 +1221,13 @@
 							{#each files as file, j}
 								{@const fileIdx = folders.length + j}
 								<tr
-									class="group cursor-pointer border-b border-border/50 transition-colors {selectedMap[`file:${file.id}`] ? 'bg-primary/5' : 'hover:bg-muted/50'}"
+									class="group cursor-pointer border-b border-border/50 transition-colors {selectedMap[`file:${file.id}`] ? 'bg-primary/5' : 'hover:bg-muted/50'} {dndItem?.id === file.id && dndItem?.type === 'file' ? 'opacity-40' : ''}"
 									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
 									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
+									draggable={!selectMode}
+									ondragstart={(e) => handleItemDragStart(e, 'file', file)}
+									ondragend={handleItemDragEnd}
 								>
 									<td class="py-2.5 pr-4">
 										<div class="flex items-center">
@@ -1336,6 +1521,13 @@
 					</button>
 				</div>
 			</div>
+		</div>
+	{/if}
+
+	{#if moveToast}
+		<div class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 shadow-xl">
+			<iconify-icon icon="solar:check-circle-linear" width="16" class="text-emerald-600"></iconify-icon>
+			<span class="text-sm font-medium">{moveToast}</span>
 		</div>
 	{/if}
 
