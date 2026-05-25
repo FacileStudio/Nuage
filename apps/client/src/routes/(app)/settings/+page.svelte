@@ -4,7 +4,7 @@
 
 	const app = getContext<{ token: string; user: UserProfile | null; setUser: (u: UserProfile) => void }>('app');
 
-	let activeTab = $state<'profile' | 'instance'>('profile');
+	let activeTab = $state<'profile' | 'instance' | 'developers'>('profile');
 
 	let profileName = $state('');
 	let profileEmail = $state('');
@@ -17,6 +17,7 @@
 	let apiTokens = $state<ApiToken[]>([]);
 	let newTokenName = $state('');
 	let createdToken = $state<string | null>(null);
+	let copiedToken = $state(false);
 	let tokenLoading = $state(false);
 
 	let instanceName = $state('');
@@ -41,7 +42,7 @@
 			const settings = await backend.getSettings(app.token);
 			instanceName = settings.instance_name ?? '';
 			nookWebhookUrl = settings.nook_webhook_url ?? '';
-			nookSecret = settings.nook_secret ?? '';
+			nookSecret = settings.nook_webhook_secret ?? '';
 			nookEnabled = settings.nook_enabled === 'true';
 		} catch {}
 	}
@@ -109,11 +110,18 @@
 		tokenLoading = false;
 	}
 
-	async function revokeToken() {
+	async function copyToken() {
+		if (!createdToken) return;
+		await navigator.clipboard.writeText(createdToken);
+		copiedToken = true;
+		setTimeout(() => { copiedToken = false; }, 2000);
+	}
+
+	async function revokeToken(id: number) {
 		tokenLoading = true;
 		try {
-			await backend.deleteApiToken(app.token);
-			apiTokens = [];
+			await backend.deleteApiToken(app.token, id);
+			await loadApiTokens();
 			createdToken = null;
 		} catch {}
 		tokenLoading = false;
@@ -126,7 +134,7 @@
 			await backend.updateSettings(app.token, {
 				instance_name: instanceName,
 				nook_webhook_url: nookWebhookUrl,
-				nook_secret: nookSecret,
+				nook_webhook_secret: nookSecret,
 				nook_enabled: String(nookEnabled)
 			});
 			settingsMessage = 'Settings saved';
@@ -175,6 +183,12 @@
 				onclick={() => activeTab = 'profile'}
 			>
 				Profile
+			</button>
+			<button
+				class="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'developers' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+				onclick={() => activeTab = 'developers'}
+			>
+				Developers
 			</button>
 			<button
 				class="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium transition-colors {activeTab === 'instance' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
@@ -258,37 +272,65 @@
 					</div>
 				</div>
 
-				<div class="space-y-4">
-					<h2 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">API Token</h2>
-					{#if apiTokens.length > 0}
-						<div class="space-y-2">
-							{#each apiTokens as tok}
-								<div class="flex items-center justify-between rounded-md border border-border p-3">
+			</div>
+
+		{:else if activeTab === 'developers'}
+			<div class="mx-auto max-w-xl space-y-8">
+				<div class="space-y-2">
+					<h2 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">API Tokens</h2>
+					<p class="text-sm text-muted-foreground">Tokens are used to authenticate CLI tools and API integrations. The token value is only shown once at creation.</p>
+				</div>
+
+				{#if createdToken}
+					<div class="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4">
+						<p class="text-xs font-medium text-emerald-400">Token created — copy it now, it won't be shown again.</p>
+						<div class="mt-2 flex items-center gap-2">
+							<code class="flex-1 break-all rounded bg-background px-3 py-2 text-xs">{createdToken}</code>
+							<button
+								class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium transition-colors hover:bg-accent"
+								onclick={copyToken}
+							>
+								<iconify-icon icon={copiedToken ? 'solar:check-read-linear' : 'solar:copy-linear'} width="14"></iconify-icon>
+								{copiedToken ? 'Copied' : 'Copy'}
+							</button>
+						</div>
+					</div>
+				{/if}
+
+				{#if apiTokens.length > 0}
+					<div class="space-y-2">
+						{#each apiTokens as tok}
+							<div class="flex items-center justify-between rounded-md border border-border p-3">
+								<div class="flex items-center gap-3">
+									<iconify-icon icon="solar:key-linear" width="16" class="text-muted-foreground"></iconify-icon>
 									<div>
 										<p class="text-sm font-medium">{tok.name}</p>
 										<p class="text-xs text-muted-foreground">Created {new Date(tok.created_at).toLocaleDateString()}</p>
 									</div>
-									<button
-										class="inline-flex h-8 items-center rounded-md px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-										onclick={revokeToken}
-										disabled={tokenLoading}
-									>
-										Revoke
-									</button>
 								</div>
-							{/each}
-						</div>
-					{/if}
-					{#if createdToken}
-						<div class="rounded-md border border-emerald-200 bg-emerald-50 p-3">
-							<p class="text-xs font-medium text-emerald-800">Token created — copy it now, it won't be shown again:</p>
-							<code class="mt-1 block break-all text-xs text-emerald-900">{createdToken}</code>
-						</div>
-					{/if}
+								<button
+									class="inline-flex h-8 items-center rounded-md px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+									onclick={() => revokeToken(tok.id)}
+									disabled={tokenLoading}
+								>
+									Revoke
+								</button>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="rounded-md border border-dashed border-border p-6 text-center">
+						<p class="text-sm text-muted-foreground">No API tokens yet.</p>
+					</div>
+				{/if}
+
+				<div class="space-y-2">
+					<label for="new-token-name" class="block text-sm font-medium">New token</label>
 					<div class="flex items-center gap-2">
 						<input
+							id="new-token-name"
 							type="text"
-							placeholder="Token name"
+							placeholder="Token name (e.g. MacBook CLI)"
 							bind:value={newTokenName}
 							onkeydown={handleTokenKeydown}
 							class="flex h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
