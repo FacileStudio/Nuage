@@ -48,16 +48,6 @@
 		...files.map(f => ({ type: 'file' as const, id: f.id }))
 	]);
 
-	function indeterminate(node: HTMLInputElement, value: boolean) {
-		node.indeterminate = value;
-		return { update(v: boolean) { node.indeterminate = v; } };
-	}
-
-	function setChecked(node: HTMLInputElement, value: boolean) {
-		node.checked = !!value;
-		return { update(v: boolean) { node.checked = !!v; } };
-	}
-
 	async function loadPdf(url: string) {
 		pdfPageNum = 1;
 		pdfScale = 1.0;
@@ -417,7 +407,6 @@
 	}
 
 	function handleCheckboxClick(e: MouseEvent, type: 'file' | 'folder', id: number, index: number) {
-		e.preventDefault();
 		e.stopPropagation();
 		const key = itemKey(type, id);
 		if (e.shiftKey && lastClickedIndex >= 0) {
@@ -634,14 +623,15 @@
 									ondblclick={(e) => handleItemDblClick(e, 'folder', folder)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
-									<div class="absolute top-2 left-2 z-10 {selectedMap[`folder:${folder.id}`] ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
-										<input
-											type="checkbox"
-											use:setChecked={!!selectedMap[`folder:${folder.id}`]}
-											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
-											class="h-4 w-4 cursor-pointer accent-primary"
-											tabindex={-1}
-										/>
+									<div
+										class="absolute top-2 left-2 z-10 flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-all {selectedMap[`folder:${folder.id}`] ? 'opacity-100 border-primary bg-primary text-primary-foreground' : 'opacity-0 group-hover:opacity-100 border-muted-foreground/40 bg-background'}"
+										onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
+										role="checkbox"
+										aria-checked={!!selectedMap[`folder:${folder.id}`]}
+									>
+										{#if selectedMap[`folder:${folder.id}`]}
+											<iconify-icon icon="mdi:check" width="12"></iconify-icon>
+										{/if}
 									</div>
 									{#if renameTarget?.type === 'folder' && (renameTarget.item as Folder).id === folder.id}
 										<iconify-icon icon="solar:folder-linear" width="36" class="text-amber-500"></iconify-icon>
@@ -678,14 +668,15 @@
 									ondblclick={(e) => handleItemDblClick(e, 'file', file)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
-									<div class="absolute top-2 left-2 z-10 {selectedMap[`file:${file.id}`] ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
-										<input
-											type="checkbox"
-											use:setChecked={!!selectedMap[`file:${file.id}`]}
-											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
-											class="h-4 w-4 cursor-pointer accent-primary"
-											tabindex={-1}
-										/>
+									<div
+										class="absolute top-2 left-2 z-10 flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-all {selectedMap[`file:${file.id}`] ? 'opacity-100 border-primary bg-primary text-primary-foreground' : 'opacity-0 group-hover:opacity-100 border-muted-foreground/40 bg-background'}"
+										onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
+										role="checkbox"
+										aria-checked={!!selectedMap[`file:${file.id}`]}
+									>
+										{#if selectedMap[`file:${file.id}`]}
+											<iconify-icon icon="mdi:check" width="12"></iconify-icon>
+										{/if}
 									</div>
 									{#if renameTarget?.type === 'file' && (renameTarget.item as NuageFile).id === file.id}
 										<iconify-icon icon={fileIcon(file.mime_type)} width="36" class={fileIconColor(file.mime_type)}></iconify-icon>
@@ -726,14 +717,19 @@
 						<thead>
 							<tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
 								<th class="pb-3 pr-2 w-10">
-									<input
-										type="checkbox"
-										checked={selectionCount > 0 && selectionCount === allItemsList.length}
-										use:indeterminate={selectionCount > 0 && selectionCount < allItemsList.length}
-										onclick={(e) => { e.preventDefault(); selectionCount === allItemsList.length ? clearSelection() : selectAll(); }}
-										class="h-4 w-4 cursor-pointer accent-primary"
+									<div
+										class="flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-colors {selectionCount > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
+										onclick={() => selectionCount === allItemsList.length ? clearSelection() : selectAll()}
+										role="checkbox"
+										aria-checked={selectionCount > 0 && selectionCount === allItemsList.length}
 										aria-label="Select all"
-									/>
+									>
+										{#if selectionCount > 0 && selectionCount === allItemsList.length}
+											<iconify-icon icon="mdi:check" width="12"></iconify-icon>
+										{:else if selectionCount > 0}
+											<iconify-icon icon="mdi:minus" width="12"></iconify-icon>
+										{/if}
+									</div>
 								</th>
 								<th class="pb-3 pr-4">Name</th>
 								<th class="hidden pb-3 pr-4 sm:table-cell">Size</th>
@@ -750,12 +746,16 @@
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
-										<input
-											type="checkbox"
-											use:setChecked={!!selectedMap[`folder:${folder.id}`]}
+										<div
+											class="flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-colors {selectedMap[`folder:${folder.id}`] ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
 											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
-											class="h-4 w-4 cursor-pointer accent-primary"
-										/>
+											role="checkbox"
+											aria-checked={!!selectedMap[`folder:${folder.id}`]}
+										>
+											{#if selectedMap[`folder:${folder.id}`]}
+												<iconify-icon icon="mdi:check" width="12"></iconify-icon>
+											{/if}
+										</div>
 									</td>
 									<td class="py-2.5 pr-4">
 										<div class="flex items-center gap-3">
@@ -797,12 +797,16 @@
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
 									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
-										<input
-											type="checkbox"
-											use:setChecked={!!selectedMap[`file:${file.id}`]}
+										<div
+											class="flex h-4 w-4 cursor-pointer items-center justify-center rounded border transition-colors {selectedMap[`file:${file.id}`] ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background'}"
 											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
-											class="h-4 w-4 cursor-pointer accent-primary"
-										/>
+											role="checkbox"
+											aria-checked={!!selectedMap[`file:${file.id}`]}
+										>
+											{#if selectedMap[`file:${file.id}`]}
+												<iconify-icon icon="mdi:check" width="12"></iconify-icon>
+											{/if}
+										</div>
 									</td>
 									<td class="py-2.5 pr-4">
 										<div class="flex items-center gap-3">
