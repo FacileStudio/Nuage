@@ -32,12 +32,12 @@
 	let pdfCanvas = $state<HTMLCanvasElement | null>(null);
 	let pdfFitScale = $state(1.0);
 
-	let selectedItems = $state<Set<string>>(new Set());
+	let selectedItems = $state<Record<string, true>>({});
 	let lastClickedIndex = $state(-1);
 	let showDeleteConfirm = $state(false);
 	let bulkDeleting = $state(false);
 	let isMac = $state(false);
-	let selectionCount = $derived(selectedItems.size);
+	let selectionCount = $derived(Object.keys(selectedItems).length);
 	let allItemsList = $derived([
 		...folders.map(f => ({ type: 'folder' as const, id: f.id })),
 		...files.map(f => ({ type: 'file' as const, id: f.id }))
@@ -117,7 +117,7 @@
 
 	async function loadContents() {
 		loading = true;
-		selectedItems = new Set();
+		selectedItems = {};
 		lastClickedIndex = -1;
 		try {
 			const [fileRes, folderRes] = await Promise.all([
@@ -239,7 +239,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 		if (!isSelected(type, item.id)) {
-			selectedItems = new Set();
+			selectedItems = {};
 			lastClickedIndex = -1;
 		}
 		contextMenu = { x: e.clientX, y: e.clientY, type, item };
@@ -301,7 +301,7 @@
 				await backend.deleteFolder(app.token, (item as Folder).id);
 			}
 		} catch {}
-		selectedItems = new Set();
+		selectedItems = {};
 		lastClickedIndex = -1;
 		await loadContents();
 	}
@@ -376,7 +376,7 @@
 	}
 
 	function isSelected(type: 'file' | 'folder', id: number): boolean {
-		return selectedItems.has(itemKey(type, id));
+		return itemKey(type, id) in selectedItems;
 	}
 
 	function toggleSelect(type: 'file' | 'folder', id: number, index: number, e: MouseEvent) {
@@ -386,16 +386,16 @@
 			const items = allItemsList;
 			const start = Math.min(lastClickedIndex, index);
 			const end = Math.max(lastClickedIndex, index);
-			const next = modKey ? new Set(selectedItems) : new Set<string>();
-			for (let i = start; i <= end; i++) next.add(itemKey(items[i].type, items[i].id));
+			const next: Record<string, true> = modKey ? { ...selectedItems } : {};
+			for (let i = start; i <= end; i++) next[itemKey(items[i].type, items[i].id)] = true;
 			selectedItems = next;
 		} else if (modKey) {
-			const next = new Set(selectedItems);
-			if (next.has(key)) next.delete(key); else next.add(key);
+			const next = { ...selectedItems };
+			if (key in next) delete next[key]; else next[key] = true;
 			selectedItems = next;
 			lastClickedIndex = index;
 		} else {
-			selectedItems = new Set([key]);
+			selectedItems = { [key]: true };
 			lastClickedIndex = index;
 		}
 	}
@@ -404,16 +404,16 @@
 		e.preventDefault();
 		e.stopPropagation();
 		const key = itemKey(type, id);
-		const next = new Set(selectedItems);
+		const next = { ...selectedItems };
 		if (e.shiftKey && lastClickedIndex >= 0) {
 			const items = allItemsList;
 			const start = Math.min(lastClickedIndex, index);
 			const end = Math.max(lastClickedIndex, index);
-			for (let i = start; i <= end; i++) next.add(itemKey(items[i].type, items[i].id));
-		} else if (next.has(key)) {
-			next.delete(key);
+			for (let i = start; i <= end; i++) next[itemKey(items[i].type, items[i].id)] = true;
+		} else if (key in next) {
+			delete next[key];
 		} else {
-			next.add(key);
+			next[key] = true;
 		}
 		selectedItems = next;
 		lastClickedIndex = index;
@@ -427,25 +427,27 @@
 			toggleSelect(type, item.id, index, e);
 			return;
 		}
-		selectedItems = new Set([itemKey(type, item.id)]);
+		selectedItems = { [itemKey(type, item.id)]: true };
 		lastClickedIndex = index;
 	}
 
 	function handleItemDblClick(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
 		e.preventDefault();
 		e.stopPropagation();
-		selectedItems = new Set();
+		selectedItems = {};
 		lastClickedIndex = -1;
 		if (type === 'folder') openFolder(item as Folder);
 		else openPreview(item as NuageFile);
 	}
 
 	function selectAll() {
-		selectedItems = new Set(allItemsList.map(i => itemKey(i.type, i.id)));
+		const next: Record<string, true> = {};
+		for (const i of allItemsList) next[itemKey(i.type, i.id)] = true;
+		selectedItems = next;
 	}
 
 	function clearSelection() {
-		selectedItems = new Set();
+		selectedItems = {};
 		lastClickedIndex = -1;
 	}
 
@@ -468,17 +470,17 @@
 	}
 
 	async function bulkDelete() {
-		if (selectedItems.size === 0) return;
+		if (Object.keys(selectedItems).length === 0) return;
 		bulkDeleting = true;
 		const promises: Promise<unknown>[] = [];
-		for (const key of selectedItems) {
+		for (const key of Object.keys(selectedItems)) {
 			const [type, idStr] = key.split(':');
 			const id = Number(idStr);
 			if (type === 'file') promises.push(backend.deleteFile(app.token, id));
 			else promises.push(backend.deleteFolder(app.token, id));
 		}
 		await Promise.allSettled(promises);
-		selectedItems = new Set();
+		selectedItems = {};
 		lastClickedIndex = -1;
 		bulkDeleting = false;
 		showDeleteConfirm = false;
