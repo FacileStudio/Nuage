@@ -30,6 +30,7 @@
 	let pdfScale = $state(1.0);
 	let pdfDoc = $state<any>(null);
 	let pdfCanvas = $state<HTMLCanvasElement | null>(null);
+	let pdfFitScale = $state(1.0);
 
 	async function loadPdf(url: string) {
 		pdfPageNum = 1;
@@ -41,6 +42,11 @@
 		const doc = await pdfjsLib.getDocument(url).promise;
 		pdfDoc = doc;
 		pdfTotalPages = doc.numPages;
+		const firstPage = await doc.getPage(1);
+		const naturalViewport = firstPage.getViewport({ scale: 1.0 });
+		const targetWidth = Math.min(600, window.innerWidth * 0.75);
+		pdfFitScale = targetWidth / naturalViewport.width;
+		pdfScale = pdfFitScale;
 		await renderPdfPage();
 	}
 
@@ -62,8 +68,9 @@
 	function pdfNext() {
 		if (pdfPageNum < pdfTotalPages) { pdfPageNum++; renderPdfPage(); }
 	}
-	function pdfZoomIn() { pdfScale = Math.min(pdfScale + 0.25, 3); renderPdfPage(); }
-	function pdfZoomOut() { pdfScale = Math.max(pdfScale - 0.25, 0.5); renderPdfPage(); }
+	function pdfZoomIn() { pdfScale = Math.min(pdfScale + 0.25, 4); renderPdfPage(); }
+	function pdfZoomOut() { pdfScale = Math.max(pdfScale - 0.25, 0.25); renderPdfPage(); }
+	function pdfFitToWidth() { pdfScale = pdfFitScale; renderPdfPage(); }
 
 	let showNewFolderDialog = $state(false);
 	let newFolderName = $state('');
@@ -207,6 +214,7 @@
 
 	function openContextMenu(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
 		e.preventDefault();
+		e.stopPropagation();
 		contextMenu = { x: e.clientX, y: e.clientY, type, item };
 	}
 
@@ -502,11 +510,12 @@
 										/>
 									{:else}
 										{#if file.mime_type.startsWith('image/')}
-											<div class="flex h-16 w-full items-center justify-center overflow-hidden rounded">
+											<div class="w-full aspect-[4/3] overflow-hidden rounded bg-muted/30">
 												<img
 													src={backend.downloadUrl(app.token, file.id)}
 													alt={file.name}
-													class="h-full w-full object-cover rounded"
+													class="h-full w-full object-cover"
+													loading="lazy"
 												/>
 											</div>
 										{:else}
@@ -614,6 +623,7 @@
 		<div
 			class="fixed z-50 min-w-[160px] rounded-md border border-border bg-background py-1 shadow-lg"
 			style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+			onclick={(e) => e.stopPropagation()}
 		>
 			{#if contextMenu.type === 'file'}
 				<button
@@ -687,13 +697,17 @@
 								<button onclick={pdfZoomOut} aria-label="Zoom out" class="flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-background">
 									<iconify-icon icon="mdi:minus" width="16"></iconify-icon>
 								</button>
-								<span class="text-xs tabular-nums">{Math.round(pdfScale * 100)}%</span>
+								<span class="min-w-[3rem] text-center text-xs tabular-nums">{Math.round(pdfScale * 100)}%</span>
 								<button onclick={pdfZoomIn} aria-label="Zoom in" class="flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-background">
 									<iconify-icon icon="mdi:plus" width="16"></iconify-icon>
 								</button>
+								<div class="mx-1 h-4 w-px bg-border"></div>
+								<button onclick={pdfFitToWidth} aria-label="Fit to width" class="flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-background" title="Fit to width">
+									<iconify-icon icon="solar:full-screen-linear" width="16"></iconify-icon>
+								</button>
 							</div>
-							<div class="max-h-[70vh] max-w-[80vw] overflow-auto rounded border border-border bg-white">
-								<canvas bind:this={pdfCanvas} class="block"></canvas>
+							<div class="max-h-[75vh] max-w-[85vw] overflow-auto rounded border border-border bg-white shadow-sm">
+								<canvas bind:this={pdfCanvas} class="block mx-auto"></canvas>
 							</div>
 						</div>
 					{:else if previewFile.mime_type.startsWith('video/')}

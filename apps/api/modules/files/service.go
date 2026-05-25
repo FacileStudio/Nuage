@@ -30,6 +30,63 @@ func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Noti
 	return &Service{orm: orm, storage: storageClient, notifier: notifier}
 }
 
+func (s *Service) deduplicateFileName(ctx context.Context, name string, folderID *int64) string {
+	check := func(candidate string) bool {
+		query := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("name = ? AND deleted_at IS NULL", candidate)
+		if folderID != nil {
+			query = query.Where("folder_id = ?", *folderID)
+		} else {
+			query = query.Where("folder_id IS NULL")
+		}
+		var count int64
+		query.Count(&count)
+		return count > 0
+	}
+
+	if !check(name) {
+		return name
+	}
+
+	ext := ""
+	base := name
+	if dotIdx := strings.LastIndex(name, "."); dotIdx > 0 {
+		ext = name[dotIdx:]
+		base = name[:dotIdx]
+	}
+
+	for i := 1; ; i++ {
+		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
+		if !check(candidate) {
+			return candidate
+		}
+	}
+}
+
+func (s *Service) deduplicateFolderName(ctx context.Context, name string, parentID *int64) string {
+	check := func(candidate string) bool {
+		query := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("name = ? AND deleted_at IS NULL", candidate)
+		if parentID != nil {
+			query = query.Where("parent_id = ?", *parentID)
+		} else {
+			query = query.Where("parent_id IS NULL")
+		}
+		var count int64
+		query.Count(&count)
+		return count > 0
+	}
+
+	if !check(name) {
+		return name
+	}
+
+	for i := 1; ; i++ {
+		candidate := fmt.Sprintf("%s (%d)", name, i)
+		if !check(candidate) {
+			return candidate
+		}
+	}
+}
+
 func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, _ int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
 	if folderID != nil {
 		var folder schemas.Folder
@@ -41,6 +98,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		}
 	}
 
+	name = s.deduplicateFileName(ctx, name, folderID)
 	facileID := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s/%s", userID, facileID, name)
 
@@ -227,6 +285,7 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 		}
 	}
 
+	name = s.deduplicateFolderName(ctx, name, parentID)
 	record := &schemas.Folder{
 		FacileID: facile.NewID(),
 		Name:     name,
