@@ -889,7 +889,6 @@
 									{:else}
 										<iconify-icon icon="solar:folder-linear" width="36" class="text-amber-500"></iconify-icon>
 										<span class="w-full truncate text-xs font-medium">{folder.name}</span>
-										<span class="text-[10px] text-muted-foreground">{formatSize(folder.size)}</span>
 									{/if}
 								</button>
 							{/each}
@@ -1024,7 +1023,7 @@
 											</div>
 										</div>
 									</td>
-									<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">{formatSize(folder.size)}</td>
+									<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">—</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(folder.created_at)}</td>
 									<td class="py-2.5">
 										<button
@@ -1103,6 +1102,13 @@
 			style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
 			onclick={(e) => e.stopPropagation()}
 		>
+			{#if contextMenu.type === 'folder' && selectionCount <= 1}
+				<div class="px-3 py-2">
+					<div class="text-sm font-medium truncate max-w-[200px]">{(contextMenu.item as Folder).name}</div>
+					<div class="text-xs text-muted-foreground">{formatSize((contextMenu.item as Folder).size)}</div>
+				</div>
+				<div class="my-1 h-px bg-border"></div>
+			{/if}
 			{#if contextMenu.type === 'file' && selectionCount <= 1}
 				<button
 					class="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"

@@ -238,7 +238,7 @@
 														<span class="truncate font-medium">{folder.name}</span>
 													</div>
 												</td>
-												<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">{formatSize(folder.size)}</td>
+												<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">&mdash;</td>
 												<td class="py-2.5"></td>
 											</tr>
 										{/each}

@@ -146,7 +146,7 @@
 										<span class="truncate font-medium">{folder.name}</span>
 									</div>
 								</td>
-								<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">{formatSize(folder.size)}</td>
+								<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">—</td>
 								<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(folder.created_at)}</td>
 								<td class="py-2.5">
 									<div class="flex items-center justify-end gap-1">
