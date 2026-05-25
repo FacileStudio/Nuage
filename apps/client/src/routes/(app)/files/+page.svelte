@@ -38,13 +38,13 @@
 		pdfTotalPages = 0;
 		pdfDoc = null;
 		const pdfjsLib = await import('pdfjs-dist');
-		pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+		pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 		const doc = await pdfjsLib.getDocument(url).promise;
 		pdfDoc = doc;
 		pdfTotalPages = doc.numPages;
 		const firstPage = await doc.getPage(1);
 		const naturalViewport = firstPage.getViewport({ scale: 1.0 });
-		const targetWidth = Math.min(600, window.innerWidth * 0.75);
+		const targetWidth = Math.min(window.innerWidth * 0.85 - 64, 900);
 		pdfFitScale = targetWidth / naturalViewport.width;
 		pdfScale = pdfFitScale;
 		await renderPdfPage();
@@ -655,7 +655,7 @@
 	{#if previewFile}
 		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog">
 			<button class="absolute inset-0" onclick={closePreview} aria-label="Close preview"></button>
-			<div class="relative z-10 flex max-h-[90vh] max-w-[90vw] flex-col items-center rounded-lg bg-background p-4 shadow-xl">
+			<div class="relative z-10 flex max-h-[95vh] w-[90vw] max-w-5xl flex-col rounded-lg bg-background p-4 shadow-xl">
 				<div class="mb-3 flex w-full items-center justify-between">
 					<h3 class="truncate text-sm font-medium">{previewFile.name}</h3>
 					<div class="flex items-center gap-2">
@@ -676,7 +676,7 @@
 						</button>
 					</div>
 				</div>
-				<div class="overflow-auto">
+				<div class="flex-1 overflow-auto flex flex-col items-center min-h-0">
 					{#if previewFile.mime_type.startsWith('image/')}
 						<img
 							src={backend.downloadUrl(app.token, previewFile.id)}
@@ -684,7 +684,7 @@
 							class="max-h-[75vh] max-w-full rounded object-contain"
 						/>
 					{:else if previewFile.mime_type === 'application/pdf'}
-						<div class="flex flex-col items-center gap-3">
+						<div class="flex flex-1 flex-col items-center gap-3 min-h-0 w-full">
 							<div class="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-1.5">
 								<button onclick={pdfPrev} disabled={pdfPageNum <= 1} aria-label="Previous page" class="flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-background disabled:opacity-30">
 									<iconify-icon icon="mdi:chevron-left" width="18"></iconify-icon>
@@ -706,7 +706,7 @@
 									<iconify-icon icon="solar:full-screen-linear" width="16"></iconify-icon>
 								</button>
 							</div>
-							<div class="max-h-[75vh] max-w-[85vw] overflow-auto rounded border border-border bg-white shadow-sm">
+							<div class="flex-1 overflow-auto rounded border border-border bg-white shadow-sm">
 								<canvas bind:this={pdfCanvas} class="block mx-auto"></canvas>
 							</div>
 						</div>
