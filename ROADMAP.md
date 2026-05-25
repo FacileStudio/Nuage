@@ -27,13 +27,11 @@ This roadmap is organized in phases. Each phase builds on the previous one.
 - API integration tests (auth, files, folders, shares, trash, sync, versioning, quotas, activity)
 
 **What's missing (and why this roadmap exists):**
-- No CLI tool
-- No desktop/mobile sync client
 - No WebDAV
 - No E2E encryption
 - No 2FA
 - No server-side thumbnails
-- Share permissions stored but not enforced
+- No public share viewer in web UI
 
 ---
 
@@ -82,36 +80,44 @@ Make what exists reliable before adding surface area.
 
 ## Phase 2 — nuage-cli & Sync
 
-The CLI is the power-user interface. WebDAV is the universal one.
+The CLI is the sync agent. WebDAV is the universal access layer.
 
-### nuage-cli
+### nuage-cli (Sync Daemon)
 
-A standalone binary (Go) that talks to the Nuage API.
+A standalone Rust binary that keeps a local directory in bidirectional sync with Nuage. Lives at [FacileStudio/nuage-cli](https://github.com/FacileStudio/nuage-cli).
 
 ```
-nuage login https://nuage.example.com
-nuage upload ./report.pdf /documents/
-nuage download /documents/report.pdf .
-nuage ls /documents/
-nuage mkdir /documents/2026/
-nuage mv /documents/report.pdf /documents/2026/
-nuage rm /documents/old.txt
-nuage share /documents/report.pdf --expires 7d
-nuage sync ./local-folder /remote-folder
-nuage search "quarterly report"
-nuage whoami
-nuage token create "ci-pipeline"
+nuage login          # interactive setup (server URL, API token, sync dir)
+nuage start          # start background daemon
+nuage stop           # stop daemon
+nuage restart        # restart daemon
+nuage sync           # one-time sync (no daemon)
+nuage watch          # foreground sync (debugging)
+nuage status         # show daemon & sync status
+nuage logs [-f]      # show/tail daemon logs
+nuage upgrade        # self-update from GitHub
 ```
 
-- [ ] Auth: `nuage login` stores token in `~/.config/nuage/config.json`
-- [ ] Core commands: `ls`, `upload`, `download`, `mkdir`, `mv`, `rm`, `cat`
-- [ ] Sharing: `share`, `unshare`, `shares`
-- [ ] Sync: bidirectional folder sync using `/sync/changes` endpoint
+- [x] Auth: `nuage login` with interactive prompts, stores config in `~/.nuage.yml`
+- [x] Bidirectional sync using `/sync/changes` endpoint with incremental cursor
+- [x] Background daemon with start/stop/restart/status/logs
+- [x] File system watcher with debounce (2s) for real-time local change detection
+- [x] Remote polling at configurable interval (default 30s)
+- [x] Conflict resolution: three-way merge with `.conflict` copies
+- [x] File rename/move detection via hash matching
+- [x] Concurrent downloads (4 parallel via semaphore)
+- [x] Atomic writes (temp file + rename)
+- [x] SHA256 integrity verification
+- [x] Configurable ignore patterns (glob syntax)
+- [x] SQLite state database for sync tracking
+- [x] Self-upgrade via `cargo install` from GitHub
+- [ ] Selective sync: choose which remote folders to sync
+- [ ] Progress bars for file transfers
+- [ ] `--json` output format for scripting
+- [ ] File management commands: `ls`, `upload`, `download`, `mkdir`, `mv`, `rm`
+- [ ] Share commands: `share`, `unshare`, `shares`
 - [ ] Search: `search` with query
 - [ ] Token management: `token create`, `token list`, `token revoke`
-- [ ] Output formats: human-readable (default), `--json` for scripting
-- [ ] Progress bars for uploads/downloads
-- [ ] Glob patterns: `nuage upload *.pdf /documents/`
 - [ ] Pipe support: `cat file | nuage upload - /documents/stdin.txt`
 
 ### WebDAV Support
@@ -120,14 +126,6 @@ nuage token create "ci-pipeline"
 - [ ] Map Nuage folders to WebDAV collections
 - [ ] Auth via session token or API token
 - [ ] Enables integration with any tool that speaks WebDAV
-
-### Desktop Sync Agent
-- [ ] Lightweight tray app (Go + systray or Tauri)
-- [ ] Watch local folder → push changes to Nuage
-- [ ] Pull remote changes → write to local folder
-- [ ] Conflict resolution: last-write-wins with conflict copies
-- [ ] Selective sync: choose which remote folders to sync
-- [ ] Uses `/sync/changes` for efficient delta sync
 
 ---
 

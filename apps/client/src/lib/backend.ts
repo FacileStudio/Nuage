@@ -102,6 +102,19 @@ export type CompleteUploadResponse = {
 	file: NuageFile;
 };
 
+export type PublicShareResponse = {
+	token: string;
+	permission: string;
+	file: NuageFile | null;
+	folder: Folder | null;
+};
+
+export type PublicShareFilesResponse = {
+	permission: string;
+	files: NuageFile[];
+	folders: Folder[];
+};
+
 export type ActivityEntry = {
 	id: number;
 	user_id: number;
@@ -429,6 +442,21 @@ export const backend = {
 		return apiFetch<{ aborted: boolean }>(`/files/upload/${sessionId}`, {
 			method: 'DELETE'
 		}, token);
+	},
+
+	getPublicShare(shareToken: string) {
+		return apiFetch<PublicShareResponse>(`/shared/${shareToken}`);
+	},
+
+	getPublicShareFiles(shareToken: string, folderId?: number) {
+		const qs = new URLSearchParams();
+		if (folderId != null) qs.set('folder_id', String(folderId));
+		const query = qs.size ? `?${qs}` : '';
+		return apiFetch<PublicShareFilesResponse>(`/shared/${shareToken}/files${query}`);
+	},
+
+	publicDownloadUrl(shareToken: string, fileId: number): string {
+		return `${backendBaseUrl}/shared/${shareToken}/download/${fileId}`;
 	},
 
 	listActivity(token: string, params?: { page?: number; per_page?: number; event_type?: string; resource_type?: string }) {

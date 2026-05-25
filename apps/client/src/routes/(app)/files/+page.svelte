@@ -2,7 +2,7 @@
 	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { backend, type NuageFile, type Folder } from '$lib/backend';
+	import { backend, type NuageFile, type Folder, type Share } from '$lib/backend';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null; refreshQuota: () => void }>('app');
 
@@ -113,6 +113,89 @@
 	function pdfZoomIn() { pdfScale = Math.min(pdfScale + 0.25, 4); renderPdfPage(); }
 	function pdfZoomOut() { pdfScale = Math.max(pdfScale - 0.25, 0.25); renderPdfPage(); }
 	function pdfFitToWidth() { pdfScale = pdfFitScale; renderPdfPage(); }
+
+	let shareTarget = $state<{ type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
+	let shareLoading = $state(false);
+	let existingShare = $state<Share | null>(null);
+	let shareCopied = $state(false);
+	let shareExpiration = $state('none');
+	let shareCopiedTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
+
+	function startShare() {
+		if (!contextMenu) return;
+		shareTarget = { type: contextMenu.type, item: contextMenu.item };
+		contextMenu = null;
+		existingShare = null;
+		shareLoading = true;
+		shareExpiration = 'none';
+		shareCopied = false;
+		loadExistingShare();
+	}
+
+	async function loadExistingShare() {
+		if (!shareTarget) return;
+		try {
+			const res = await backend.listMyShares(app.token);
+			const match = res.shares.find((s) => {
+				if (shareTarget!.type === 'file') return s.file_id === (shareTarget!.item as NuageFile).id;
+				return s.folder_id === (shareTarget!.item as Folder).id;
+			});
+			existingShare = match ?? null;
+			if (match?.expires_at) {
+				shareExpiration = 'custom';
+			}
+		} catch {}
+		shareLoading = false;
+	}
+
+	async function createShareLink() {
+		if (!shareTarget) return;
+		shareLoading = true;
+		try {
+			const data: { file_id?: number; folder_id?: number; permission?: string; expires_at?: string } = {};
+			if (shareTarget.type === 'file') data.file_id = (shareTarget.item as NuageFile).id;
+			else data.folder_id = (shareTarget.item as Folder).id;
+
+			if (shareExpiration !== 'none') {
+				const now = new Date();
+				if (shareExpiration === '1d') now.setDate(now.getDate() + 1);
+				else if (shareExpiration === '7d') now.setDate(now.getDate() + 7);
+				else if (shareExpiration === '30d') now.setDate(now.getDate() + 30);
+				data.expires_at = now.toISOString();
+			}
+
+			existingShare = await backend.createShare(app.token, data);
+		} catch {}
+		shareLoading = false;
+	}
+
+	async function removeShareLink() {
+		if (!existingShare) return;
+		shareLoading = true;
+		try {
+			await backend.deleteShare(app.token, existingShare.id);
+			existingShare = null;
+			shareExpiration = 'none';
+		} catch {}
+		shareLoading = false;
+	}
+
+	function copyShareLink() {
+		if (!existingShare) return;
+		const url = `${window.location.origin}/s/${existingShare.token}`;
+		navigator.clipboard.writeText(url);
+		shareCopied = true;
+		if (shareCopiedTimeout) clearTimeout(shareCopiedTimeout);
+		shareCopiedTimeout = setTimeout(() => { shareCopied = false; }, 2000);
+	}
+
+	function closeShareDialog() {
+		shareTarget = null;
+		existingShare = null;
+		shareCopied = false;
+		shareExpiration = 'none';
+		if (shareCopiedTimeout) clearTimeout(shareCopiedTimeout);
+	}
 
 	let showNewFolderDialog = $state(false);
 	let newFolderName = $state('');
@@ -557,7 +640,7 @@
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-		if (previewFile || showNewFolderDialog || showDeleteConfirm) return;
+		if (previewFile || showNewFolderDialog || showDeleteConfirm || shareTarget) return;
 		const modKey = isMac ? e.metaKey : e.ctrlKey;
 		if (modKey && e.key === 'a' && selectMode) {
 			e.preventDefault();
@@ -1027,6 +1110,15 @@
 					Rename
 				</button>
 			{/if}
+			{#if selectionCount <= 1}
+				<button
+					class="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
+					onclick={startShare}
+				>
+					<iconify-icon icon="solar:share-linear" width="16" class="text-muted-foreground"></iconify-icon>
+					Share
+				</button>
+			{/if}
 			<div class="my-1 h-px bg-border"></div>
 			<button
 				class="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
@@ -1201,6 +1293,117 @@
 						Move to trash
 					</button>
 				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if shareTarget}
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog">
+			<button class="absolute inset-0" onclick={closeShareDialog} aria-label="Close dialog"></button>
+			<div class="relative z-10 w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-xl">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2 min-w-0">
+						<iconify-icon icon="solar:share-linear" width="20" class="text-muted-foreground shrink-0"></iconify-icon>
+						<h3 class="truncate text-lg font-semibold">Share "{shareTarget.item.name}"</h3>
+					</div>
+					<button
+						class="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-muted shrink-0"
+						onclick={closeShareDialog}
+						aria-label="Close"
+					>
+						<iconify-icon icon="solar:close-circle-linear" width="18"></iconify-icon>
+					</button>
+				</div>
+
+				{#if shareLoading && !existingShare}
+					<div class="mt-6 flex items-center justify-center py-8">
+						<div class="h-5 w-5 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
+					</div>
+				{:else if !existingShare}
+					<div class="mt-6 flex flex-col items-center gap-4 py-4">
+						<div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+							<iconify-icon icon="solar:link-linear" width="24" class="text-muted-foreground"></iconify-icon>
+						</div>
+						<p class="text-sm text-muted-foreground">No public link exists for this {shareTarget.type}.</p>
+
+						<div class="flex w-full items-center gap-2">
+							<label for="share-expiration" class="text-sm font-medium shrink-0">Expires</label>
+							<select
+								id="share-expiration"
+								bind:value={shareExpiration}
+								class="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								<option value="none">No expiration</option>
+								<option value="1d">1 day</option>
+								<option value="7d">7 days</option>
+								<option value="30d">30 days</option>
+							</select>
+						</div>
+
+						<button
+							class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+							onclick={createShareLink}
+							disabled={shareLoading}
+						>
+							{#if shareLoading}
+								<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"></div>
+							{:else}
+								<iconify-icon icon="solar:link-linear" width="16"></iconify-icon>
+							{/if}
+							Create public link
+						</button>
+					</div>
+				{:else}
+					<div class="mt-5 flex flex-col gap-4">
+						<div>
+							<label for="share-url" class="mb-1.5 block text-sm font-medium">Public link</label>
+							<div class="flex gap-2">
+								<input
+									id="share-url"
+									type="text"
+									readonly
+									value="{window.location.origin}/s/{existingShare.token}"
+									class="flex h-9 w-full rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								/>
+								<button
+									class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+									onclick={copyShareLink}
+								>
+									{#if shareCopied}
+										<iconify-icon icon="solar:check-circle-linear" width="16" class="text-emerald-600"></iconify-icon>
+										Copied!
+									{:else}
+										<iconify-icon icon="solar:copy-linear" width="16"></iconify-icon>
+										Copy
+									{/if}
+								</button>
+							</div>
+						</div>
+
+						{#if existingShare.expires_at}
+							<p class="text-xs text-muted-foreground">
+								Expires {new Date(existingShare.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+							</p>
+						{:else}
+							<p class="text-xs text-muted-foreground">This link does not expire.</p>
+						{/if}
+
+						<div class="border-t border-border pt-4">
+							<button
+								class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-destructive/30 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+								onclick={removeShareLink}
+								disabled={shareLoading}
+							>
+								{#if shareLoading}
+									<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-destructive border-t-transparent"></div>
+								{:else}
+									<iconify-icon icon="solar:trash-bin-2-linear" width="16"></iconify-icon>
+								{/if}
+								Remove link
+							</button>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}
