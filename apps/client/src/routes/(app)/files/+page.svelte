@@ -32,6 +32,22 @@
 	let pdfCanvas = $state<HTMLCanvasElement | null>(null);
 	let pdfFitScale = $state(1.0);
 
+	let selectedItems = $state<Set<string>>(new Set());
+	let lastClickedIndex = $state(-1);
+	let showDeleteConfirm = $state(false);
+	let bulkDeleting = $state(false);
+	let isMac = $state(false);
+	let selectionCount = $derived(selectedItems.size);
+	let allItemsList = $derived([
+		...folders.map(f => ({ type: 'folder' as const, id: f.id })),
+		...files.map(f => ({ type: 'file' as const, id: f.id }))
+	]);
+
+	function indeterminate(node: HTMLInputElement, value: boolean) {
+		node.indeterminate = value;
+		return { update(v: boolean) { node.indeterminate = v; } };
+	}
+
 	async function loadPdf(url: string) {
 		pdfPageNum = 1;
 		pdfScale = 1.0;
@@ -90,12 +106,19 @@
 	});
 
 	onMount(() => {
+		isMac = navigator.platform.includes('Mac');
 		document.addEventListener('click', closeContextMenu);
-		return () => document.removeEventListener('click', closeContextMenu);
+		document.addEventListener('keydown', handleGlobalKeydown);
+		return () => {
+			document.removeEventListener('click', closeContextMenu);
+			document.removeEventListener('keydown', handleGlobalKeydown);
+		};
 	});
 
 	async function loadContents() {
 		loading = true;
+		selectedItems = new Set();
+		lastClickedIndex = -1;
 		try {
 			const [fileRes, folderRes] = await Promise.all([
 				backend.listFiles(app.token, {
@@ -215,6 +238,10 @@
 	function openContextMenu(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder) {
 		e.preventDefault();
 		e.stopPropagation();
+		if (!isSelected(type, item.id)) {
+			selectedItems = new Set();
+			lastClickedIndex = -1;
+		}
 		contextMenu = { x: e.clientX, y: e.clientY, type, item };
 	}
 
@@ -263,6 +290,10 @@
 		if (!contextMenu) return;
 		const { type, item } = contextMenu;
 		contextMenu = null;
+		if (selectionCount > 1) {
+			showDeleteConfirm = true;
+			return;
+		}
 		try {
 			if (type === 'file') {
 				await backend.deleteFile(app.token, (item as NuageFile).id);
@@ -270,6 +301,8 @@
 				await backend.deleteFolder(app.token, (item as Folder).id);
 			}
 		} catch {}
+		selectedItems = new Set();
+		lastClickedIndex = -1;
 		await loadContents();
 	}
 
@@ -336,6 +369,113 @@
 	function handleNewFolderKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter') createFolder();
 		if (e.key === 'Escape') { showNewFolderDialog = false; newFolderName = ''; }
+	}
+
+	function itemKey(type: 'file' | 'folder', id: number): string {
+		return `${type}:${id}`;
+	}
+
+	function isSelected(type: 'file' | 'folder', id: number): boolean {
+		return selectedItems.has(itemKey(type, id));
+	}
+
+	function toggleSelect(type: 'file' | 'folder', id: number, index: number, e: MouseEvent) {
+		const key = itemKey(type, id);
+		const modKey = isMac ? e.metaKey : e.ctrlKey;
+		if (e.shiftKey && lastClickedIndex >= 0) {
+			const items = allItemsList;
+			const start = Math.min(lastClickedIndex, index);
+			const end = Math.max(lastClickedIndex, index);
+			const next = modKey ? new Set(selectedItems) : new Set<string>();
+			for (let i = start; i <= end; i++) next.add(itemKey(items[i].type, items[i].id));
+			selectedItems = next;
+		} else if (modKey) {
+			const next = new Set(selectedItems);
+			if (next.has(key)) next.delete(key); else next.add(key);
+			selectedItems = next;
+			lastClickedIndex = index;
+		} else {
+			selectedItems = new Set([key]);
+			lastClickedIndex = index;
+		}
+	}
+
+	function handleCheckboxClick(e: MouseEvent, type: 'file' | 'folder', id: number, index: number) {
+		e.preventDefault();
+		e.stopPropagation();
+		const key = itemKey(type, id);
+		const next = new Set(selectedItems);
+		if (e.shiftKey && lastClickedIndex >= 0) {
+			const items = allItemsList;
+			const start = Math.min(lastClickedIndex, index);
+			const end = Math.max(lastClickedIndex, index);
+			for (let i = start; i <= end; i++) next.add(itemKey(items[i].type, items[i].id));
+		} else if (next.has(key)) {
+			next.delete(key);
+		} else {
+			next.add(key);
+		}
+		selectedItems = next;
+		lastClickedIndex = index;
+	}
+
+	function handleItemClick(e: MouseEvent, type: 'file' | 'folder', item: NuageFile | Folder, index: number) {
+		const modKey = isMac ? e.metaKey : e.ctrlKey;
+		if (modKey || e.shiftKey) {
+			e.preventDefault();
+			e.stopPropagation();
+			toggleSelect(type, item.id, index, e);
+			return;
+		}
+		selectedItems = new Set();
+		lastClickedIndex = -1;
+		if (type === 'folder') openFolder(item as Folder);
+		else openPreview(item as NuageFile);
+	}
+
+	function selectAll() {
+		selectedItems = new Set(allItemsList.map(i => itemKey(i.type, i.id)));
+	}
+
+	function clearSelection() {
+		selectedItems = new Set();
+		lastClickedIndex = -1;
+	}
+
+	function handleGlobalKeydown(e: KeyboardEvent) {
+		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+		if (previewFile || showNewFolderDialog || showDeleteConfirm) return;
+		const modKey = isMac ? e.metaKey : e.ctrlKey;
+		if (modKey && e.key === 'a') {
+			e.preventDefault();
+			selectAll();
+		} else if (e.key === 'Escape') {
+			if (selectionCount > 0) clearSelection();
+			else closeContextMenu();
+		} else if (e.key === 'Delete' || e.key === 'Backspace') {
+			if (selectionCount > 0) {
+				e.preventDefault();
+				showDeleteConfirm = true;
+			}
+		}
+	}
+
+	async function bulkDelete() {
+		if (selectedItems.size === 0) return;
+		bulkDeleting = true;
+		const promises: Promise<unknown>[] = [];
+		for (const key of selectedItems) {
+			const [type, idStr] = key.split(':');
+			const id = Number(idStr);
+			if (type === 'file') promises.push(backend.deleteFile(app.token, id));
+			else promises.push(backend.deleteFolder(app.token, id));
+		}
+		await Promise.allSettled(promises);
+		selectedItems = new Set();
+		lastClickedIndex = -1;
+		bulkDeleting = false;
+		showDeleteConfirm = false;
+		await loadContents();
 	}
 </script>
 
@@ -460,12 +600,21 @@
 					<div class="mb-6">
 						<p class="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Folders</p>
 						<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-							{#each folders as folder}
+							{#each folders as folder, i}
 								<button
-									class="group flex flex-col items-center gap-2 rounded-lg border border-border p-4 text-center transition-colors hover:bg-muted"
-									onclick={() => openFolder(folder)}
+									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {isSelected('folder', folder.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
+									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
+									<div class="absolute top-2 left-2 z-10 {isSelected('folder', folder.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
+										<input
+											type="checkbox"
+											checked={isSelected('folder', folder.id)}
+											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
+											class="h-4 w-4 cursor-pointer accent-primary"
+											tabindex={-1}
+										/>
+									</div>
 									{#if renameTarget?.type === 'folder' && (renameTarget.item as Folder).id === folder.id}
 										<iconify-icon icon="solar:folder-linear" width="36" class="text-amber-500"></iconify-icon>
 										<input
@@ -473,6 +622,7 @@
 											bind:value={renameValue}
 											onkeydown={handleRenameKeydown}
 											onblur={cancelRename}
+											onclick={(e) => e.stopPropagation()}
 											class="w-full rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-ring"
 											autofocus
 										/>
@@ -492,12 +642,22 @@
 							<p class="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Files</p>
 						{/if}
 						<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-							{#each files as file}
+							{#each files as file, j}
+								{@const fileIdx = folders.length + j}
 								<button
-									class="group flex flex-col items-center gap-2 rounded-lg border border-border p-4 text-center transition-colors hover:bg-muted"
-									onclick={() => openPreview(file)}
+									class="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors {isSelected('file', file.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted'}"
+									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
+									<div class="absolute top-2 left-2 z-10 {isSelected('file', file.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
+										<input
+											type="checkbox"
+											checked={isSelected('file', file.id)}
+											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
+											class="h-4 w-4 cursor-pointer accent-primary"
+											tabindex={-1}
+										/>
+									</div>
 									{#if renameTarget?.type === 'file' && (renameTarget.item as NuageFile).id === file.id}
 										<iconify-icon icon={fileIcon(file.mime_type)} width="36" class={fileIconColor(file.mime_type)}></iconify-icon>
 										<input
@@ -505,6 +665,7 @@
 											bind:value={renameValue}
 											onkeydown={handleRenameKeydown}
 											onblur={cancelRename}
+											onclick={(e) => e.stopPropagation()}
 											class="w-full rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-ring"
 											autofocus
 										/>
@@ -535,6 +696,16 @@
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+								<th class="pb-3 pr-2 w-10">
+									<input
+										type="checkbox"
+										checked={selectionCount > 0 && selectionCount === allItemsList.length}
+										use:indeterminate={selectionCount > 0 && selectionCount < allItemsList.length}
+										onclick={(e) => { e.preventDefault(); selectionCount === allItemsList.length ? clearSelection() : selectAll(); }}
+										class="h-4 w-4 cursor-pointer accent-primary"
+										aria-label="Select all"
+									/>
+								</th>
 								<th class="pb-3 pr-4">Name</th>
 								<th class="hidden pb-3 pr-4 sm:table-cell">Size</th>
 								<th class="hidden pb-3 pr-4 md:table-cell">Modified</th>
@@ -542,13 +713,22 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each folders as folder}
+							{#each folders as folder, i}
 								<tr
-									class="group cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/50"
+									class="group cursor-pointer border-b border-border/50 transition-colors {isSelected('folder', folder.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}"
+									onclick={(e) => handleItemClick(e, 'folder', folder, i)}
 									oncontextmenu={(e) => openContextMenu(e, 'folder', folder)}
 								>
+									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
+										<input
+											type="checkbox"
+											checked={isSelected('folder', folder.id)}
+											onclick={(e) => handleCheckboxClick(e, 'folder', folder.id, i)}
+											class="h-4 w-4 cursor-pointer accent-primary"
+										/>
+									</td>
 									<td class="py-2.5 pr-4">
-										<button class="flex items-center gap-3 text-left" onclick={() => openFolder(folder)}>
+										<div class="flex items-center gap-3">
 											<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
 											{#if renameTarget?.type === 'folder' && (renameTarget.item as Folder).id === folder.id}
 												<input
@@ -556,20 +736,21 @@
 													bind:value={renameValue}
 													onkeydown={handleRenameKeydown}
 													onblur={cancelRename}
+													onclick={(e) => e.stopPropagation()}
 													class="rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
 													autofocus
 												/>
 											{:else}
 												<span class="truncate font-medium">{folder.name}</span>
 											{/if}
-										</button>
+										</div>
 									</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">—</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(folder.created_at)}</td>
 									<td class="py-2.5">
 										<button
 											class="flex h-7 w-7 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
-											onclick={(e) => openContextMenu(e, 'folder', folder)}
+											onclick={(e) => { e.stopPropagation(); openContextMenu(e, 'folder', folder); }}
 											aria-label="More options"
 										>
 											<iconify-icon icon="solar:menu-dots-linear" width="16"></iconify-icon>
@@ -577,13 +758,23 @@
 									</td>
 								</tr>
 							{/each}
-							{#each files as file}
+							{#each files as file, j}
+								{@const fileIdx = folders.length + j}
 								<tr
-									class="group cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/50"
+									class="group cursor-pointer border-b border-border/50 transition-colors {isSelected('file', file.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}"
+									onclick={(e) => handleItemClick(e, 'file', file, fileIdx)}
 									oncontextmenu={(e) => openContextMenu(e, 'file', file)}
 								>
+									<td class="py-2.5 pr-2 w-10" onclick={(e) => e.stopPropagation()}>
+										<input
+											type="checkbox"
+											checked={isSelected('file', file.id)}
+											onclick={(e) => handleCheckboxClick(e, 'file', file.id, fileIdx)}
+											class="h-4 w-4 cursor-pointer accent-primary"
+										/>
+									</td>
 									<td class="py-2.5 pr-4">
-										<button class="flex items-center gap-3 text-left" onclick={() => openPreview(file)}>
+										<div class="flex items-center gap-3">
 											<iconify-icon icon={fileIcon(file.mime_type)} width="20" class="{fileIconColor(file.mime_type)} shrink-0"></iconify-icon>
 											{#if renameTarget?.type === 'file' && (renameTarget.item as NuageFile).id === file.id}
 												<input
@@ -591,20 +782,21 @@
 													bind:value={renameValue}
 													onkeydown={handleRenameKeydown}
 													onblur={cancelRename}
+													onclick={(e) => e.stopPropagation()}
 													class="rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
 													autofocus
 												/>
 											{:else}
 												<span class="truncate font-medium">{file.name}</span>
 											{/if}
-										</button>
+										</div>
 									</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">{formatSize(file.size)}</td>
 									<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(file.updated_at)}</td>
 									<td class="py-2.5">
 										<button
 											class="flex h-7 w-7 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
-											onclick={(e) => openContextMenu(e, 'file', file)}
+											onclick={(e) => { e.stopPropagation(); openContextMenu(e, 'file', file); }}
 											aria-label="More options"
 										>
 											<iconify-icon icon="solar:menu-dots-linear" width="16"></iconify-icon>
@@ -625,7 +817,7 @@
 			style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
 			onclick={(e) => e.stopPropagation()}
 		>
-			{#if contextMenu.type === 'file'}
+			{#if contextMenu.type === 'file' && selectionCount <= 1}
 				<button
 					class="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
 					onclick={downloadItem}
@@ -634,20 +826,22 @@
 					Download
 				</button>
 			{/if}
-			<button
-				class="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
-				onclick={startRename}
-			>
-				<iconify-icon icon="solar:pen-linear" width="16" class="text-muted-foreground"></iconify-icon>
-				Rename
-			</button>
+			{#if selectionCount <= 1}
+				<button
+					class="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
+					onclick={startRename}
+				>
+					<iconify-icon icon="solar:pen-linear" width="16" class="text-muted-foreground"></iconify-icon>
+					Rename
+				</button>
+			{/if}
 			<div class="my-1 h-px bg-border"></div>
 			<button
 				class="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
 				onclick={deleteItem}
 			>
 				<iconify-icon icon="solar:trash-bin-2-linear" width="16"></iconify-icon>
-				Delete
+				{selectionCount > 1 ? `Delete ${selectionCount} items` : 'Delete'}
 			</button>
 		</div>
 	{/if}
@@ -755,6 +949,62 @@
 						onclick={createFolder}
 					>
 						Create
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if selectionCount > 0}
+		<div class="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-border bg-background px-4 py-2.5 shadow-xl">
+			<span class="text-sm font-medium">{selectionCount} selected</span>
+			<div class="h-4 w-px bg-border"></div>
+			<button
+				class="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+				onclick={() => showDeleteConfirm = true}
+			>
+				<iconify-icon icon="solar:trash-bin-2-linear" width="14"></iconify-icon>
+				Delete
+			</button>
+			<div class="h-4 w-px bg-border"></div>
+			<span class="hidden text-xs text-muted-foreground sm:inline">
+				{isMac ? '⌘' : 'Ctrl+'}A all · {isMac ? '⌫' : 'Del'} delete · Esc clear
+			</span>
+			<button
+				class="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted"
+				onclick={clearSelection}
+				aria-label="Deselect all"
+			>
+				<iconify-icon icon="solar:close-circle-linear" width="16" class="text-muted-foreground"></iconify-icon>
+			</button>
+		</div>
+	{/if}
+
+	{#if showDeleteConfirm}
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="alertdialog">
+			<button class="absolute inset-0" onclick={() => { showDeleteConfirm = false; }} aria-label="Cancel"></button>
+			<div class="relative z-10 w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-xl">
+				<h3 class="text-lg font-semibold">Move to trash?</h3>
+				<p class="mt-2 text-sm text-muted-foreground">
+					{selectionCount} {selectionCount === 1 ? 'item' : 'items'} will be moved to trash. You can restore them from the Trash page.
+				</p>
+				<div class="mt-5 flex justify-end gap-2">
+					<button
+						class="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent"
+						onclick={() => { showDeleteConfirm = false; }}
+						disabled={bulkDeleting}
+					>
+						Cancel
+					</button>
+					<button
+						class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+						onclick={bulkDelete}
+						disabled={bulkDeleting}
+					>
+						{#if bulkDeleting}
+							<div class="h-3 w-3 animate-spin rounded-full border-2 border-destructive-foreground border-t-transparent"></div>
+						{/if}
+						Move to trash
 					</button>
 				</div>
 			</div>
