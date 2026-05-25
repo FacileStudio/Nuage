@@ -74,7 +74,8 @@ export type TrashResponse = {
 };
 
 export type ApiToken = {
-	token: string;
+	id: number;
+	token?: string;
 	name: string;
 	created_at: string;
 };
@@ -255,7 +256,7 @@ export const backend = {
 	updateSettings(token: string, data: Record<string, string>) {
 		return apiFetch<Record<string, string>>('/settings', {
 			method: 'PUT',
-			body: JSON.stringify(data)
+			body: JSON.stringify({ settings: data })
 		}, token);
 	},
 
@@ -306,7 +307,7 @@ export const backend = {
 		}, token);
 	},
 
-	deleteApiToken(token: string) {
-		return apiFetch<{}>('/users/me/api-token', { method: 'DELETE' }, token);
+	deleteApiToken(token: string, tokenId: number) {
+		return apiFetch<{}>(`/users/me/api-token/${tokenId}`, { method: 'DELETE' }, token);
 	}
 };
