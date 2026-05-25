@@ -8,7 +8,6 @@ type Share struct {
 	FileID     *int64     `json:"file_id" gorm:"index"`
 	FolderID   *int64     `json:"folder_id" gorm:"index"`
 	SharedBy   int64      `json:"shared_by" gorm:"not null"`
-	SharedWith *int64     `json:"shared_with" gorm:"index"`
 	Permission string     `json:"permission" gorm:"not null;default:'view'"`
 	ExpiresAt  *time.Time `json:"expires_at"`
 	CreatedAt  time.Time  `json:"created_at"`

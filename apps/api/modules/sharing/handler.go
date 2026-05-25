@@ -50,32 +50,6 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	httpjson.WriteJSON(w, http.StatusCreated, mapShare(*record))
 }
 
-func (h *Handler) listSharedWithMe(w http.ResponseWriter, r *http.Request) {
-	identity, ok := authcontext.IdentityFromContext(r.Context())
-	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
-		return
-	}
-
-	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
-	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
-		return
-	}
-
-	records, err := h.service.listSharedWithMe(r.Context(), userID)
-	if err != nil {
-		httpjson.WriteError(w, err)
-		return
-	}
-
-	resp := ShareListResponse{Shares: make([]ShareResponse, 0, len(records))}
-	for _, record := range records {
-		resp.Shares = append(resp.Shares, mapShare(record))
-	}
-	httpjson.WriteJSON(w, http.StatusOK, resp)
-}
-
 func (h *Handler) listSharedByMe(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {

@@ -60,7 +60,6 @@ export type Share = {
 	file_id: number | null;
 	folder_id: number | null;
 	shared_by: number;
-	shared_with: number | null;
 	permission: string;
 	expires_at: string | null;
 	created_at: string;
@@ -285,15 +284,11 @@ export const backend = {
 		return apiFetch<{}>(`/trash/${type}/${id}`, { method: 'DELETE' }, token);
 	},
 
-	createShare(token: string, data: { file_id?: number; folder_id?: number; shared_with?: number; permission?: string; expires_at?: string }) {
+	createShare(token: string, data: { file_id?: number; folder_id?: number; permission?: string; expires_at?: string }) {
 		return apiFetch<Share>('/shares', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		}, token);
-	},
-
-	listSharedWithMe(token: string) {
-		return apiFetch<{ shares: Share[] }>('/shares', {}, token);
 	},
 
 	listMyShares(token: string) {

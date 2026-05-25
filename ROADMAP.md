@@ -11,7 +11,7 @@ This roadmap is organized in phases. Each phase builds on the previous one.
 **What exists today:**
 - File upload/download with drag-and-drop, folders, breadcrumb navigation
 - Grid and list views with image/PDF/video/audio preview
-- Sharing (public links + user-to-user) with optional expiration
+- Sharing (public links with optional expiration)
 - Trash with restore and permanent delete
 - OIDC/SSO + email/password auth
 - API tokens for programmatic access

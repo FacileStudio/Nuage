@@ -57,5 +57,20 @@ func preMigrate(db *gorm.DB) error {
 			END $$;
 		`)
 	}
+
+	if db.Migrator().HasTable("shares") {
+		db.Exec(`
+			DO $$ BEGIN
+				IF EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_name = 'shares' AND column_name = 'shared_with'
+				) THEN
+					DROP INDEX IF EXISTS idx_shares_shared_with;
+					ALTER TABLE shares DROP COLUMN shared_with;
+				END IF;
+			END $$;
+		`)
+	}
+
 	return nil
 }

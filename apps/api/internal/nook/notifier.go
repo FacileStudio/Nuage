@@ -41,9 +41,8 @@ type FolderData struct {
 }
 
 type ShareData struct {
-	ID              int64  `json:"id"`
-	SharedWithEmail string `json:"shared_with_email,omitempty"`
-	Permission      string `json:"permission"`
+	ID         int64  `json:"id"`
+	Permission string `json:"permission"`
 }
 
 type Event struct {

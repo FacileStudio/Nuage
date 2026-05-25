@@ -3,7 +3,6 @@ package sharing
 type CreateShareRequest struct {
 	FileID     *int64  `json:"file_id"`
 	FolderID   *int64  `json:"folder_id"`
-	SharedWith *int64  `json:"shared_with"`
 	Permission string  `json:"permission"`
 	ExpiresAt  *string `json:"expires_at"`
 }
@@ -14,7 +13,6 @@ type ShareResponse struct {
 	FileID     *int64  `json:"file_id"`
 	FolderID   *int64  `json:"folder_id"`
 	SharedBy   int64   `json:"shared_by"`
-	SharedWith *int64  `json:"shared_with"`
 	Permission string  `json:"permission"`
 	ExpiresAt  *string `json:"expires_at"`
 	CreatedAt  string  `json:"created_at"`

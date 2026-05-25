@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount, getContext } from 'svelte';
-	import { backend, type Share, type NuageFile } from '$lib/backend';
+	import { backend, type Share } from '$lib/backend';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
 
 	let shares = $state<Share[]>([]);
 	let loading = $state(true);
+	let revoking = $state<number | null>(null);
+	let copiedId = $state<number | null>(null);
 
 	onMount(async () => {
 		await loadShares();
@@ -14,7 +16,7 @@
 	async function loadShares() {
 		loading = true;
 		try {
-			const res = await backend.listSharedWithMe(app.token);
+			const res = await backend.listMyShares(app.token);
 			shares = res.shares ?? [];
 		} catch {
 			shares = [];
@@ -22,15 +24,44 @@
 		loading = false;
 	}
 
+	async function revokeShare(id: number) {
+		revoking = id;
+		try {
+			await backend.deleteShare(app.token, id);
+			shares = shares.filter((s) => s.id !== id);
+		} catch {}
+		revoking = null;
+	}
+
+	async function copyLink(share: Share) {
+		const url = `${window.location.origin}/s/${share.token}`;
+		await navigator.clipboard.writeText(url);
+		copiedId = share.id;
+		setTimeout(() => {
+			if (copiedId === share.id) copiedId = null;
+		}, 2000);
+	}
+
+	function shareUrl(share: Share): string {
+		return `${window.location.origin}/s/${share.token}`;
+	}
+
+	function itemName(share: Share): string {
+		return share.file?.name ?? share.folder?.name ?? 'Untitled';
+	}
+
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 	}
 
-	function formatSize(bytes: number): string {
-		if (bytes === 0) return '0 B';
-		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(1024));
-		return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+	function formatExpiration(iso: string | null): string {
+		if (!iso) return 'No expiration';
+		return `Expires ${formatDate(iso)}`;
+	}
+
+	function isExpired(iso: string | null): boolean {
+		if (!iso) return false;
+		return new Date(iso).getTime() < Date.now();
 	}
 
 	function fileIcon(mime: string): string {
@@ -50,30 +81,16 @@
 		if (mime.includes('zip') || mime.includes('archive')) return 'text-amber-600';
 		return 'text-blue-600';
 	}
-
-	function permissionBadgeClass(permission: string): string {
-		if (permission === 'write' || permission === 'edit') return 'bg-amber-100 text-amber-800';
-		return 'bg-blue-100 text-blue-800';
-	}
-
-	function openItem(share: Share) {
-		if (share.file) {
-			const url = backend.downloadUrl(app.token, share.file.id);
-			window.open(url, '_blank');
-		} else if (share.folder) {
-			window.location.href = `/files?folder=${share.folder.id}`;
-		}
-	}
 </script>
 
 <svelte:head>
-	<title>Shared — Nuage</title>
+	<title>Shared links — Nuage</title>
 </svelte:head>
 
 <div class="flex h-full flex-col">
 	<div class="border-b border-border px-4 py-4 md:px-8 md:py-5">
-		<h1 class="text-lg font-semibold">Shared with me</h1>
-		<p class="mt-1 text-sm text-muted-foreground">Files and folders others have shared with you</p>
+		<h1 class="text-lg font-semibold">Shared links</h1>
+		<p class="mt-1 text-sm text-muted-foreground">Manage your public share links</p>
 	</div>
 
 	<div class="flex-1 overflow-auto px-4 py-4 md:px-8 md:py-6">
@@ -84,41 +101,80 @@
 		{:else if shares.length === 0}
 			<div class="flex h-64 flex-col items-center justify-center text-center">
 				<iconify-icon icon="solar:share-linear" width="48" class="text-muted-foreground/40"></iconify-icon>
-				<p class="mt-4 text-sm font-medium text-muted-foreground">Nothing shared with you yet</p>
-				<p class="mt-1 text-xs text-muted-foreground/70">When someone shares files or folders with you, they'll appear here</p>
+				<p class="mt-4 text-sm font-medium text-muted-foreground">No shared links yet</p>
+				<p class="mt-1 text-xs text-muted-foreground/70">Right-click a file and select Share to create a public link</p>
 			</div>
 		{:else}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-				{#each shares as share}
-					<button
-						class="flex items-start gap-4 rounded-lg border border-border p-4 text-left transition-colors hover:bg-muted"
-						onclick={() => openItem(share)}
-					>
-						<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-							{#if share.file}
-								<iconify-icon icon={fileIcon(share.file.mime_type)} width="22" class={fileIconColor(share.file.mime_type)}></iconify-icon>
-							{:else}
-								<iconify-icon icon="solar:folder-linear" width="22" class="text-amber-500"></iconify-icon>
-							{/if}
-						</div>
-						<div class="min-w-0 flex-1">
-							<p class="truncate text-sm font-medium">
-								{share.file?.name ?? share.folder?.name ?? 'Untitled'}
-							</p>
-							<div class="mt-1.5 flex flex-wrap items-center gap-2">
-								<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium {permissionBadgeClass(share.permission)}">
-									{share.permission}
-								</span>
-								<span class="text-[11px] text-muted-foreground">
-									{formatDate(share.created_at)}
-								</span>
-							</div>
-							{#if share.file}
-								<p class="mt-1 text-[11px] text-muted-foreground">{formatSize(share.file.size)}</p>
-							{/if}
-						</div>
-					</button>
-				{/each}
+			<div class="overflow-x-auto">
+				<table class="w-full text-sm">
+					<thead>
+						<tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+							<th class="pb-3 pr-4">Name</th>
+							<th class="hidden pb-3 pr-4 md:table-cell">Link</th>
+							<th class="hidden pb-3 pr-4 sm:table-cell">Expiration</th>
+							<th class="hidden pb-3 pr-4 lg:table-cell">Created</th>
+							<th class="pb-3 w-44 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each shares as share}
+							<tr class="border-b border-border/50 transition-colors hover:bg-muted/50">
+								<td class="py-2.5 pr-4">
+									<div class="flex items-center gap-3">
+										{#if share.file}
+											<iconify-icon icon={fileIcon(share.file.mime_type)} width="20" class="{fileIconColor(share.file.mime_type)} shrink-0"></iconify-icon>
+										{:else}
+											<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
+										{/if}
+										<span class="truncate font-medium">{itemName(share)}</span>
+									</div>
+								</td>
+								<td class="hidden py-2.5 pr-4 md:table-cell">
+									<span class="inline-block max-w-[200px] truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+										/s/{share.token}
+									</span>
+								</td>
+								<td class="hidden py-2.5 pr-4 sm:table-cell">
+									{#if isExpired(share.expires_at)}
+										<span class="text-xs font-medium text-destructive">Expired</span>
+									{:else}
+										<span class="text-xs text-muted-foreground">{formatExpiration(share.expires_at)}</span>
+									{/if}
+								</td>
+								<td class="hidden py-2.5 pr-4 text-xs text-muted-foreground lg:table-cell">{formatDate(share.created_at)}</td>
+								<td class="py-2.5">
+									<div class="flex items-center justify-end gap-1">
+										<button
+											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
+											onclick={() => copyLink(share)}
+										>
+											{#if copiedId === share.id}
+												<iconify-icon icon="solar:check-read-linear" width="14" class="text-emerald-600"></iconify-icon>
+												<span class="text-emerald-600">Copied!</span>
+											{:else}
+												<iconify-icon icon="solar:copy-linear" width="14"></iconify-icon>
+												Copy
+											{/if}
+										</button>
+										<button
+											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+											onclick={() => revokeShare(share.id)}
+											disabled={revoking !== null}
+											aria-label="Revoke share link"
+										>
+											{#if revoking === share.id}
+												<div class="h-3 w-3 animate-spin rounded-full border-2 border-destructive border-t-transparent"></div>
+											{:else}
+												<iconify-icon icon="solar:link-broken-linear" width="14"></iconify-icon>
+											{/if}
+											Revoke
+										</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		{/if}
 	</div>

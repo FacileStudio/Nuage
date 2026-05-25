@@ -15,7 +15,6 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Use(middleware.RequireAuth(authService))
 
 		r.Post("/", handler.create)
-		r.Get("/", handler.listSharedWithMe)
 		r.Get("/by-me", handler.listSharedByMe)
 		r.Delete("/{id}", handler.deleteShare)
 	})

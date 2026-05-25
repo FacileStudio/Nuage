@@ -52,7 +52,6 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 		FileID:     req.FileID,
 		FolderID:   req.FolderID,
 		SharedBy:   userID,
-		SharedWith: req.SharedWith,
 		Permission: permission,
 		ExpiresAt:  expiresAt,
 	}
@@ -61,37 +60,18 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 		return nil, errors.Internal("failed to create share", err)
 	}
 
-	var sharedWithEmail string
-	if record.SharedWith != nil {
-		var target schemas.User
-		if err := s.orm.WithContext(ctx).Where("id = ?", *record.SharedWith).First(&target).Error; err == nil {
-			sharedWithEmail = target.Email
-		}
-	}
 	s.notifier.Notify(ctx, userID, "share.created", nook.EventData{
-		Share: &nook.ShareData{ID: record.ID, SharedWithEmail: sharedWithEmail, Permission: record.Permission},
+		Share: &nook.ShareData{ID: record.ID, Permission: record.Permission},
 	})
 
 	if s.activity != nil {
 		s.activity.Log(ctx, activity.Entry{
 			UserID: userID, EventType: "share.created", ResourceType: "share",
-			ResourceID: record.ID, ResourceName: sharedWithEmail,
+			ResourceID: record.ID,
 		})
 	}
 
 	return record, nil
-}
-
-func (s *Service) listSharedWithMe(ctx context.Context, userID int64) ([]schemas.Share, error) {
-	var records []schemas.Share
-	if err := s.orm.WithContext(ctx).
-		Preload("File").Preload("Folder").
-		Where("shared_with = ?", userID).
-		Order("created_at desc").
-		Find(&records).Error; err != nil {
-		return nil, errors.Internal("failed to list shares", err)
-	}
-	return records, nil
 }
 
 func (s *Service) listSharedByMe(ctx context.Context, userID int64) ([]schemas.Share, error) {
@@ -266,7 +246,6 @@ func mapShare(record schemas.Share) ShareResponse {
 		FileID:     record.FileID,
 		FolderID:   record.FolderID,
 		SharedBy:   record.SharedBy,
-		SharedWith: record.SharedWith,
 		Permission: record.Permission,
 		CreatedAt:  record.CreatedAt.UTC().Format(time.RFC3339),
 	}
