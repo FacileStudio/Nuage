@@ -50,7 +50,7 @@ Make what exists reliable before adding surface area.
 - [x] Multipart upload endpoint: init → upload parts → complete
 - [x] Resume interrupted uploads
 - [x] Remove the 64MB ceiling — support multi-GB files
-- [ ] Progress tracking per-chunk on the frontend
+- [x] Progress tracking per-chunk on the frontend
 
 ### File Versioning
 - [x] Keep N previous versions of a file (configurable, default 5)
@@ -63,13 +63,13 @@ Make what exists reliable before adding surface area.
 - [x] Per-user storage quota (configurable by admin)
 - [x] `GET /quota/me` — current usage vs limit
 - [x] Reject uploads when quota exceeded
-- [ ] Usage bar in the web UI
+- [x] Usage bar in the web UI
 - [x] Admin: view all users' usage
 
 ### Activity Log
 - [x] Log all mutations: uploads, deletes, renames, shares, restores
 - [x] `GET /activity` endpoint with pagination and filters
-- [ ] Activity feed in web UI (sidebar or dedicated page)
+- [x] Activity feed in web UI (sidebar or dedicated page)
 - [x] Per-file activity: `GET /activity/files/{id}`
 
 ### Enforce Share Permissions
