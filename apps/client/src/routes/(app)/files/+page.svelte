@@ -995,7 +995,7 @@
 			<span class="text-sm font-medium">{selectionCount} selected</span>
 			<div class="h-4 w-px bg-border"></div>
 			<button
-				class="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+				class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
 				onclick={() => showDeleteConfirm = true}
 			>
 				<iconify-icon icon="solar:trash-bin-2-linear" width="14"></iconify-icon>
