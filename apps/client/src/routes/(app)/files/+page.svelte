@@ -1032,12 +1032,14 @@
 						Cancel
 					</button>
 					<button
-						class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+						class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
 						onclick={bulkDelete}
 						disabled={bulkDeleting}
 					>
 						{#if bulkDeleting}
-							<div class="h-3 w-3 animate-spin rounded-full border-2 border-destructive-foreground border-t-transparent"></div>
+							<div class="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+						{:else}
+							<iconify-icon icon="solar:trash-bin-2-linear" width="16"></iconify-icon>
 						{/if}
 						Move to trash
 					</button>
