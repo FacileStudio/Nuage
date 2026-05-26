@@ -116,7 +116,7 @@ nuage upgrade        # self-update from GitHub
 - [x] `--json` output format for scripting
 - [x] File management commands: `ls`, `upload`, `download`, `mkdir`, `mv`, `rm`
 - [x] Share commands: `share`, `unshare`, `shares`
-- [ ] Search: `search` with query
+- [x] Search: `search` with query, type filter, folder scope, limit
 - [x] Token management: `token create`, `token list`, `token revoke`
 - [x] Pipe support: `cat file | nuage upload - /documents/stdin.txt`
 
@@ -264,4 +264,4 @@ If you're contributing or planning work, here's how to think about priority:
 
 ---
 
-*Last updated: 2026-05-25*
+*Last updated: 2026-05-26*

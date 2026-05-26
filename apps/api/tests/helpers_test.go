@@ -21,6 +21,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
+	"github.com/FacileStudio/Nuage/apps/api/modules/search"
 	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sharing"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sync"
@@ -99,6 +100,7 @@ func setupTestServer(t *testing.T) *testServer {
 	syncService := sync.NewService(db)
 	sharingService := sharing.NewService(db, notifier, actLogger)
 	settingsService := settings.NewService(db)
+	searchService := search.NewService(db)
 	activityService := activitymod.NewService(db)
 
 	appEnv := env.Config{SSOOnly: false}
@@ -113,6 +115,7 @@ func setupTestServer(t *testing.T) *testServer {
 	settings.RegisterRoutes(router, settingsService, authService)
 	sync.RegisterRoutes(router, syncService, authService)
 	quota.RegisterRoutes(router, quotaService, authService)
+	search.RegisterRoutes(router, searchService, authService)
 	activitymod.RegisterRoutes(router, activityService, authService)
 
 	t.Cleanup(func() {
