@@ -58,7 +58,7 @@ func (s *Service) Search(ctx context.Context, query string, filterType string, f
 	}
 
 	if filterType == "" || filterType == "folder" {
-		folderPart := `SELECT id, facile_id, name, 'folder' AS type, NULL AS mime_type, 0 AS size, NULL::bigint AS folder_id, parent_id, updated_at FROM folders WHERE deleted_at IS NULL AND lower(name) LIKE ?`
+		folderPart := `SELECT id, facile_id, name, 'folder' AS type, NULL::text AS mime_type, 0 AS size, NULL::bigint AS folder_id, parent_id, updated_at FROM folders WHERE deleted_at IS NULL AND lower(name) LIKE ?`
 		folderArgs := []any{pattern}
 
 		if folderID != nil {
@@ -124,7 +124,7 @@ func (s *Service) Search(ctx context.Context, query string, filterType string, f
 			Size:      r.Size,
 			FolderID:  r.FolderID,
 			ParentID:  r.ParentID,
-			UpdatedAt: r.UpdatedAt.Format(time.RFC3339),
+			UpdatedAt: r.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 
