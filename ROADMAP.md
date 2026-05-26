@@ -111,14 +111,14 @@ nuage upgrade        # self-update from GitHub
 - [x] Configurable ignore patterns (glob syntax)
 - [x] SQLite state database for sync tracking
 - [x] Self-upgrade via `cargo install` from GitHub
-- [ ] Selective sync: choose which remote folders to sync
-- [ ] Progress bars for file transfers
-- [ ] `--json` output format for scripting
-- [ ] File management commands: `ls`, `upload`, `download`, `mkdir`, `mv`, `rm`
-- [ ] Share commands: `share`, `unshare`, `shares`
+- [x] Selective sync: choose which remote folders to sync
+- [x] Progress bars for file transfers
+- [x] `--json` output format for scripting
+- [x] File management commands: `ls`, `upload`, `download`, `mkdir`, `mv`, `rm`
+- [x] Share commands: `share`, `unshare`, `shares`
 - [ ] Search: `search` with query
-- [ ] Token management: `token create`, `token list`, `token revoke`
-- [ ] Pipe support: `cat file | nuage upload - /documents/stdin.txt`
+- [x] Token management: `token create`, `token list`, `token revoke`
+- [x] Pipe support: `cat file | nuage upload - /documents/stdin.txt`
 
 ### WebDAV Support
 - [ ] Mount Nuage as a network drive on any OS
