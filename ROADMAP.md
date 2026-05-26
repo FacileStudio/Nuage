@@ -25,7 +25,8 @@ This roadmap is organized in phases. Each phase builds on the previous one.
 - Activity log with pagination and per-file history
 - Share permission enforcement (view/edit, server-side checks)
 - Public share viewer page with folder browsing and file download
-- API integration tests (auth, files, folders, shares, trash, sync, versioning, quotas, activity)
+- Search API (`GET /search`) with name matching across files and folders, type/folder filters
+- API integration tests (auth, files, folders, shares, trash, sync, versioning, quotas, activity, search)
 
 **What's missing (and why this roadmap exists):**
 - No WebDAV
