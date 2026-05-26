@@ -42,6 +42,31 @@ services:
       network: host
     expose:
       - "4000"
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: dokploy-network
+      traefik.http.routers.nuage-api-web.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/api`)"
+      traefik.http.routers.nuage-api-web.entrypoints: web
+      traefik.http.routers.nuage-api-web.middlewares: redirect-to-https@file
+      traefik.http.routers.nuage-api-web.service: nuage-api-svc
+      traefik.http.routers.nuage-api-secure.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/api`)"
+      traefik.http.routers.nuage-api-secure.entrypoints: websecure
+      traefik.http.routers.nuage-api-secure.tls.certresolver: letsencrypt
+      traefik.http.routers.nuage-api-secure.middlewares: nuage-strip-api
+      traefik.http.routers.nuage-api-secure.service: nuage-api-svc
+      traefik.http.routers.nuage-webdav-web.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/webdav`)"
+      traefik.http.routers.nuage-webdav-web.entrypoints: web
+      traefik.http.routers.nuage-webdav-web.middlewares: redirect-to-https@file
+      traefik.http.routers.nuage-webdav-web.service: nuage-api-svc
+      traefik.http.routers.nuage-webdav-secure.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/webdav`)"
+      traefik.http.routers.nuage-webdav-secure.entrypoints: websecure
+      traefik.http.routers.nuage-webdav-secure.tls.certresolver: letsencrypt
+      traefik.http.routers.nuage-webdav-secure.service: nuage-api-svc
+      traefik.http.middlewares.nuage-strip-api.stripprefix.prefixes: /api
+      traefik.http.services.nuage-api-svc.loadbalancer.server.port: "4000"
     environment:
       DATABASE_URL: postgres://nuage:nuage-internal-db@nuage-db:5432/nuage?sslmode=disable
       PORT: "4000"
@@ -87,6 +112,10 @@ services:
     depends_on:
       nuage-api:
         condition: service_healthy
+
+networks:
+  dokploy-network:
+    external: true
 
 volumes:
   db_data:
