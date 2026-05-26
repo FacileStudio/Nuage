@@ -30,6 +30,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/sync"
 	"github.com/FacileStudio/Nuage/apps/api/modules/trash"
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
+	nuagewebdav "github.com/FacileStudio/Nuage/apps/api/modules/webdav"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/go-chi/chi/v5"
@@ -149,6 +150,7 @@ func main() {
 	quota.RegisterRoutes(router, quotaService, authService)
 	search.RegisterRoutes(router, searchService, authService)
 	activitymod.RegisterRoutes(router, activityService, authService)
+	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, appLogger)
 
 	addr := ":" + appEnv.Port
 	server := &http.Server{

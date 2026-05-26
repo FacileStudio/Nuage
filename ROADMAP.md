@@ -26,10 +26,10 @@ This roadmap is organized in phases. Each phase builds on the previous one.
 - Share permission enforcement (view/edit, server-side checks)
 - Public share viewer page with folder browsing and file download
 - Search API (`GET /search`) with name matching across files and folders, type/folder filters
-- API integration tests (auth, files, folders, shares, trash, sync, versioning, quotas, activity, search)
+- WebDAV server (Basic Auth with API tokens, macOS Finder / Windows Explorer compatible)
+- API integration tests (auth, files, folders, shares, trash, sync, versioning, quotas, activity, search, webdav)
 
 **What's missing (and why this roadmap exists):**
-- No WebDAV
 - No E2E encryption
 - No 2FA
 - No server-side thumbnails
@@ -122,11 +122,13 @@ nuage upgrade        # self-update from GitHub
 - [x] Pipe support: `cat file | nuage upload - /documents/stdin.txt`
 
 ### WebDAV Support
-- [ ] Mount Nuage as a network drive on any OS
-- [ ] Read/write with standard WebDAV clients (Finder, Windows Explorer, Cyberduck)
-- [ ] Map Nuage folders to WebDAV collections
-- [ ] Auth via session token or API token
-- [ ] Enables integration with any tool that speaks WebDAV
+- [x] Mount Nuage as a network drive on any OS
+- [x] Read/write with standard WebDAV clients (Finder, Windows Explorer, Cyberduck)
+- [x] Map Nuage folders to WebDAV collections
+- [x] Auth via Basic Auth with API token as password
+- [x] Lock support (in-memory) for Finder write access
+- [x] .DS_Store and resource fork filtering
+- [x] Recursive folder delete via WebDAV
 
 ---
 
