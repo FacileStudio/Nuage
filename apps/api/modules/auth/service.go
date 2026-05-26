@@ -42,8 +42,13 @@ func (service *Service) registerUser(context context.Context, email string, pass
 		Color:        color,
 		PasswordHash: hash,
 	}
+
+	var userCount int64
+	service.orm.WithContext(context).Model(&schemas.User{}).Count(&userCount)
+	record.IsAdmin = userCount == 0
+
 	if err := service.orm.WithContext(context).Create(record).Error; err != nil {
-		if stderrors.Is(err, gorm.ErrDuplicatedKey) {
+		if stderrors.Is(err, gorm.ErrDuplicatedKey) || isDuplicateKeyErr(err) {
 			return "", "", errors.Conflict("email already registered")
 		}
 		return "", "", errors.Internal("failed to create user", err)
@@ -156,6 +161,22 @@ func (service *Service) Authenticate(context context.Context, authorization stri
 	return service.authenticateRequest(context, authorization)
 }
 
+func (service *Service) deleteSession(ctx context.Context, authorization string) error {
+	token := normalizeBearer(authorization)
+	if token == "" {
+		return errors.Unauthorized("missing auth token")
+	}
+	hashed := authcrypto.HashToken(token)
+	result := service.orm.WithContext(ctx).Where("token = ?", hashed).Delete(&schemas.Session{})
+	if result.Error != nil {
+		return errors.Internal("failed to delete session", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return errors.NotFound("session not found")
+	}
+	return nil
+}
+
 func (service *Service) upsertOIDCUser(context context.Context, email string) (userID string, token string, err error) {
 	var record schemas.User
 	err = service.orm.WithContext(context).Where("email = ?", email).First(&record).Error
@@ -167,7 +188,9 @@ func (service *Service) upsertOIDCUser(context context.Context, email string) (u
 		if colorErr != nil {
 			return "", "", errors.Internal("failed to choose user color", colorErr)
 		}
-		record = schemas.User{Email: email, Color: color}
+		var userCount int64
+		service.orm.WithContext(context).Model(&schemas.User{}).Count(&userCount)
+		record = schemas.User{Email: email, Color: color, IsAdmin: userCount == 0}
 		if err := service.orm.WithContext(context).Create(&record).Error; err != nil {
 			return "", "", errors.Internal("failed to create user", err)
 		}
@@ -181,4 +204,8 @@ func (service *Service) upsertOIDCUser(context context.Context, email string) (u
 		return "", "", err
 	}
 	return strconv.FormatInt(record.ID, 10), token, nil
+}
+
+func isDuplicateKeyErr(err error) bool {
+	return strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "SQLSTATE 23505")
 }

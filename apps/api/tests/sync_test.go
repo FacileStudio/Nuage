@@ -10,7 +10,7 @@ import (
 
 func TestSyncState(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "sync@example.com", "password123")
+	_, token := registerUser(ts, "sync@example.com", "password12345")
 
 	uploadFile(ts, token, "synced.txt", "data", nil)
 
@@ -29,7 +29,7 @@ func TestSyncState(t *testing.T) {
 
 func TestSyncChanges(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "changes@example.com", "password123")
+	_, token := registerUser(ts, "changes@example.com", "password12345")
 
 	resp := doGet(ts, "/sync/changes?since=2020-01-01T00:00:00Z", token)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

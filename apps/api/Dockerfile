@@ -15,10 +15,14 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} go build -o bin/a
 FROM alpine:3.20
 
 RUN apk add --no-cache wget
+RUN addgroup -S nuage && adduser -S nuage -G nuage
 
 WORKDIR /app
 
 COPY --from=build /repo/apps/api/bin/api /app/api
+RUN mkdir -p /app/data && chown -R nuage:nuage /app
+
+USER nuage
 
 EXPOSE 4000
 

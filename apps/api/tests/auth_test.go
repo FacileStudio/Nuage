@@ -12,7 +12,7 @@ func TestRegister(t *testing.T) {
 	ts := setupTestServer(t)
 
 	resp := doJSON(ts, "POST", "/auth/register", map[string]string{
-		"email": "test@example.com", "password": "password123",
+		"email": "test@example.com", "password": "password12345",
 	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -28,20 +28,20 @@ func TestRegister(t *testing.T) {
 func TestRegisterDuplicate(t *testing.T) {
 	ts := setupTestServer(t)
 
-	registerUser(ts, "dupe@example.com", "password123")
+	registerUser(ts, "dupe@example.com", "password12345")
 
 	resp := doJSON(ts, "POST", "/auth/register", map[string]string{
-		"email": "dupe@example.com", "password": "password123",
+		"email": "dupe@example.com", "password": "password12345",
 	}, "")
 	assert.Equal(t, http.StatusConflict, resp.StatusCode)
 }
 
 func TestLogin(t *testing.T) {
 	ts := setupTestServer(t)
-	registerUser(ts, "login@example.com", "password123")
+	registerUser(ts, "login@example.com", "password12345")
 
 	resp := doJSON(ts, "POST", "/auth/login", map[string]string{
-		"email": "login@example.com", "password": "password123",
+		"email": "login@example.com", "password": "password12345",
 	}, "")
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -54,7 +54,7 @@ func TestLogin(t *testing.T) {
 
 func TestLoginWrongPassword(t *testing.T) {
 	ts := setupTestServer(t)
-	registerUser(ts, "wrong@example.com", "password123")
+	registerUser(ts, "wrong@example.com", "password12345")
 
 	resp := doJSON(ts, "POST", "/auth/login", map[string]string{
 		"email": "wrong@example.com", "password": "wrongpassword",

@@ -11,7 +11,7 @@ import (
 
 func TestFileVersioning(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "version@example.com", "password123")
+	_, token := registerUser(ts, "version@example.com", "password12345")
 
 	resp := uploadFile(ts, token, "versioned.txt", "version 1", nil)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -51,7 +51,7 @@ func TestFileVersioning(t *testing.T) {
 
 func TestRestoreVersion(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "restore-ver@example.com", "password123")
+	_, token := registerUser(ts, "restore-ver@example.com", "password12345")
 
 	resp := uploadFile(ts, token, "restore-ver.txt", "original", nil)
 	var file struct {

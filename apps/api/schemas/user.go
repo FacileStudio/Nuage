@@ -9,6 +9,7 @@ type User struct {
 	AvatarURL    string    `gorm:"column:avatar_url"`
 	Color        string    `gorm:"column:color"`
 	PasswordHash string    `gorm:"column:password_hash"`
+	IsAdmin      bool      `gorm:"column:is_admin;default:false"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 

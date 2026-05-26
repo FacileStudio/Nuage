@@ -11,7 +11,7 @@ import (
 
 func TestSearchRequiresQuery(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search-req@example.com", "password123")
+	_, token := registerUser(ts, "search-req@example.com", "password12345")
 
 	resp := doGet(ts, "/search", token)
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -19,7 +19,7 @@ func TestSearchRequiresQuery(t *testing.T) {
 
 func TestSearchEndpointFiles(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search-files@example.com", "password123")
+	_, token := registerUser(ts, "search-files@example.com", "password12345")
 
 	uploadFile(ts, token, "quarterly-report.pdf", "data", nil)
 	uploadFile(ts, token, "invoice-2026.pdf", "data", nil)
@@ -45,7 +45,7 @@ func TestSearchEndpointFiles(t *testing.T) {
 
 func TestSearchFolders(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search-folders@example.com", "password123")
+	_, token := registerUser(ts, "search-folders@example.com", "password12345")
 
 	doJSON(ts, "POST", "/folders", map[string]string{"name": "Documents"}, token)
 	doJSON(ts, "POST", "/folders", map[string]string{"name": "Photos"}, token)
@@ -68,7 +68,7 @@ func TestSearchFolders(t *testing.T) {
 
 func TestSearchTypeFilter(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search-type@example.com", "password123")
+	_, token := registerUser(ts, "search-type@example.com", "password12345")
 
 	uploadFile(ts, token, "notes.txt", "data", nil)
 	doJSON(ts, "POST", "/folders", map[string]string{"name": "notes"}, token)
@@ -89,7 +89,7 @@ func TestSearchTypeFilter(t *testing.T) {
 
 func TestSearchInFolder(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search-infolder@example.com", "password123")
+	_, token := registerUser(ts, "search-infolder@example.com", "password12345")
 
 	folderResp := doJSON(ts, "POST", "/folders", map[string]string{"name": "Work"}, token)
 	var folder struct {
@@ -117,7 +117,7 @@ func TestSearchInFolder(t *testing.T) {
 
 func TestSearchLimit(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search-limit@example.com", "password123")
+	_, token := registerUser(ts, "search-limit@example.com", "password12345")
 
 	for i := 0; i < 5; i++ {
 		uploadFile(ts, token, fmt.Sprintf("doc-%d.txt", i), "data", nil)
@@ -136,7 +136,7 @@ func TestSearchLimit(t *testing.T) {
 
 func TestSearchCaseInsensitive(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search-case@example.com", "password123")
+	_, token := registerUser(ts, "search-case@example.com", "password12345")
 
 	uploadFile(ts, token, "MyDocument.PDF", "data", nil)
 

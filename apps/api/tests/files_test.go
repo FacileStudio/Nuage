@@ -14,7 +14,7 @@ import (
 
 func TestUploadAndDownload(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "files@example.com", "password123")
+	_, token := registerUser(ts, "files@example.com", "password12345")
 
 	content := "hello world file content"
 	resp := uploadFile(ts, token, "test.txt", content, nil)
@@ -44,7 +44,7 @@ func TestUploadAndDownload(t *testing.T) {
 
 func TestUploadToFolder(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "folder-upload@example.com", "password123")
+	_, token := registerUser(ts, "folder-upload@example.com", "password12345")
 
 	folderResp := doJSON(ts, "POST", "/folders", map[string]string{"name": "docs"}, token)
 	require.Equal(t, http.StatusCreated, folderResp.StatusCode)
@@ -67,7 +67,7 @@ func TestUploadToFolder(t *testing.T) {
 
 func TestDeduplicateFileName(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dedup@example.com", "password123")
+	_, token := registerUser(ts, "dedup@example.com", "password12345")
 
 	uploadFile(ts, token, "report.txt", "first", nil)
 	resp := uploadFile(ts, token, "report.txt", "second", nil)
@@ -82,7 +82,7 @@ func TestDeduplicateFileName(t *testing.T) {
 
 func TestListFiles(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "list@example.com", "password123")
+	_, token := registerUser(ts, "list@example.com", "password12345")
 
 	uploadFile(ts, token, "a.txt", "a", nil)
 	uploadFile(ts, token, "b.txt", "b", nil)
@@ -99,7 +99,7 @@ func TestListFiles(t *testing.T) {
 
 func TestUpdateFile(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "update@example.com", "password123")
+	_, token := registerUser(ts, "update@example.com", "password12345")
 
 	resp := uploadFile(ts, token, "old.txt", "content", nil)
 	var file struct {
@@ -119,7 +119,7 @@ func TestUpdateFile(t *testing.T) {
 
 func TestDeleteFile(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "delete@example.com", "password123")
+	_, token := registerUser(ts, "delete@example.com", "password12345")
 
 	resp := uploadFile(ts, token, "deleteme.txt", "bye", nil)
 	var file struct {
@@ -136,7 +136,7 @@ func TestDeleteFile(t *testing.T) {
 
 func TestSearchFiles(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "search@example.com", "password123")
+	_, token := registerUser(ts, "search@example.com", "password12345")
 
 	uploadFile(ts, token, "quarterly-report.pdf", "data", nil)
 	uploadFile(ts, token, "invoice.pdf", "data", nil)

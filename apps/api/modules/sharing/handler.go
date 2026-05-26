@@ -1,8 +1,10 @@
 package sharing
 
 import (
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
@@ -155,7 +157,7 @@ func (h *Handler) downloadSharedFile(w http.ResponseWriter, r *http.Request) {
 	defer reader.Close()
 
 	w.Header().Set("Content-Type", file.MimeType)
-	w.Header().Set("Content-Disposition", `attachment; filename="`+file.Name+`"`)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(file.Name)))
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, reader)

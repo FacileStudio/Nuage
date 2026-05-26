@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -31,6 +32,45 @@ type Service struct {
 
 func NewService(orm *gorm.DB) *Service {
 	return &Service{orm: orm}
+}
+
+func isPrivateAddress(host string) bool {
+	hostname := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		hostname = h
+	}
+
+	if hostname == "localhost" {
+		return true
+	}
+
+	ip := net.ParseIP(hostname)
+	if ip == nil {
+		ips, err := net.LookupIP(hostname)
+		if err != nil || len(ips) == 0 {
+			return true
+		}
+		ip = ips[0]
+	}
+
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+
+	metadata := net.ParseIP("169.254.169.254")
+	if ip.Equal(metadata) {
+		return true
+	}
+
+	return false
+}
+
+func (s *Service) isAdmin(ctx context.Context, userID int64) (bool, error) {
+	var user schemas.User
+	if err := s.orm.WithContext(ctx).Select("is_admin").Where("id = ?", userID).First(&user).Error; err != nil {
+		return false, errors.Internal("failed to check admin status", err)
+	}
+	return user.IsAdmin, nil
 }
 
 func (s *Service) listSettings(ctx context.Context) ([]schemas.Setting, error) {
@@ -81,6 +121,10 @@ func (s *Service) testNook(ctx context.Context, input TestNookRequest) (bool, st
 	parsed, err := url.Parse(webhookURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return false, "invalid webhook URL: must start with http:// or https://", nil
+	}
+
+	if isPrivateAddress(parsed.Host) {
+		return false, "webhook URL must not point to a private or internal address", nil
 	}
 
 	payload := map[string]string{

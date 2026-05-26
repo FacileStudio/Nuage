@@ -117,14 +117,14 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 	return &record, nil
 }
 
-func (s *Service) listVersions(ctx context.Context, fileID string) ([]schemas.FileVersion, error) {
+func (s *Service) listVersions(ctx context.Context, userID int64, fileID string) ([]schemas.FileVersion, error) {
 	id, err := strconv.ParseInt(fileID, 10, 64)
 	if err != nil {
 		return nil, errors.Invalid("invalid file id")
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ? AND deleted_at IS NULL", id, userID).First(&record).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.NotFound("file not found")
 		}

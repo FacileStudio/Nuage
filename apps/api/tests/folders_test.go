@@ -11,7 +11,7 @@ import (
 
 func TestCreateFolder(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "folders@example.com", "password123")
+	_, token := registerUser(ts, "folders@example.com", "password12345")
 
 	resp := doJSON(ts, "POST", "/folders", map[string]string{"name": "documents"}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -28,7 +28,7 @@ func TestCreateFolder(t *testing.T) {
 
 func TestNestedFolders(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "nested@example.com", "password123")
+	_, token := registerUser(ts, "nested@example.com", "password12345")
 
 	resp := doJSON(ts, "POST", "/folders", map[string]string{"name": "parent"}, token)
 	var parent struct {
@@ -49,7 +49,7 @@ func TestNestedFolders(t *testing.T) {
 
 func TestGetFolderContents(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "contents@example.com", "password123")
+	_, token := registerUser(ts, "contents@example.com", "password12345")
 
 	folderResp := doJSON(ts, "POST", "/folders", map[string]string{"name": "stuff"}, token)
 	var folder struct {
@@ -74,7 +74,7 @@ func TestGetFolderContents(t *testing.T) {
 
 func TestDeleteEmptyFolder(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "delfolder@example.com", "password123")
+	_, token := registerUser(ts, "delfolder@example.com", "password12345")
 
 	resp := doJSON(ts, "POST", "/folders", map[string]string{"name": "empty"}, token)
 	var folder struct {
@@ -88,7 +88,7 @@ func TestDeleteEmptyFolder(t *testing.T) {
 
 func TestDeleteNonEmptyFolder(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "nonempty@example.com", "password123")
+	_, token := registerUser(ts, "nonempty@example.com", "password12345")
 
 	resp := doJSON(ts, "POST", "/folders", map[string]string{"name": "notempty"}, token)
 	var folder struct {

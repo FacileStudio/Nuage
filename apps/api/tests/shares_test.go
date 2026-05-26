@@ -12,7 +12,7 @@ import (
 
 func TestCreateShareLink(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "sharer@example.com", "password123")
+	_, token := registerUser(ts, "sharer@example.com", "password12345")
 
 	fileResp := uploadFile(ts, token, "shared.txt", "shared content", nil)
 	var file struct {
@@ -36,7 +36,7 @@ func TestCreateShareLink(t *testing.T) {
 
 func TestPublicShareAccess(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "pub-share@example.com", "password123")
+	_, token := registerUser(ts, "pub-share@example.com", "password12345")
 
 	fileResp := uploadFile(ts, token, "public.txt", "public data", nil)
 	var file struct {
@@ -68,7 +68,7 @@ func TestPublicShareAccess(t *testing.T) {
 
 func TestSharedFileDownload(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dl-share@example.com", "password123")
+	_, token := registerUser(ts, "dl-share@example.com", "password12345")
 
 	content := "downloadable content"
 	fileResp := uploadFile(ts, token, "download.txt", content, nil)
@@ -95,8 +95,8 @@ func TestSharedFileDownload(t *testing.T) {
 
 func TestSharePermissionEnforcement(t *testing.T) {
 	ts := setupTestServer(t)
-	_, ownerToken := registerUser(ts, "owner@example.com", "password123")
-	_, viewerToken := registerUser(ts, "viewer@example.com", "password123")
+	_, ownerToken := registerUser(ts, "owner@example.com", "password12345")
+	_, viewerToken := registerUser(ts, "viewer@example.com", "password12345")
 
 	fileResp := uploadFile(ts, ownerToken, "protected.txt", "secret", nil)
 	var file struct {
@@ -121,7 +121,7 @@ func TestSharePermissionEnforcement(t *testing.T) {
 
 func TestListSharedByMe(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "by-me@example.com", "password123")
+	_, token := registerUser(ts, "by-me@example.com", "password12345")
 
 	fileResp := uploadFile(ts, token, "mine.txt", "data", nil)
 	var file struct {
@@ -145,7 +145,7 @@ func TestListSharedByMe(t *testing.T) {
 
 func TestRevokeShare(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "revoke@example.com", "password123")
+	_, token := registerUser(ts, "revoke@example.com", "password12345")
 
 	fileResp := uploadFile(ts, token, "revokable.txt", "data", nil)
 	var file struct {

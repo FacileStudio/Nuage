@@ -1,8 +1,10 @@
 package files
 
 import (
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -74,6 +76,17 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
 	query := r.URL.Query()
 
 	var folderID *int64
@@ -86,7 +99,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		folderID = &id
 	}
 
-	records, err := h.service.listFiles(r.Context(), folderID, query.Get("search"), query.Get("linked_to"), query.Get("origin_app"))
+	records, err := h.service.listFiles(r.Context(), userID, folderID, query.Get("search"), query.Get("linked_to"), query.Get("origin_app"))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -100,7 +113,18 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
-	record, err := h.service.getFile(r.Context(), chi.URLParam(r, "id"))
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	record, err := h.service.getFile(r.Context(), userID, chi.URLParam(r, "id"))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -109,7 +133,18 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
-	reader, record, err := h.service.downloadFile(r.Context(), chi.URLParam(r, "id"))
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	reader, record, err := h.service.downloadFile(r.Context(), userID, chi.URLParam(r, "id"))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -117,7 +152,7 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	defer reader.Close()
 
 	w.Header().Set("Content-Type", record.MimeType)
-	w.Header().Set("Content-Disposition", `attachment; filename="`+record.Name+`"`)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(record.Name)))
 	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, reader)
@@ -177,6 +212,17 @@ func (h *Handler) updateFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) linkFile(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
 	var req LinkFileRequest
 	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
 		httpjson.WriteError(w, err)
@@ -188,7 +234,7 @@ func (h *Handler) linkFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := h.service.linkFile(r.Context(), chi.URLParam(r, "id"), strings.TrimSpace(req.LinkedTo))
+	record, err := h.service.linkFile(r.Context(), userID, chi.URLParam(r, "id"), strings.TrimSpace(req.LinkedTo))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -230,6 +276,17 @@ func (h *Handler) createFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listFolders(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
 	var parentID *int64
 	if raw := r.URL.Query().Get("parent_id"); raw != "" {
 		id, err := strconv.ParseInt(raw, 10, 64)
@@ -240,7 +297,7 @@ func (h *Handler) listFolders(w http.ResponseWriter, r *http.Request) {
 		parentID = &id
 	}
 
-	records, err := h.service.listFolders(r.Context(), parentID)
+	records, err := h.service.listFolders(r.Context(), userID, parentID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -264,7 +321,18 @@ func (h *Handler) listFolders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getFolder(w http.ResponseWriter, r *http.Request) {
-	folder, childFiles, childFolders, err := h.service.getFolder(r.Context(), chi.URLParam(r, "id"))
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	folder, childFiles, childFolders, err := h.service.getFolder(r.Context(), userID, chi.URLParam(r, "id"))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

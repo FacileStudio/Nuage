@@ -30,7 +30,7 @@ type searchRow struct {
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 
-func (s *Service) Search(ctx context.Context, query string, filterType string, folderID *int64, limit int) (*SearchResponse, error) {
+func (s *Service) Search(ctx context.Context, userID int64, query string, filterType string, folderID *int64, limit int) (*SearchResponse, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, errors.Invalid("search query is required")
 	}
@@ -45,8 +45,8 @@ func (s *Service) Search(ctx context.Context, query string, filterType string, f
 	var args []any
 
 	if filterType == "" || filterType == "file" {
-		filePart := `SELECT id, facile_id, name, 'file' AS type, mime_type, size, folder_id, NULL::bigint AS parent_id, updated_at FROM files WHERE deleted_at IS NULL AND lower(name) LIKE ?`
-		fileArgs := []any{pattern}
+		filePart := `SELECT id, facile_id, name, 'file' AS type, mime_type, size, folder_id, NULL::bigint AS parent_id, updated_at FROM files WHERE deleted_at IS NULL AND uploaded_by = ? AND lower(name) LIKE ?`
+		fileArgs := []any{userID, pattern}
 
 		if folderID != nil {
 			filePart += ` AND folder_id = ?`
@@ -58,8 +58,8 @@ func (s *Service) Search(ctx context.Context, query string, filterType string, f
 	}
 
 	if filterType == "" || filterType == "folder" {
-		folderPart := `SELECT id, facile_id, name, 'folder' AS type, NULL::text AS mime_type, 0 AS size, NULL::bigint AS folder_id, parent_id, updated_at FROM folders WHERE deleted_at IS NULL AND lower(name) LIKE ?`
-		folderArgs := []any{pattern}
+		folderPart := `SELECT id, facile_id, name, 'folder' AS type, NULL::text AS mime_type, 0 AS size, NULL::bigint AS folder_id, parent_id, updated_at FROM folders WHERE deleted_at IS NULL AND owner_id = ? AND lower(name) LIKE ?`
+		folderArgs := []any{userID, pattern}
 
 		if folderID != nil {
 			folderPart += ` AND parent_id = ?`

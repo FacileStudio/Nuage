@@ -11,7 +11,7 @@ import (
 
 func TestTrashAndRestore(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "trash@example.com", "password123")
+	_, token := registerUser(ts, "trash@example.com", "password12345")
 
 	resp := uploadFile(ts, token, "trashme.txt", "data", nil)
 	var file struct {
@@ -44,7 +44,7 @@ func TestTrashAndRestore(t *testing.T) {
 
 func TestPermanentDelete(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "permdelete@example.com", "password123")
+	_, token := registerUser(ts, "permdelete@example.com", "password12345")
 
 	resp := uploadFile(ts, token, "goodbye.txt", "data", nil)
 	var file struct {

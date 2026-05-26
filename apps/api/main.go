@@ -35,6 +35,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 )
 
 func main() {
@@ -114,9 +115,11 @@ func main() {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.RealIP)
-	router.Use(middleware.CORS([]string{"*"}))
+	router.Use(middleware.CORS(appEnv.AllowedOrigins))
+	router.Use(middleware.SecurityHeaders)
 	router.Use(middleware.RequestLogger(appLogger))
 	router.Use(chimiddleware.Recoverer)
+	router.Use(httprate.LimitByIP(100, time.Minute))
 
 	router.Get("/health", func(w http.ResponseWriter, request *http.Request) {
 		httpjson.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})

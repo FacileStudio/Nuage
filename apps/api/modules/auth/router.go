@@ -7,6 +7,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
+	mw "github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -20,6 +21,15 @@ func RegisterRoutes(router chi.Router, service *Service, appEnv env.Config) {
 				"sso_only":     appEnv.SSOOnly,
 				"oidc_enabled": oidcEnabled,
 			})
+		})
+
+		router.With(mw.RequireAuth(service)).Post("/logout", func(w http.ResponseWriter, r *http.Request) {
+			authorization := r.Header.Get("Authorization")
+			if err := service.deleteSession(r.Context(), authorization); err != nil {
+				httpjson.WriteError(w, err)
+				return
+			}
+			httpjson.WriteJSON(w, http.StatusOK, map[string]bool{"logged_out": true})
 		})
 
 		if !appEnv.SSOOnly {

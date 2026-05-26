@@ -11,7 +11,7 @@ import (
 
 func TestActivityLogOnUpload(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "activity@example.com", "password123")
+	_, token := registerUser(ts, "activity@example.com", "password12345")
 
 	uploadFile(ts, token, "tracked.txt", "data", nil)
 
@@ -44,7 +44,7 @@ func TestActivityLogOnUpload(t *testing.T) {
 
 func TestActivityPagination(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "paginate@example.com", "password123")
+	_, token := registerUser(ts, "paginate@example.com", "password12345")
 
 	for i := 0; i < 5; i++ {
 		uploadFile(ts, token, "file.txt", "data", nil)
@@ -69,7 +69,7 @@ func TestActivityPagination(t *testing.T) {
 
 func TestActivityAllEndpoint(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "all-activity@example.com", "password123")
+	_, token := registerUser(ts, "all-activity@example.com", "password12345")
 
 	uploadFile(ts, token, "global.txt", "data", nil)
 	time.Sleep(100 * time.Millisecond)
@@ -86,7 +86,7 @@ func TestActivityAllEndpoint(t *testing.T) {
 
 func TestActivityFilters(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "filter@example.com", "password123")
+	_, token := registerUser(ts, "filter@example.com", "password12345")
 
 	uploadFile(ts, token, "filtered.txt", "data", nil)
 	doJSON(ts, "POST", "/folders", map[string]string{"name": "folder"}, token)

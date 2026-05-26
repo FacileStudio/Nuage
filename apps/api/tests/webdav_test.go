@@ -43,7 +43,7 @@ func TestWebDAVOptionsRequiresAuth(t *testing.T) {
 
 func TestWebDAVPropfindRoot(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav@example.com", "password123")
+	_, token := registerUser(ts, "dav@example.com", "password12345")
 
 	resp := davRequest(ts, "PROPFIND", "/webdav/", token, "")
 	assert.Equal(t, 207, resp.StatusCode)
@@ -54,7 +54,7 @@ func TestWebDAVPropfindRoot(t *testing.T) {
 
 func TestWebDAVMkcolAndList(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-mkdir@example.com", "password123")
+	_, token := registerUser(ts, "dav-mkdir@example.com", "password12345")
 
 	resp := davRequest(ts, "MKCOL", "/webdav/TestFolder", token, "")
 	require.Equal(t, 201, resp.StatusCode)
@@ -68,7 +68,7 @@ func TestWebDAVMkcolAndList(t *testing.T) {
 
 func TestWebDAVPutAndGet(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-put@example.com", "password123")
+	_, token := registerUser(ts, "dav-put@example.com", "password12345")
 
 	content := "hello webdav world"
 	req := httptest.NewRequest("PUT", "/webdav/hello.txt", strings.NewReader(content))
@@ -87,7 +87,7 @@ func TestWebDAVPutAndGet(t *testing.T) {
 
 func TestWebDAVDelete(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-del@example.com", "password123")
+	_, token := registerUser(ts, "dav-del@example.com", "password12345")
 
 	req := httptest.NewRequest("PUT", "/webdav/todelete.txt", strings.NewReader("data"))
 	req.SetBasicAuth("user@example.com", token)
@@ -104,7 +104,7 @@ func TestWebDAVDelete(t *testing.T) {
 
 func TestWebDAVMove(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-mv@example.com", "password123")
+	_, token := registerUser(ts, "dav-mv@example.com", "password12345")
 
 	req := httptest.NewRequest("PUT", "/webdav/original.txt", strings.NewReader("move me"))
 	req.SetBasicAuth("user@example.com", token)
@@ -129,7 +129,7 @@ func TestWebDAVMove(t *testing.T) {
 
 func TestWebDAVPutInFolder(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-putfolder@example.com", "password123")
+	_, token := registerUser(ts, "dav-putfolder@example.com", "password12345")
 
 	resp := davRequest(ts, "MKCOL", "/webdav/Docs", token, "")
 	require.Equal(t, 201, resp.StatusCode)
@@ -148,7 +148,7 @@ func TestWebDAVPutInFolder(t *testing.T) {
 
 func TestWebDAVOverwrite(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-overwrite@example.com", "password123")
+	_, token := registerUser(ts, "dav-overwrite@example.com", "password12345")
 
 	req := httptest.NewRequest("PUT", "/webdav/update.txt", strings.NewReader("version1"))
 	req.SetBasicAuth("user@example.com", token)
@@ -170,7 +170,7 @@ func TestWebDAVOverwrite(t *testing.T) {
 
 func TestWebDAVDeleteFolder(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-delfolder@example.com", "password123")
+	_, token := registerUser(ts, "dav-delfolder@example.com", "password12345")
 
 	davRequest(ts, "MKCOL", "/webdav/ToDelete", token, "")
 
@@ -188,7 +188,7 @@ func TestWebDAVDeleteFolder(t *testing.T) {
 
 func TestWebDAVDSStoreIgnored(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "dav-ds@example.com", "password123")
+	_, token := registerUser(ts, "dav-ds@example.com", "password12345")
 
 	req := httptest.NewRequest("PUT", "/webdav/.DS_Store", strings.NewReader("junk"))
 	req.SetBasicAuth("user@example.com", token)

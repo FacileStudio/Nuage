@@ -10,7 +10,7 @@ import (
 
 func TestGetQuota(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "quota@example.com", "password123")
+	_, token := registerUser(ts, "quota@example.com", "password12345")
 
 	resp := doGet(ts, "/quota/me", token)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -27,7 +27,7 @@ func TestGetQuota(t *testing.T) {
 
 func TestQuotaUpdatesOnUpload(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "quota-upload@example.com", "password123")
+	_, token := registerUser(ts, "quota-upload@example.com", "password12345")
 
 	uploadFile(ts, token, "big.txt", "some file content here", nil)
 
@@ -41,7 +41,7 @@ func TestQuotaUpdatesOnUpload(t *testing.T) {
 
 func TestRecalculateQuota(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "recalc@example.com", "password123")
+	_, token := registerUser(ts, "recalc@example.com", "password12345")
 
 	uploadFile(ts, token, "file1.txt", "content1", nil)
 	uploadFile(ts, token, "file2.txt", "content2", nil)
@@ -58,8 +58,8 @@ func TestRecalculateQuota(t *testing.T) {
 
 func TestListAllUsage(t *testing.T) {
 	ts := setupTestServer(t)
-	_, token := registerUser(ts, "admin-quota@example.com", "password123")
-	registerUser(ts, "user2@example.com", "password123")
+	_, token := registerUser(ts, "admin-quota@example.com", "password12345")
+	registerUser(ts, "user2@example.com", "password12345")
 
 	resp := doGet(ts, "/quota/users", token)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

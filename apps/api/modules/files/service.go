@@ -94,7 +94,7 @@ func (s *Service) deduplicateFolderName(ctx context.Context, name string, parent
 func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
 	if folderID != nil {
 		var folder schemas.Folder
-		if err := s.orm.WithContext(ctx).Where("id = ?", *folderID).First(&folder).Error; err != nil {
+		if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *folderID, userID).First(&folder).Error; err != nil {
 			if stderrors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, errors.NotFound("folder not found")
 			}
@@ -161,8 +161,9 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 	return record, nil
 }
 
-func (s *Service) listFiles(ctx context.Context, folderID *int64, search string, linkedTo string, originApp string) ([]schemas.File, error) {
+func (s *Service) listFiles(ctx context.Context, userID int64, folderID *int64, search string, linkedTo string, originApp string) ([]schemas.File, error) {
 	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("created_at desc")
+	query = query.Where("uploaded_by = ?", userID)
 
 	if folderID != nil {
 		query = query.Where("folder_id = ?", *folderID)
@@ -186,14 +187,14 @@ func (s *Service) listFiles(ctx context.Context, folderID *int64, search string,
 	return records, nil
 }
 
-func (s *Service) getFile(ctx context.Context, fileID string) (*schemas.File, error) {
+func (s *Service) getFile(ctx context.Context, userID int64, fileID string) (*schemas.File, error) {
 	id, err := strconv.ParseInt(fileID, 10, 64)
 	if err != nil {
 		return nil, errors.Invalid("invalid file id")
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ? AND deleted_at IS NULL", id, userID).First(&record).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.NotFound("file not found")
 		}
@@ -202,8 +203,8 @@ func (s *Service) getFile(ctx context.Context, fileID string) (*schemas.File, er
 	return &record, nil
 }
 
-func (s *Service) downloadFile(ctx context.Context, fileID string) (io.ReadCloser, *schemas.File, error) {
-	record, err := s.getFile(ctx, fileID)
+func (s *Service) downloadFile(ctx context.Context, userID int64, fileID string) (io.ReadCloser, *schemas.File, error) {
+	record, err := s.getFile(ctx, userID, fileID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,7 +217,7 @@ func (s *Service) downloadFile(ctx context.Context, fileID string) (io.ReadClose
 }
 
 func (s *Service) deleteFile(ctx context.Context, userID int64, fileID string) error {
-	record, err := s.getFile(ctx, fileID)
+	record, err := s.getFile(ctx, userID, fileID)
 	if err != nil {
 		return err
 	}
@@ -255,7 +256,7 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 			updates["folder_id"] = nil
 		} else {
 			var folder schemas.Folder
-			if err := s.orm.WithContext(ctx).Where("id = ?", *folderID).First(&folder).Error; err != nil {
+			if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *folderID, userID).First(&folder).Error; err != nil {
 				if stderrors.Is(err, gorm.ErrRecordNotFound) {
 					return nil, errors.NotFound("folder not found")
 				}
@@ -269,12 +270,12 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 		return nil, errors.Invalid("at least one field must be provided")
 	}
 
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("id = ? AND uploaded_by = ?", id, userID).Updates(updates).Error; err != nil {
 		return nil, errors.Internal("failed to update file", err)
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ?", id, userID).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read file", err)
 	}
 
@@ -292,18 +293,18 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 	return &record, nil
 }
 
-func (s *Service) linkFile(ctx context.Context, fileID string, linkedTo string) (*schemas.File, error) {
+func (s *Service) linkFile(ctx context.Context, userID int64, fileID string, linkedTo string) (*schemas.File, error) {
 	id, err := strconv.ParseInt(fileID, 10, 64)
 	if err != nil {
 		return nil, errors.Invalid("invalid file id")
 	}
 
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("id = ?", id).Update("linked_to", linkedTo).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("id = ? AND uploaded_by = ?", id, userID).Update("linked_to", linkedTo).Error; err != nil {
 		return nil, errors.Internal("failed to link file", err)
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ?", id, userID).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read file", err)
 	}
 	return &record, nil
@@ -312,7 +313,7 @@ func (s *Service) linkFile(ctx context.Context, fileID string, linkedTo string) 
 func (s *Service) createFolder(ctx context.Context, userID int64, name string, parentID *int64) (*schemas.Folder, error) {
 	if parentID != nil {
 		var parent schemas.Folder
-		if err := s.orm.WithContext(ctx).Where("id = ?", *parentID).First(&parent).Error; err != nil {
+		if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *parentID, userID).First(&parent).Error; err != nil {
 			if stderrors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, errors.NotFound("parent folder not found")
 			}
@@ -345,8 +346,9 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 	return record, nil
 }
 
-func (s *Service) listFolders(ctx context.Context, parentID *int64) ([]schemas.Folder, error) {
+func (s *Service) listFolders(ctx context.Context, userID int64, parentID *int64) ([]schemas.Folder, error) {
 	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("name asc")
+	query = query.Where("owner_id = ?", userID)
 
 	if parentID != nil {
 		query = query.Where("parent_id = ?", *parentID)
@@ -361,14 +363,14 @@ func (s *Service) listFolders(ctx context.Context, parentID *int64) ([]schemas.F
 	return records, nil
 }
 
-func (s *Service) getFolder(ctx context.Context, folderID string) (*schemas.Folder, []schemas.File, []schemas.Folder, error) {
+func (s *Service) getFolder(ctx context.Context, userID int64, folderID string) (*schemas.Folder, []schemas.File, []schemas.Folder, error) {
 	id, err := strconv.ParseInt(folderID, 10, 64)
 	if err != nil {
 		return nil, nil, nil, errors.Invalid("invalid folder id")
 	}
 
 	var folder schemas.Folder
-	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&folder).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ? AND deleted_at IS NULL", id, userID).First(&folder).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, nil, errors.NotFound("folder not found")
 		}
@@ -376,12 +378,12 @@ func (s *Service) getFolder(ctx context.Context, folderID string) (*schemas.Fold
 	}
 
 	var childFiles []schemas.File
-	if err := s.orm.WithContext(ctx).Where("folder_id = ? AND deleted_at IS NULL", id).Order("created_at desc").Find(&childFiles).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("folder_id = ? AND uploaded_by = ? AND deleted_at IS NULL", id, userID).Order("created_at desc").Find(&childFiles).Error; err != nil {
 		return nil, nil, nil, errors.Internal("failed to list folder files", err)
 	}
 
 	var childFolders []schemas.Folder
-	if err := s.orm.WithContext(ctx).Where("parent_id = ? AND deleted_at IS NULL", id).Order("name asc").Find(&childFolders).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("parent_id = ? AND owner_id = ? AND deleted_at IS NULL", id, userID).Order("name asc").Find(&childFolders).Error; err != nil {
 		return nil, nil, nil, errors.Internal("failed to list subfolders", err)
 	}
 
@@ -406,7 +408,7 @@ func (s *Service) updateFolder(ctx context.Context, userID int64, folderID strin
 				return nil, errors.Invalid("folder cannot be its own parent")
 			}
 			var parent schemas.Folder
-			if err := s.orm.WithContext(ctx).Where("id = ?", *parentID).First(&parent).Error; err != nil {
+			if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *parentID, userID).First(&parent).Error; err != nil {
 				if stderrors.Is(err, gorm.ErrRecordNotFound) {
 					return nil, errors.NotFound("parent folder not found")
 				}
@@ -420,12 +422,12 @@ func (s *Service) updateFolder(ctx context.Context, userID int64, folderID strin
 		return nil, errors.Invalid("at least one field must be provided")
 	}
 
-	if err := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("id = ? AND owner_id = ?", id, userID).Updates(updates).Error; err != nil {
 		return nil, errors.Internal("failed to update folder", err)
 	}
 
 	var record schemas.Folder
-	if err := s.orm.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", id, userID).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read folder", err)
 	}
 
@@ -450,7 +452,7 @@ func (s *Service) deleteFolder(ctx context.Context, userID int64, folderID strin
 	}
 
 	var folder schemas.Folder
-	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&folder).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ? AND deleted_at IS NULL", id, userID).First(&folder).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.NotFound("folder not found")
 		}

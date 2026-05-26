@@ -28,7 +28,23 @@ func Migrate(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
+	if err := ensureAdmin(db); err != nil {
+		return err
+	}
 	return usercolor.BackfillMissing(context.Background(), db)
+}
+
+func ensureAdmin(db *gorm.DB) error {
+	var adminCount int64
+	db.Model(&User{}).Where("is_admin = ?", true).Count(&adminCount)
+	if adminCount > 0 {
+		return nil
+	}
+	var firstUser User
+	if err := db.Order("id asc").First(&firstUser).Error; err != nil {
+		return nil
+	}
+	return db.Model(&firstUser).Update("is_admin", true).Error
 }
 
 func preMigrate(db *gorm.DB) error {

@@ -50,7 +50,18 @@ func (h *Handler) reupload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listVersions(w http.ResponseWriter, r *http.Request) {
-	versions, err := h.service.listVersions(r.Context(), chi.URLParam(r, "id"))
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	versions, err := h.service.listVersions(r.Context(), userID, chi.URLParam(r, "id"))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

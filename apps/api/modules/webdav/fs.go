@@ -44,7 +44,7 @@ func (fs *NuageFS) resolvePath(ctx context.Context, name string) (*schemas.Folde
 		isLast := i == len(parts)-1
 
 		var folder schemas.Folder
-		q := fs.db.WithContext(ctx).Where("name = ? AND deleted_at IS NULL", part)
+		q := fs.db.WithContext(ctx).Where("name = ? AND owner_id = ? AND deleted_at IS NULL", part, fs.userID)
 		if currentFolderID != nil {
 			q = q.Where("parent_id = ?", *currentFolderID)
 		} else {
@@ -61,7 +61,7 @@ func (fs *NuageFS) resolvePath(ctx context.Context, name string) (*schemas.Folde
 
 		if isLast {
 			var file schemas.File
-			fq := fs.db.WithContext(ctx).Where("name = ? AND deleted_at IS NULL", part)
+			fq := fs.db.WithContext(ctx).Where("name = ? AND uploaded_by = ? AND deleted_at IS NULL", part, fs.userID)
 			if currentFolderID != nil {
 				fq = fq.Where("folder_id = ?", *currentFolderID)
 			} else {
@@ -203,9 +203,15 @@ func (fs *NuageFS) RemoveAll(ctx context.Context, name string) error {
 	now := time.Now()
 
 	if file != nil {
+		if file.UploadedBy != fs.userID {
+			return os.ErrPermission
+		}
 		return fs.db.WithContext(ctx).Model(file).Update("deleted_at", now).Error
 	}
 	if folder != nil {
+		if folder.OwnerID != fs.userID {
+			return os.ErrPermission
+		}
 		return fs.softDeleteRecursive(ctx, folder.ID, now)
 	}
 	return os.ErrNotExist
@@ -213,7 +219,7 @@ func (fs *NuageFS) RemoveAll(ctx context.Context, name string) error {
 
 func (fs *NuageFS) softDeleteRecursive(ctx context.Context, folderID int64, now time.Time) error {
 	var subfolders []schemas.Folder
-	fs.db.WithContext(ctx).Where("parent_id = ? AND deleted_at IS NULL", folderID).Find(&subfolders)
+	fs.db.WithContext(ctx).Where("parent_id = ? AND owner_id = ? AND deleted_at IS NULL", folderID, fs.userID).Find(&subfolders)
 	for _, sub := range subfolders {
 		if err := fs.softDeleteRecursive(ctx, sub.ID, now); err != nil {
 			return err
@@ -221,7 +227,7 @@ func (fs *NuageFS) softDeleteRecursive(ctx context.Context, folderID int64, now 
 	}
 
 	if err := fs.db.WithContext(ctx).Model(&schemas.File{}).
-		Where("folder_id = ? AND deleted_at IS NULL", folderID).
+		Where("folder_id = ? AND uploaded_by = ? AND deleted_at IS NULL", folderID, fs.userID).
 		Update("deleted_at", now).Error; err != nil {
 		return err
 	}
@@ -240,6 +246,13 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 		return err
 	}
 
+	if file != nil && file.UploadedBy != fs.userID {
+		return os.ErrPermission
+	}
+	if folder != nil && folder.OwnerID != fs.userID {
+		return os.ErrPermission
+	}
+
 	newBase := path.Base(newName)
 	var newParentID *int64
 	newDir := path.Dir(newName)
@@ -250,6 +263,9 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 		}
 		if parent == nil {
 			return os.ErrNotExist
+		}
+		if parent.OwnerID != fs.userID {
+			return os.ErrPermission
 		}
 		newParentID = &parent.ID
 	}
@@ -312,6 +328,9 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 }
 
 func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, data []byte) error {
+	if file.UploadedBy != fs.userID {
+		return os.ErrPermission
+	}
 	mimeType := http.DetectContentType(data)
 
 	hasher := sha256.New()
