@@ -14,6 +14,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
+	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
 	"github.com/FacileStudio/Nuage/apps/api/internal/logger"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
@@ -97,7 +98,8 @@ func main() {
 	authService := auth.NewService(db)
 	userService := users.NewService(db, appEnv.StorageDir)
 	quotaService := quota.NewService(db)
-	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService)
+	presignSecret := presign.DeriveSecret(appEnv.MinIO.SecretKey, "nuage-presign-v1")
+	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService, presignSecret)
 	trashService := trash.NewService(db, storageClient, actLogger, quotaService)
 	syncService := sync.NewService(db)
 	sharingService := sharing.NewService(db, notifier, actLogger)

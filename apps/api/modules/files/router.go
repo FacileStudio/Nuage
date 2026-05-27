@@ -41,6 +41,8 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Delete("/upload/{sessionId}", handler.abortUpload)
 	})
 
+	router.Get("/presigned/{token}", handler.presignedDownload)
+
 	router.Route("/folders", func(r chi.Router) {
 		r.Use(middleware.RequireAuth(authService))
 

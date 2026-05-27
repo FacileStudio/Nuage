@@ -9,6 +9,7 @@ export const fallback: RequestHandler = async ({ request, params, url }) => {
 	const headers = new Headers(request.headers);
 	headers.delete('host');
 	headers.delete('connection');
+	headers.set('X-Forwarded-Prefix', '/api');
 
 	const init: RequestInit = {
 		method: request.method,

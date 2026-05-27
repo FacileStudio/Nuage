@@ -1,8 +1,12 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,7 +17,8 @@ func TestPresignFile(t *testing.T) {
 	ts := setupTestServer(t)
 	_, token := registerUser(ts, "presign@example.com", "password12345")
 
-	resp := uploadFile(ts, token, "secret.txt", "presigned content", nil)
+	content := "presigned content here"
+	resp := uploadFile(ts, token, "secret.txt", content, nil)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	var file struct {
@@ -31,6 +36,20 @@ func TestPresignFile(t *testing.T) {
 	parseJSON(presignResp, &result)
 	assert.NotEmpty(t, result.URL)
 	assert.NotEmpty(t, result.ExpiresAt)
+
+	parsed, err := url.Parse(result.URL)
+	require.NoError(t, err)
+
+	dlReq := httptest.NewRequest("GET", parsed.RequestURI(), nil)
+	dlW := httptest.NewRecorder()
+	ts.router.ServeHTTP(dlW, dlReq)
+	dlResp := dlW.Result()
+
+	require.Equal(t, http.StatusOK, dlResp.StatusCode)
+	body, _ := io.ReadAll(dlResp.Body)
+	dlResp.Body.Close()
+	assert.Equal(t, content, string(body))
+	assert.Equal(t, "application/octet-stream", dlResp.Header.Get("Content-Type"))
 }
 
 func TestPresignFileCustomExpiry(t *testing.T) {
@@ -45,8 +64,7 @@ func TestPresignFileCustomExpiry(t *testing.T) {
 	}
 	parseJSON(resp, &file)
 
-	expiresIn := int64(300)
-	presignResp := doJSON(ts, "POST", fmt.Sprintf("/files/%d/presign", file.ID), map[string]int64{"expires_in": expiresIn}, token)
+	presignResp := doJSON(ts, "POST", fmt.Sprintf("/files/%d/presign", file.ID), map[string]int64{"expires_in": 300}, token)
 	require.Equal(t, http.StatusOK, presignResp.StatusCode)
 
 	var result struct {
@@ -120,4 +138,48 @@ func TestPresignFileOtherUser(t *testing.T) {
 
 	presignResp := doJSON(ts, "POST", fmt.Sprintf("/files/%d/presign", file.ID), nil, token2)
 	require.Equal(t, http.StatusNotFound, presignResp.StatusCode)
+}
+
+func TestPresignedDownloadInvalidToken(t *testing.T) {
+	ts := setupTestServer(t)
+
+	req := httptest.NewRequest("GET", "/presigned/garbage-token", nil)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	resp := w.Result()
+
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestPresignedDownloadTamperedToken(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "presign-tamper@example.com", "password12345")
+
+	resp := uploadFile(ts, token, "tamper.txt", "tamper content", nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &file)
+
+	presignResp := doJSON(ts, "POST", fmt.Sprintf("/files/%d/presign", file.ID), nil, token)
+	require.Equal(t, http.StatusOK, presignResp.StatusCode)
+
+	var result struct {
+		URL string `json:"url"`
+	}
+	json.NewDecoder(presignResp.Body).Decode(&result)
+	presignResp.Body.Close()
+
+	parsed, err := url.Parse(result.URL)
+	require.NoError(t, err)
+
+	tampered := parsed.RequestURI() + "tampered"
+	req := httptest.NewRequest("GET", tampered, nil)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	dlResp := w.Result()
+
+	require.Equal(t, http.StatusUnauthorized, dlResp.StatusCode)
 }

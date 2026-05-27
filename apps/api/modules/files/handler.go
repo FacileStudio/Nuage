@@ -193,16 +193,47 @@ func (h *Handler) presign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dur := time.Duration(expiresIn) * time.Second
-	presignedURL, expiresAt, err := h.service.presignFile(r.Context(), userID, chi.URLParam(r, "id"), dur)
+	token, expiresAt, err := h.service.presignFile(r.Context(), userID, chi.URLParam(r, "id"), dur)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
 	}
 
+	scheme := "https"
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	} else if r.TLS == nil {
+		scheme = "http"
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	prefix := r.Header.Get("X-Forwarded-Prefix")
+
+	presignedURL := fmt.Sprintf("%s://%s%s/presigned/%s", scheme, host, prefix, token)
+
 	httpjson.WriteJSON(w, http.StatusOK, PresignResponse{
 		URL:       presignedURL,
 		ExpiresAt: expiresAt.UTC().Format(time.RFC3339),
 	})
+}
+
+func (h *Handler) presignedDownload(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	reader, record, err := h.service.downloadPresigned(r.Context(), token)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", record.MimeType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(record.Name)))
+	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, reader)
 }
 
 func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {

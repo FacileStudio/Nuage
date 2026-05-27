@@ -17,6 +17,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
@@ -97,7 +98,8 @@ func setupTestServer(t *testing.T) *testServer {
 	authService := auth.NewService(db)
 	userService := users.NewService(db, t.TempDir())
 	quotaService := quota.NewService(db)
-	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService)
+	presignSecret := presign.DeriveSecret("test-secret", "nuage-presign-v1")
+	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService, presignSecret)
 	trashService := trash.NewService(db, storageClient, actLogger, quotaService)
 	syncService := sync.NewService(db)
 	sharingService := sharing.NewService(db, notifier, actLogger)

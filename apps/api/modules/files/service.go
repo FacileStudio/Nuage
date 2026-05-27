@@ -15,6 +15,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -23,15 +24,16 @@ import (
 )
 
 type Service struct {
-	orm      *gorm.DB
-	storage  *storage.Client
-	notifier *nook.Notifier
-	activity *activity.Logger
-	quota    *quota.Service
+	orm           *gorm.DB
+	storage       *storage.Client
+	notifier      *nook.Notifier
+	activity      *activity.Logger
+	quota         *quota.Service
+	presignSecret []byte
 }
 
-func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier, actLogger *activity.Logger, quotaService *quota.Service) *Service {
-	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService}
+func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier, actLogger *activity.Logger, quotaService *quota.Service, presignSecret []byte) *Service {
+	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret}
 }
 
 func (s *Service) deduplicateFileName(ctx context.Context, name string, folderID *int64) string {
@@ -500,12 +502,34 @@ func (s *Service) presignFile(ctx context.Context, userID int64, fileID string, 
 		return "", time.Time{}, err
 	}
 
-	url, err := s.storage.PresignedGetURL(ctx, record.BucketKey, expiresIn)
+	expiresAt := time.Now().Add(expiresIn)
+	token, err := presign.Sign(record.ID, expiresAt, s.presignSecret)
 	if err != nil {
-		return "", time.Time{}, errors.Internal("failed to generate presigned url", err)
+		return "", time.Time{}, errors.Internal("failed to sign presigned token", err)
 	}
 
-	return url, time.Now().Add(expiresIn), nil
+	return token, expiresAt, nil
+}
+
+func (s *Service) downloadPresigned(ctx context.Context, token string) (io.ReadCloser, *schemas.File, error) {
+	claims, err := presign.Verify(token, s.presignSecret)
+	if err != nil {
+		return nil, nil, errors.Unauthorized(err.Error())
+	}
+
+	var record schemas.File
+	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", claims.FileID).First(&record).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, errors.NotFound("file not found")
+		}
+		return nil, nil, errors.Internal("failed to read file", err)
+	}
+
+	reader, err := s.storage.GetObject(ctx, record.BucketKey)
+	if err != nil {
+		return nil, nil, errors.Internal("failed to read file from storage", err)
+	}
+	return reader, &record, nil
 }
 
 func mapFile(record schemas.File) FileResponse {
