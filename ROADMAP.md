@@ -137,8 +137,8 @@ nuage upgrade        # self-update from GitHub
 Make Nuage a great building block for other tools.
 
 ### OpenAPI Specification
-- [ ] Machine-generated OpenAPI 3.1 spec from Go handlers
-- [ ] Serve at `/docs` with Scalar or Swagger UI
+- [x] Hand-maintained OpenAPI 3.1 spec with full endpoint coverage
+- [x] Serve at `/docs` with Scalar UI
 - [ ] Auto-generate TypeScript and Go client SDKs
 - [ ] Versioned API (`/v1/`) for stability guarantees
 
@@ -157,9 +157,9 @@ Make Nuage a great building block for other tools.
 - [ ] Not full S3 — just the subset that covers file CRUD
 
 ### Presigned URLs
-- [ ] `POST /files/{id}/presign` — time-limited download URL (no auth header needed)
-- [ ] Configurable expiry (default 1h, max 7d)
-- [ ] Useful for embedding in emails, external tools, CDN-style access
+- [x] `POST /files/{id}/presign` — time-limited download URL (no auth header needed)
+- [x] Configurable expiry (default 1h, max 7d)
+- [x] Useful for embedding in emails, external tools, CDN-style access
 
 ---
 
@@ -267,4 +267,4 @@ If you're contributing or planning work, here's how to think about priority:
 
 ---
 
-*Last updated: 2026-05-26*
+*Last updated: 2026-05-27*

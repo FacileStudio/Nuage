@@ -833,6 +833,52 @@ paths:
         "413":
           $ref: "#/components/responses/TooLarge"
 
+  /files/{id}/presign:
+    post:
+      operationId: presignFile
+      summary: Generate a presigned download URL
+      description: |
+        Generate a time-limited, pre-authenticated URL that can be used to download
+        the file without any authorization header. Useful for embedding in emails,
+        `<img>` tags, inter-service communication, or passing to tools like `curl`.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expires_in:
+                  type: integer
+                  format: int64
+                  description: URL lifetime in seconds (min 60, max 604800). Defaults to 3600 (1 hour).
+                  default: 3600
+                  minimum: 60
+                  maximum: 604800
+            example:
+              expires_in: 3600
+      responses:
+        "200":
+          description: Presigned URL generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignResponse"
+              example:
+                url: "https://minio.internal/nuage/1/nua_abc123/photo.jpg?X-Amz-Algorithm=..."
+                expires_at: "2025-05-20T13:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ---------------------------------------------------------------------------
   # Chunked Uploads
   # ---------------------------------------------------------------------------
@@ -2740,6 +2786,18 @@ components:
         type:
           type: string
           enum: [string, integer, boolean, secret]
+
+    PresignResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Pre-authenticated download URL (time-limited)
+        expires_at:
+          type: string
+          format: date-time
+          description: When the URL stops working
 
     HealthResponse:
       type: object

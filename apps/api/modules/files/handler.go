@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
@@ -156,6 +157,52 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, reader)
+}
+
+func (h *Handler) presign(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	var req PresignRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := httpjson.DecodeJSON(w, r, &req); err != nil {
+			httpjson.WriteError(w, err)
+			return
+		}
+	}
+
+	expiresIn := int64(3600)
+	if req.ExpiresIn != nil {
+		expiresIn = *req.ExpiresIn
+	}
+	if expiresIn < 60 {
+		httpjson.WriteError(w, errors.Invalid("expires_in must be at least 60 seconds"))
+		return
+	}
+	if expiresIn > 604800 {
+		httpjson.WriteError(w, errors.Invalid("expires_in must not exceed 604800 seconds (7 days)"))
+		return
+	}
+
+	dur := time.Duration(expiresIn) * time.Second
+	presignedURL, expiresAt, err := h.service.presignFile(r.Context(), userID, chi.URLParam(r, "id"), dur)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	httpjson.WriteJSON(w, http.StatusOK, PresignResponse{
+		URL:       presignedURL,
+		ExpiresAt: expiresAt.UTC().Format(time.RFC3339),
+	})
 }
 
 func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {

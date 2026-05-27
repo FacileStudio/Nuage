@@ -72,6 +72,20 @@ var Documentation = documentation.Module{
 		},
 		{
 			Method:       "POST",
+			Path:         "/files/{id}/presign",
+			Summary:      "Generate a presigned download URL",
+			Description:  "Returns a time-limited, pre-authenticated URL for downloading the file without auth headers.",
+			Auth:         "bearer token required",
+			RequestBody:  "PresignRequest (optional expires_in in seconds, default 3600, max 604800)",
+			ResponseBody: "PresignResponse",
+			Errors: []documentation.Error{
+				{Status: 400, Code: "invalid_argument", Description: "expires_in out of range."},
+				{Status: 401, Code: "unauthenticated", Description: "Authorization header is missing or invalid."},
+				{Status: 404, Code: "not_found", Description: "File does not exist."},
+			},
+		},
+		{
+			Method:       "POST",
 			Path:         "/folders",
 			Summary:      "Create a folder",
 			Description:  "Creates a new folder with an optional parent.",

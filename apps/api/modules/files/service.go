@@ -494,6 +494,20 @@ func (s *Service) deleteFolder(ctx context.Context, userID int64, folderID strin
 	return nil
 }
 
+func (s *Service) presignFile(ctx context.Context, userID int64, fileID string, expiresIn time.Duration) (string, time.Time, error) {
+	record, err := s.getFile(ctx, userID, fileID)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	url, err := s.storage.PresignedGetURL(ctx, record.BucketKey, expiresIn)
+	if err != nil {
+		return "", time.Time{}, errors.Internal("failed to generate presigned url", err)
+	}
+
+	return url, time.Now().Add(expiresIn), nil
+}
+
 func mapFile(record schemas.File) FileResponse {
 	return FileResponse{
 		ID:         record.ID,

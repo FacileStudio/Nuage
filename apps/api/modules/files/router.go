@@ -25,6 +25,7 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Delete("/{id}", handler.deleteFile)
 		r.Put("/{id}", handler.updateFile)
 		r.Post("/{id}/link", handler.linkFile)
+		r.Post("/{id}/presign", handler.presign)
 
 		r.Post("/{id}/reupload", func(w http.ResponseWriter, req *http.Request) {
 			req.Body = http.MaxBytesReader(w, req.Body, 100<<20)

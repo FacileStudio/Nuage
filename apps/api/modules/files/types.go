@@ -58,3 +58,12 @@ type UpdateFolderRequest struct {
 	Name     *string `json:"name"`
 	ParentID *int64  `json:"parent_id"`
 }
+
+type PresignRequest struct {
+	ExpiresIn *int64 `json:"expires_in"`
+}
+
+type PresignResponse struct {
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expires_at"`
+}
