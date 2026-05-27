@@ -13,7 +13,6 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
-	documentation "github.com/FacileStudio/Nuage/apps/api/internal/documentation"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
 	"github.com/FacileStudio/Nuage/apps/api/internal/logger"
@@ -22,6 +21,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
+	"github.com/FacileStudio/Nuage/apps/api/modules/docs"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/modules/search"
@@ -104,13 +104,6 @@ func main() {
 	settingsService := settings.NewService(db)
 	searchService := search.NewService(db)
 	activityService := activitymod.NewService(db)
-	docs := documentation.Response{
-		Modules: []documentation.Module{
-			auth.Documentation,
-			users.Documentation,
-			files.Documentation,
-		},
-	}
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -133,9 +126,7 @@ func main() {
 		}
 		httpjson.WriteJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
-	router.Get("/docs", func(w http.ResponseWriter, request *http.Request) {
-		httpjson.WriteJSON(w, http.StatusOK, docs)
-	})
+	docs.RegisterRoutes(router)
 
 	avatarFS := http.StripPrefix("/avatars/", http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 	router.Get("/avatars/*", func(w http.ResponseWriter, r *http.Request) {

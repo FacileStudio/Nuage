@@ -1,0 +1,2803 @@
+openapi: 3.1.0
+info:
+  title: Nuage API
+  description: |
+    Minimalist, developer-friendly cloud storage for the Facile Suite.
+
+    ## Authentication
+
+    Most endpoints require authentication via one of these methods:
+
+    - **Bearer token**: `Authorization: Bearer {token}` header
+    - **Query parameter**: `?token={token}` fallback for contexts where headers are impractical
+    - **HTTP Basic Auth**: WebDAV only — username is your email, password is your API token
+    - **OIDC**: OpenID Connect flow when enabled by the instance administrator
+
+    ## Rate Limiting
+
+    All endpoints are rate-limited to **100 requests per minute per IP**.
+    Exceeding the limit returns `429 Too Many Requests`.
+
+    ## File Size Limits
+
+    - Standard uploads: 100 MB max
+    - Avatar uploads: 6 MB max
+    - Chunked uploads: no per-request limit (total size declared at init)
+  version: 1.0.0
+  contact:
+    name: Facile Studio
+    url: https://facile.studio
+  license:
+    name: MIT
+
+servers:
+  - url: https://nuage.facile.studio
+    description: Production
+  - url: http://localhost:4000
+    description: Local development
+
+tags:
+  - name: Health
+    description: Service health and readiness checks
+  - name: Auth
+    description: Authentication, registration, and OIDC
+  - name: Users
+    description: User profiles, avatars, and API tokens
+  - name: Files
+    description: File upload, download, metadata, and linking
+  - name: Folders
+    description: Folder CRUD and tree navigation
+  - name: Sharing
+    description: Share links for files and folders (authenticated and public)
+  - name: Trash
+    description: Soft-deleted files and folders
+  - name: Sync
+    description: Delta sync and full state snapshots
+  - name: Activity
+    description: Audit log and activity feed
+  - name: Quota
+    description: Storage usage and limits
+  - name: Search
+    description: Full-text search across files and folders
+  - name: Settings
+    description: Instance-level configuration (admin only)
+  - name: WebDAV
+    description: WebDAV file access (Basic Auth)
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Health
+  # ---------------------------------------------------------------------------
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      description: Returns `ok` if the server is running. No authentication required.
+      tags: [Health]
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "ok"
+
+  /ready:
+    get:
+      operationId: readinessCheck
+      summary: Readiness check
+      description: Returns `ready` if the server can accept traffic (database reachable, migrations applied). No authentication required.
+      tags: [Health]
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "ready"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "not_ready"
+
+  # ---------------------------------------------------------------------------
+  # Auth
+  # ---------------------------------------------------------------------------
+  /auth/config:
+    get:
+      operationId: getAuthConfig
+      summary: Get auth configuration
+      description: Returns which authentication methods are available on this instance. No authentication required.
+      tags: [Auth]
+      responses:
+        "200":
+          description: Auth configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sso_only:
+                    type: boolean
+                    description: When true, local registration and login are disabled
+                  oidc_enabled:
+                    type: boolean
+                    description: Whether OIDC login is available
+              example:
+                sso_only: false
+                oidc_enabled: true
+
+  /auth/register:
+    post:
+      operationId: register
+      summary: Register a new account
+      description: |
+        Create a new user account with email and password.
+        Disabled when `sso_only` is true.
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+            example:
+              email: "alice@example.com"
+              password: "hunter2hunter2"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  token:
+                    type: string
+              example:
+                user_id: "550e8400-e29b-41d4-a716-446655440000"
+                token: "nua_tok_a1b2c3d4e5f6..."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "conflict"
+                message: "email already registered"
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Log in
+      description: |
+        Authenticate with email and password. Returns a bearer token.
+        Disabled when `sso_only` is true.
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+            example:
+              email: "alice@example.com"
+              password: "hunter2hunter2"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  token:
+                    type: string
+              example:
+                user_id: "550e8400-e29b-41d4-a716-446655440000"
+                token: "nua_tok_a1b2c3d4e5f6..."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Log out
+      description: Invalidate the current session token.
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logged_out:
+                    type: boolean
+                    const: true
+              example:
+                logged_out: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/oidc:
+    get:
+      operationId: oidcRedirect
+      summary: Start OIDC login
+      description: Redirects the user to the configured OIDC provider. Only available when `oidc_enabled` is true.
+      tags: [Auth]
+      responses:
+        "302":
+          description: Redirect to OIDC provider
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      summary: OIDC callback
+      description: |
+        Handles the OIDC provider callback. Validates the authorization code,
+        creates or links the user account, and sets the auth token.
+      tags: [Auth]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to application with auth token set
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ---------------------------------------------------------------------------
+  # Users
+  # ---------------------------------------------------------------------------
+  /users/:
+    get:
+      operationId: listUsers
+      summary: List users
+      description: Returns all users on the instance.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/me:
+    get:
+      operationId: getCurrentUser
+      summary: Get current user
+      description: Returns the authenticated user's profile.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+              example:
+                user:
+                  id: "550e8400-e29b-41d4-a716-446655440000"
+                  email: "alice@example.com"
+                  name: "Alice"
+                  avatar_url: "/users/me/avatar"
+                  color: "#6366f1"
+                  created_at: "2025-01-15T09:00:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      operationId: updateCurrentUser
+      summary: Update current user
+      description: Update the authenticated user's profile fields. All fields are optional.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                color:
+                  type: string
+                  pattern: "^#[0-9a-fA-F]{6}$"
+            example:
+              name: "Alice Wonderland"
+              color: "#6366f1"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Get user by ID
+      description: Returns a user's public profile by their ID.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserID"
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/me/avatar:
+    post:
+      operationId: uploadAvatar
+      summary: Upload avatar
+      description: Upload or replace the authenticated user's avatar. Max file size 6 MB.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file (JPEG, PNG, WebP). Max 6 MB.
+      responses:
+        "200":
+          description: Updated user with new avatar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+
+    delete:
+      operationId: deleteAvatar
+      summary: Delete avatar
+      description: Remove the authenticated user's avatar.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User with avatar removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/me/api-token:
+    get:
+      operationId: listApiTokens
+      summary: List API tokens
+      description: Returns all API tokens for the authenticated user.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Token list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createApiToken
+      summary: Create API token
+      description: |
+        Generate a new API token. The full token value is returned only once
+        in this response — store it securely.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Human-readable label for the token
+            example:
+              name: "desktop-sync"
+      responses:
+        "201":
+          description: Token created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiTokenCreated"
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                token: "nua_pat_a1b2c3d4e5f6..."
+                name: "desktop-sync"
+                created_at: "2025-05-20T12:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/me/api-token/{id}:
+    delete:
+      operationId: deleteApiToken
+      summary: Delete API token
+      description: Revoke and delete an API token by ID.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TokenID"
+      responses:
+        "200":
+          description: Token deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    const: true
+              example:
+                deleted: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Files
+  # ---------------------------------------------------------------------------
+  /files/:
+    post:
+      operationId: uploadFile
+      summary: Upload a file
+      description: |
+        Upload a file via multipart form data. Max file size 100 MB.
+        For larger files, use the chunked upload endpoints.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload. Max 100 MB.
+                folder_id:
+                  type: string
+                  format: uuid
+                  description: Target folder (root if omitted)
+                origin_app:
+                  type: string
+                  description: Facile Suite app that owns this file
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+
+    get:
+      operationId: listFiles
+      summary: List files
+      description: |
+        List files, optionally filtered by folder, search query, linked resource,
+        or origin app.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: folder_id
+          in: query
+          description: Filter by folder ID
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          description: Search by file name
+          schema:
+            type: string
+        - name: linked_to
+          in: query
+          description: Filter by linked resource identifier
+          schema:
+            type: string
+        - name: origin_app
+          in: query
+          description: Filter by origin application
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /files/{id}:
+    get:
+      operationId: getFile
+      summary: Get file metadata
+      description: Returns metadata for a single file.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          description: File metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateFile
+      summary: Update file metadata
+      description: Rename a file or move it to a different folder.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                folder_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+            example:
+              name: "report-final.pdf"
+              folder_id: "660e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "200":
+          description: Updated file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteFile
+      summary: Delete a file
+      description: Soft-delete a file (moves to trash).
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    const: true
+              example:
+                deleted: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /files/{id}/download:
+    get:
+      operationId: downloadFile
+      summary: Download file content
+      description: Stream the file's binary content. Returns the appropriate `Content-Type` header.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          description: File stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /files/{id}/link:
+    post:
+      operationId: linkFile
+      summary: Link file to a resource
+      description: Associate a file with an external resource identifier (e.g., a record in another Facile app).
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [linked_to]
+              properties:
+                linked_to:
+                  type: string
+                  description: External resource identifier
+            example:
+              linked_to: "invoice:inv_abc123"
+      responses:
+        "200":
+          description: File linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /files/{id}/reupload:
+    post:
+      operationId: reuploadFile
+      summary: Replace file content
+      description: Replace a file's content while preserving its ID and metadata. Creates a new version. Max 100 MB.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Replacement file. Max 100 MB.
+      responses:
+        "200":
+          description: File replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+
+  # ---------------------------------------------------------------------------
+  # Chunked Uploads
+  # ---------------------------------------------------------------------------
+  /files/upload/init:
+    post:
+      operationId: initChunkedUpload
+      summary: Initialize chunked upload
+      description: Start a chunked upload session. Returns a session ID used for subsequent part uploads.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name, mime_type, total_size]
+              properties:
+                file_name:
+                  type: string
+                mime_type:
+                  type: string
+                total_size:
+                  type: integer
+                  format: int64
+                  description: Total file size in bytes
+                folder_id:
+                  type: string
+                  format: uuid
+                origin_app:
+                  type: string
+            example:
+              file_name: "backup.tar.gz"
+              mime_type: "application/gzip"
+              total_size: 524288000
+              folder_id: "660e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "201":
+          description: Upload session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    format: uuid
+                  expires_at:
+                    type: string
+                    format: date-time
+              example:
+                session_id: "770e8400-e29b-41d4-a716-446655440000"
+                expires_at: "2025-05-21T12:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /files/upload/{sessionId}/part/{partNumber}:
+    put:
+      operationId: uploadChunkPart
+      summary: Upload a chunk
+      description: Upload a single part of a chunked upload. Parts can be uploaded in any order.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+        - $ref: "#/components/parameters/PartNumber"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Chunk accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChunkResponse"
+              example:
+                part_number: 1
+                size: 10485760
+                hash: "sha256:abcdef1234567890..."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /files/upload/{sessionId}/complete:
+    post:
+      operationId: completeChunkedUpload
+      summary: Complete chunked upload
+      description: Finalize the upload session and assemble all parts into the final file.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      responses:
+        "200":
+          description: Upload completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file:
+                    $ref: "#/components/schemas/FileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /files/upload/{sessionId}/status:
+    get:
+      operationId: getChunkedUploadStatus
+      summary: Get upload session status
+      description: Check the progress of a chunked upload session, including which parts have been received.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      responses:
+        "200":
+          description: Session status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSession"
+              example:
+                session_id: "770e8400-e29b-41d4-a716-446655440000"
+                file_name: "backup.tar.gz"
+                total_size: 524288000
+                status: "in_progress"
+                uploaded_chunks: [1, 2, 3]
+                expires_at: "2025-05-21T12:00:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /files/upload/{sessionId}:
+    delete:
+      operationId: abortChunkedUpload
+      summary: Abort chunked upload
+      description: Cancel the upload session and discard any uploaded parts.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      responses:
+        "200":
+          description: Upload aborted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aborted:
+                    type: boolean
+                    const: true
+              example:
+                aborted: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # File Versioning
+  # ---------------------------------------------------------------------------
+  /files/{id}/versions:
+    get:
+      operationId: listFileVersions
+      summary: List file versions
+      description: Returns the version history for a file, ordered newest first.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          description: Version list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VersionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /files/{id}/versions/{versionId}/restore:
+    post:
+      operationId: restoreFileVersion
+      summary: Restore a file version
+      description: Restore a previous version of a file, making it the current version.
+      tags: [Files]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+        - $ref: "#/components/parameters/VersionID"
+      responses:
+        "200":
+          description: Version restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Folders
+  # ---------------------------------------------------------------------------
+  /folders/:
+    post:
+      operationId: createFolder
+      summary: Create a folder
+      description: Create a new folder, optionally nested under a parent folder.
+      tags: [Folders]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                parent_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Parent folder ID (root if omitted)
+            example:
+              name: "Documents"
+              parent_id: null
+      responses:
+        "201":
+          description: Folder created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      operationId: listFolders
+      summary: List folders
+      description: List folders at the root level or within a specific parent folder.
+      tags: [Folders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: parent_id
+          in: query
+          description: Filter by parent folder ID (root folders if omitted)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Folder list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  folders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FolderResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /folders/{id}:
+    get:
+      operationId: getFolder
+      summary: Get folder contents
+      description: Returns the folder metadata along with its files and subfolders.
+      tags: [Folders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FolderID"
+      responses:
+        "200":
+          description: Folder with contents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateFolder
+      summary: Update a folder
+      description: Rename a folder or move it to a different parent.
+      tags: [Folders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FolderID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                parent_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+            example:
+              name: "Archived Documents"
+      responses:
+        "200":
+          description: Updated folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteFolder
+      summary: Delete a folder
+      description: Soft-delete a folder and its contents (moves to trash).
+      tags: [Folders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FolderID"
+      responses:
+        "200":
+          description: Folder deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    const: true
+              example:
+                deleted: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Sharing (Authenticated)
+  # ---------------------------------------------------------------------------
+  /shares/:
+    post:
+      operationId: createShare
+      summary: Create a share link
+      description: |
+        Generate a public share link for a file or folder. Exactly one of
+        `file_id` or `folder_id` must be provided.
+      tags: [Sharing]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission]
+              properties:
+                file_id:
+                  type: string
+                  format: uuid
+                folder_id:
+                  type: string
+                  format: uuid
+                permission:
+                  type: string
+                  enum: [view, download, edit]
+                expires_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+            example:
+              file_id: "550e8400-e29b-41d4-a716-446655440000"
+              permission: "download"
+              expires_at: "2025-06-01T00:00:00Z"
+      responses:
+        "201":
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /shares/by-me:
+    get:
+      operationId: listMyShares
+      summary: List shares created by me
+      description: Returns all active share links created by the authenticated user.
+      tags: [Sharing]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Share list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shares:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ShareResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /shares/{id}:
+    delete:
+      operationId: deleteShare
+      summary: Revoke a share link
+      description: Permanently revoke a share link. The public URL will stop working.
+      tags: [Sharing]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShareID"
+      responses:
+        "200":
+          description: Share revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    const: true
+              example:
+                deleted: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Sharing (Public)
+  # ---------------------------------------------------------------------------
+  /shared/{token}:
+    get:
+      operationId: getPublicShare
+      summary: Access a public share
+      description: View a shared file or folder using its public share token. No authentication required.
+      tags: [Sharing]
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared resource
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicShareResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /shared/{token}/download/{fileId}:
+    get:
+      operationId: downloadSharedFile
+      summary: Download a file from a public share
+      description: Download a specific file from a shared folder or the shared file itself. No authentication required.
+      tags: [Sharing]
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+        - name: fileId
+          in: path
+          required: true
+          description: File ID to download
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: File stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /shared/{token}/files:
+    get:
+      operationId: listSharedFiles
+      summary: List files in a public share
+      description: List the files and folders accessible through a public share link. No authentication required.
+      tags: [Sharing]
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared file listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permission:
+                    type: string
+                    enum: [view, download, edit]
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicFile"
+                  folders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicFolder"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Trash
+  # ---------------------------------------------------------------------------
+  /trash/:
+    get:
+      operationId: listTrash
+      summary: List trashed items
+      description: Returns all soft-deleted files and folders for the authenticated user.
+      tags: [Trash]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Trash contents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TrashItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /trash/{type}/{id}/restore:
+    post:
+      operationId: restoreFromTrash
+      summary: Restore from trash
+      description: Restore a soft-deleted file or folder back to its original location.
+      tags: [Trash]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TrashType"
+        - $ref: "#/components/parameters/TrashItemID"
+      responses:
+        "200":
+          description: Item restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored:
+                    type: boolean
+                    const: true
+              example:
+                restored: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /trash/{type}/{id}:
+    delete:
+      operationId: permanentlyDeleteTrashItem
+      summary: Permanently delete trashed item
+      description: Permanently remove a file or folder from trash. This action is irreversible.
+      tags: [Trash]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TrashType"
+        - $ref: "#/components/parameters/TrashItemID"
+      responses:
+        "200":
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    const: true
+              example:
+                deleted: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Sync
+  # ---------------------------------------------------------------------------
+  /sync/changes:
+    get:
+      operationId: getSyncChanges
+      summary: Get changes since timestamp
+      description: |
+        Returns files and folders that have been created, modified, or deleted
+        since the given timestamp. Used for incremental sync.
+      tags: [Sync]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: since
+          in: query
+          required: true
+          description: RFC 3339 timestamp to fetch changes from
+          schema:
+            type: string
+            format: date-time
+          example: "2025-05-20T00:00:00Z"
+      responses:
+        "200":
+          description: Changes since timestamp
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    $ref: "#/components/schemas/ChangedItems"
+                  folders:
+                    $ref: "#/components/schemas/ChangedItems"
+                  server_time:
+                    type: string
+                    format: date-time
+              example:
+                files:
+                  changed:
+                    - id: "550e8400-e29b-41d4-a716-446655440000"
+                      facile_id: "nua_abc123"
+                      name: "photo.jpg"
+                      type: "file"
+                      size: 2048576
+                      hash: "sha256:abcdef..."
+                      parent_id: null
+                      folder_id: "660e8400-e29b-41d4-a716-446655440000"
+                      updated_at: "2025-05-20T14:30:00Z"
+                  deleted:
+                    - id: "880e8400-e29b-41d4-a716-446655440000"
+                      facile_id: "nua_xyz789"
+                      type: "file"
+                      deleted_at: "2025-05-20T15:00:00Z"
+                folders:
+                  changed: []
+                  deleted: []
+                server_time: "2025-05-20T16:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sync/state:
+    get:
+      operationId: getSyncState
+      summary: Get full sync state
+      description: |
+        Returns the complete state of all files and folders. Used for initial sync
+        or full reconciliation.
+      tags: [Sync]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Full sync state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SyncItem"
+                  folders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SyncItem"
+                  server_time:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Activity
+  # ---------------------------------------------------------------------------
+  /activity/:
+    get:
+      operationId: listActivity
+      summary: List all activity
+      description: Returns a paginated activity feed for the entire instance.
+      tags: [Activity]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: event_type
+          in: query
+          description: Filter by event type (e.g., `file.uploaded`, `folder.created`)
+          schema:
+            type: string
+        - name: resource_type
+          in: query
+          description: Filter by resource type (`file`, `folder`, `share`)
+          schema:
+            type: string
+        - name: resource_id
+          in: query
+          description: Filter by resource ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activities:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActivityResponse"
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /activity/me:
+    get:
+      operationId: listMyActivity
+      summary: List my activity
+      description: Returns a paginated activity feed for the authenticated user only.
+      tags: [Activity]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: event_type
+          in: query
+          schema:
+            type: string
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User activity feed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activities:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActivityResponse"
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /activity/files/{id}:
+    get:
+      operationId: listFileActivity
+      summary: List activity for a file
+      description: Returns a paginated activity feed scoped to a specific file.
+      tags: [Activity]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: event_type
+          in: query
+          schema:
+            type: string
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: File activity feed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activities:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActivityResponse"
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Quota
+  # ---------------------------------------------------------------------------
+  /quota/me:
+    get:
+      operationId: getMyQuota
+      summary: Get my storage usage
+      description: Returns the authenticated user's storage usage and limit.
+      tags: [Quota]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Usage info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+              example:
+                user_id: "550e8400-e29b-41d4-a716-446655440000"
+                storage_used: 1073741824
+                storage_limit: 10737418240
+                percentage: 10.0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /quota/me/recalculate:
+    post:
+      operationId: recalculateMyQuota
+      summary: Recalculate my storage usage
+      description: Force a recalculation of the authenticated user's storage usage from disk.
+      tags: [Quota]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Recalculated usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /quota/users:
+    get:
+      operationId: listUserQuotas
+      summary: List all user quotas (admin)
+      description: Returns storage usage for all users. Admin only.
+      tags: [Quota]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All user quotas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UsageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /quota/users/{userId}:
+    put:
+      operationId: updateUserQuota
+      summary: Update user quota (admin)
+      description: Set the storage limit for a specific user. Admin only.
+      tags: [Quota]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Target user ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [storage_limit]
+              properties:
+                storage_limit:
+                  type: integer
+                  format: int64
+                  description: Storage limit in bytes
+            example:
+              storage_limit: 21474836480
+      responses:
+        "200":
+          description: Updated quota
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------------------
+  # Search
+  # ---------------------------------------------------------------------------
+  /search/:
+    get:
+      operationId: search
+      summary: Search files and folders
+      description: Full-text search across file and folder names and metadata.
+      tags: [Search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+            minLength: 1
+          example: "quarterly report"
+        - name: type
+          in: query
+          description: Filter by result type (`file` or `folder`)
+          schema:
+            type: string
+            enum: [file, folder]
+        - name: folder_id
+          in: query
+          description: Scope search to a specific folder and its descendants
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SearchResult"
+                  total:
+                    type: integer
+              example:
+                results:
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
+                    facile_id: "nua_abc123"
+                    name: "Q1 Quarterly Report.pdf"
+                    type: "file"
+                    path: "/Documents/Reports"
+                    mime_type: "application/pdf"
+                    size: 2048576
+                    folder_id: "660e8400-e29b-41d4-a716-446655440000"
+                    parent_id: null
+                    updated_at: "2025-05-15T10:00:00Z"
+                total: 1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Settings (admin only)
+  # ---------------------------------------------------------------------------
+  /settings/:
+    get:
+      operationId: getSettings
+      summary: Get instance settings (admin)
+      description: Returns all instance settings. Secret values are masked. Admin only.
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Settings list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Setting"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    put:
+      operationId: updateSettings
+      summary: Update instance settings (admin)
+      description: Update one or more instance settings. Admin only.
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settings]
+              properties:
+                settings:
+                  type: object
+                  additionalProperties: true
+                  description: Key-value pairs of settings to update
+            example:
+              settings:
+                max_upload_size: 209715200
+                registration_enabled: false
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Setting"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /settings/test-nook:
+    post:
+      operationId: testNookConnection
+      summary: Test Nook webhook connection (admin)
+      description: |
+        Send a test event to the configured Nook uptime monitoring webhook
+        and verify the connection. Admin only.
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, secret, enabled]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                secret:
+                  type: string
+                enabled:
+                  type: boolean
+            example:
+              url: "https://nook.facile.studio/webhook/nuage"
+              secret: "whsec_abc123..."
+              enabled: true
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                message: "Nook webhook responded successfully"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ---------------------------------------------------------------------------
+  # WebDAV
+  # ---------------------------------------------------------------------------
+  /webdav/{path}:
+    options:
+      operationId: webdavOptions
+      summary: WebDAV OPTIONS
+      description: |
+        Returns supported WebDAV methods and capabilities.
+        All WebDAV endpoints use HTTP Basic Auth where the password is your API token.
+      tags: [WebDAV]
+      parameters:
+        - $ref: "#/components/parameters/WebDAVPath"
+      responses:
+        "200":
+          description: Supported methods
+          headers:
+            Allow:
+              schema:
+                type: string
+              example: "OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, COPY, MOVE, PROPFIND, PROPPATCH, LOCK, UNLOCK"
+            DAV:
+              schema:
+                type: string
+              example: "1, 2"
+
+    get:
+      operationId: webdavGet
+      summary: WebDAV GET
+      description: Download a file via WebDAV.
+      tags: [WebDAV]
+      security:
+        - basicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WebDAVPath"
+      responses:
+        "200":
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: webdavPut
+      summary: WebDAV PUT
+      description: Upload or replace a file via WebDAV.
+      tags: [WebDAV]
+      security:
+        - basicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WebDAVPath"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: File created
+        "204":
+          description: File replaced
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Conflict (parent directory does not exist)
+
+    delete:
+      operationId: webdavDelete
+      summary: WebDAV DELETE
+      description: Delete a file or collection via WebDAV.
+      tags: [WebDAV]
+      security:
+        - basicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WebDAVPath"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    head:
+      operationId: webdavHead
+      summary: WebDAV HEAD
+      description: Check file existence and retrieve headers without downloading the body.
+      tags: [WebDAV]
+      security:
+        - basicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WebDAVPath"
+      responses:
+        "200":
+          description: File exists
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        API token passed as `Authorization: Bearer {token}`.
+        Alternatively, pass `?token={token}` as a query parameter.
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        WebDAV only. Username is your email, password is your API token.
+
+  parameters:
+    FileID:
+      name: id
+      in: path
+      required: true
+      description: File ID
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+    FolderID:
+      name: id
+      in: path
+      required: true
+      description: Folder ID
+      schema:
+        type: string
+        format: uuid
+        example: "660e8400-e29b-41d4-a716-446655440000"
+
+    UserID:
+      name: id
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+    TokenID:
+      name: id
+      in: path
+      required: true
+      description: API token ID
+      schema:
+        type: string
+        format: uuid
+
+    ShareID:
+      name: id
+      in: path
+      required: true
+      description: Share link ID
+      schema:
+        type: string
+        format: uuid
+
+    ShareToken:
+      name: token
+      in: path
+      required: true
+      description: Public share token
+      schema:
+        type: string
+        example: "shr_a1b2c3d4e5f6g7h8"
+
+    SessionID:
+      name: sessionId
+      in: path
+      required: true
+      description: Chunked upload session ID
+      schema:
+        type: string
+        format: uuid
+
+    PartNumber:
+      name: partNumber
+      in: path
+      required: true
+      description: Chunk part number (1-indexed)
+      schema:
+        type: integer
+        minimum: 1
+
+    VersionID:
+      name: versionId
+      in: path
+      required: true
+      description: File version ID
+      schema:
+        type: string
+        format: uuid
+
+    TrashType:
+      name: type
+      in: path
+      required: true
+      description: Resource type in trash
+      schema:
+        type: string
+        enum: [file, folder]
+
+    TrashItemID:
+      name: id
+      in: path
+      required: true
+      description: Trashed item ID
+      schema:
+        type: string
+        format: uuid
+
+    WebDAVPath:
+      name: path
+      in: path
+      required: true
+      description: WebDAV resource path
+      schema:
+        type: string
+        example: "Documents/report.pdf"
+
+    Page:
+      name: page
+      in: query
+      description: Page number (1-indexed)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PerPage:
+      name: per_page
+      in: query
+      description: Items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        created_at:
+          type: string
+          format: date-time
+
+    ApiToken:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiTokenCreated:
+      type: object
+      description: Returned only once at creation time — includes the full token value
+      properties:
+        id:
+          type: string
+          format: uuid
+        token:
+          type: string
+          description: The full API token (shown only once)
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    FileResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        facile_id:
+          type: string
+          description: Cross-suite Facile identifier
+          example: "nua_abc123"
+        name:
+          type: string
+        mime_type:
+          type: string
+        size:
+          type: integer
+          format: int64
+          description: File size in bytes
+        hash:
+          type: string
+          description: Content hash (SHA-256)
+        folder_id:
+          type: string
+          format: uuid
+          nullable: true
+        origin_app:
+          type: string
+          nullable: true
+          description: Facile Suite app that created this file
+        linked_to:
+          type: string
+          nullable: true
+          description: External resource this file is linked to
+        uploaded_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FolderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        facile_id:
+          type: string
+          example: "nua_fld_abc123"
+        name:
+          type: string
+        size:
+          type: integer
+          format: int64
+          description: Total size of all files in this folder (recursive)
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        owner_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FolderDetailResponse:
+      type: object
+      properties:
+        folder:
+          $ref: "#/components/schemas/FolderResponse"
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileResponse"
+        folders:
+          type: array
+          items:
+            $ref: "#/components/schemas/FolderResponse"
+
+    ShareResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        token:
+          type: string
+          description: Public share token
+          example: "shr_a1b2c3d4e5f6g7h8"
+        file_id:
+          type: string
+          format: uuid
+          nullable: true
+        folder_id:
+          type: string
+          format: uuid
+          nullable: true
+        shared_by:
+          type: string
+          format: uuid
+        permission:
+          type: string
+          enum: [view, download, edit]
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        file:
+          $ref: "#/components/schemas/FileResponse"
+        folder:
+          $ref: "#/components/schemas/FolderResponse"
+
+    PublicShareResponse:
+      type: object
+      description: Public view of a shared resource (no auth context)
+      properties:
+        token:
+          type: string
+        permission:
+          type: string
+          enum: [view, download, edit]
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        file:
+          $ref: "#/components/schemas/PublicFile"
+        folder:
+          $ref: "#/components/schemas/PublicFolder"
+
+    PublicFile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        mime_type:
+          type: string
+        size:
+          type: integer
+          format: int64
+
+    PublicFolder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    TrashItem:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [file, folder]
+        id:
+          type: string
+          format: uuid
+        facile_id:
+          type: string
+        name:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+
+    VersionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        file_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          description: Version number (1-indexed)
+        hash:
+          type: string
+        size:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    ActivityResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          description: "Event type (e.g., `file.uploaded`, `folder.created`, `share.created`)"
+        resource_type:
+          type: string
+          enum: [file, folder, share, user]
+        resource_id:
+          type: string
+          format: uuid
+        resource_name:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    UsageResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        storage_used:
+          type: integer
+          format: int64
+          description: Storage used in bytes
+        storage_limit:
+          type: integer
+          format: int64
+          description: Storage limit in bytes
+        percentage:
+          type: number
+          format: double
+          description: Usage as a percentage (0-100)
+
+    SearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        facile_id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [file, folder]
+        path:
+          type: string
+          description: Full path from root
+        mime_type:
+          type: string
+          nullable: true
+          description: Only set for files
+        size:
+          type: integer
+          format: int64
+          nullable: true
+        folder_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Parent folder for files
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Parent folder for folders
+        updated_at:
+          type: string
+          format: date-time
+
+    UploadSession:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+        total_size:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [in_progress, completed, aborted, expired]
+        uploaded_chunks:
+          type: array
+          items:
+            type: integer
+          description: List of received part numbers
+        expires_at:
+          type: string
+          format: date-time
+
+    ChunkResponse:
+      type: object
+      properties:
+        part_number:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        hash:
+          type: string
+          description: SHA-256 hash of the chunk
+
+    ChangedItems:
+      type: object
+      properties:
+        changed:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncItem"
+        deleted:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeletedItem"
+
+    SyncItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        facile_id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [file, folder]
+        size:
+          type: integer
+          format: int64
+          nullable: true
+        hash:
+          type: string
+          nullable: true
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Parent folder ID (for folders)
+        folder_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Containing folder ID (for files)
+        updated_at:
+          type: string
+          format: date-time
+
+    DeletedItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        facile_id:
+          type: string
+        type:
+          type: string
+          enum: [file, folder]
+        deleted_at:
+          type: string
+          format: date-time
+
+    Setting:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          description: Setting value (secrets are masked as `"***"`)
+        type:
+          type: string
+          enum: [string, integer, boolean, secret]
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["ok", "ready", "not_ready"]
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code
+        message:
+          type: string
+          description: Human-readable error message
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "invalid_argument"
+            message: "validation failed"
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "unauthenticated"
+            message: "missing or invalid token"
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "permission_denied"
+            message: "admin access required"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "not_found"
+            message: "resource not found"
+
+    TooLarge:
+      description: Request body exceeds size limit
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "resource_exhausted"
+            message: "file exceeds maximum upload size"
+
+security:
+  - bearerAuth: []
