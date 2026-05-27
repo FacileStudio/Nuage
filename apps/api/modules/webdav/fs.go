@@ -96,7 +96,7 @@ func (fs *NuageFS) resolveParentFolder(ctx context.Context, name string) (*int64
 func (fs *NuageFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	name = path.Clean(name)
 	if isJunkFile(name) {
-		return nil, os.ErrNotExist
+		return &nuageFileInfo{name: path.Base(name), size: 0, modTime: time.Now()}, nil
 	}
 	if name == "/" || name == "." || name == "" {
 		return &DirInfo{name: "/", modTime: time.Now()}, nil

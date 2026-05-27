@@ -3,12 +3,15 @@ package webdav
 import (
 	"bytes"
 	"context"
+	"encoding/xml"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"golang.org/x/net/webdav"
 )
 
 type VirtualDir struct {
@@ -29,10 +32,24 @@ func (d *VirtualDir) Stat() (os.FileInfo, error) {
 	return &DirInfo{name: d.dirName, modTime: d.modTime}, nil
 }
 
+func (d *VirtualDir) DeadProps() (map[xml.Name]webdav.Property, error) {
+	return nil, nil
+}
+
+func (d *VirtualDir) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
+	pstat := webdav.Propstat{Status: http.StatusOK}
+	for _, patch := range patches {
+		for _, p := range patch.Props {
+			pstat.Props = append(pstat.Props, webdav.Property{XMLName: p.XMLName})
+		}
+	}
+	return []webdav.Propstat{pstat}, nil
+}
+
 func (d *VirtualDir) Readdir(count int) ([]os.FileInfo, error) {
 	if d.children == nil {
 		var folders []schemas.Folder
-		fq := d.fs.db.WithContext(d.ctx).Where("deleted_at IS NULL").Order("name asc")
+		fq := d.fs.db.WithContext(d.ctx).Where("owner_id = ? AND deleted_at IS NULL", d.fs.userID).Order("name asc")
 		if d.folderID != nil {
 			fq = fq.Where("parent_id = ?", *d.folderID)
 		} else {
@@ -41,7 +58,7 @@ func (d *VirtualDir) Readdir(count int) ([]os.FileInfo, error) {
 		fq.Find(&folders)
 
 		var files []schemas.File
-		ffq := d.fs.db.WithContext(d.ctx).Where("deleted_at IS NULL").Order("name asc")
+		ffq := d.fs.db.WithContext(d.ctx).Where("uploaded_by = ? AND deleted_at IS NULL", d.fs.userID).Order("name asc")
 		if d.folderID != nil {
 			ffq = ffq.Where("folder_id = ?", *d.folderID)
 		} else {
@@ -161,6 +178,20 @@ func (f *VirtualFile) ContentType(_ context.Context) (string, error) {
 	return "", ErrNotImplemented
 }
 
+func (f *VirtualFile) DeadProps() (map[xml.Name]webdav.Property, error) {
+	return nil, nil
+}
+
+func (f *VirtualFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
+	pstat := webdav.Propstat{Status: http.StatusOK}
+	for _, patch := range patches {
+		for _, p := range patch.Props {
+			pstat.Props = append(pstat.Props, webdav.Property{XMLName: p.XMLName})
+		}
+	}
+	return []webdav.Propstat{pstat}, nil
+}
+
 type nuageFileInfo struct {
 	name     string
 	size     int64
@@ -205,6 +236,20 @@ func (d *DevNullFile) Readdir(int) ([]os.FileInfo, error) { return nil, os.ErrIn
 func (d *DevNullFile) Close() error                   { return nil }
 func (d *DevNullFile) Stat() (os.FileInfo, error) {
 	return &nuageFileInfo{name: d.name, size: 0, modTime: time.Now()}, nil
+}
+
+func (d *DevNullFile) DeadProps() (map[xml.Name]webdav.Property, error) {
+	return nil, nil
+}
+
+func (d *DevNullFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
+	pstat := webdav.Propstat{Status: http.StatusOK}
+	for _, patch := range patches {
+		for _, p := range patch.Props {
+			pstat.Props = append(pstat.Props, webdav.Property{XMLName: p.XMLName})
+		}
+	}
+	return []webdav.Propstat{pstat}, nil
 }
 
 var ErrNotImplemented = errors.New("not implemented")
