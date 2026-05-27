@@ -74,6 +74,7 @@ paths:
       summary: Health check
       description: Returns `ok` if the server is running. No authentication required.
       tags: [Health]
+      security: []
       responses:
         "200":
           description: Healthy
@@ -90,6 +91,7 @@ paths:
       summary: Readiness check
       description: Returns `ready` if the server can accept traffic (database reachable, migrations applied). No authentication required.
       tags: [Health]
+      security: []
       responses:
         "200":
           description: Ready
@@ -117,6 +119,7 @@ paths:
       summary: Get auth configuration
       description: Returns which authentication methods are available on this instance. No authentication required.
       tags: [Auth]
+      security: []
       responses:
         "200":
           description: Auth configuration
@@ -143,6 +146,7 @@ paths:
         Create a new user account with email and password.
         Disabled when `sso_only` is true.
       tags: [Auth]
+      security: []
       requestBody:
         required: true
         content:
@@ -196,6 +200,7 @@ paths:
         Authenticate with email and password. Returns a bearer token.
         Disabled when `sso_only` is true.
       tags: [Auth]
+      security: []
       requestBody:
         required: true
         content:
@@ -263,6 +268,7 @@ paths:
       summary: Start OIDC login
       description: Redirects the user to the configured OIDC provider. Only available when `oidc_enabled` is true.
       tags: [Auth]
+      security: []
       responses:
         "302":
           description: Redirect to OIDC provider
@@ -277,6 +283,7 @@ paths:
         Handles the OIDC provider callback. Validates the authorization code,
         creates or links the user account, and sets the auth token.
       tags: [Auth]
+      security: []
       parameters:
         - name: code
           in: query
@@ -1327,6 +1334,7 @@ paths:
       summary: Access a public share
       description: View a shared file or folder using its public share token. No authentication required.
       tags: [Sharing]
+      security: []
       parameters:
         - $ref: "#/components/parameters/ShareToken"
       responses:
@@ -1345,6 +1353,7 @@ paths:
       summary: Download a file from a public share
       description: Download a specific file from a shared folder or the shared file itself. No authentication required.
       tags: [Sharing]
+      security: []
       parameters:
         - $ref: "#/components/parameters/ShareToken"
         - name: fileId
@@ -1373,6 +1382,7 @@ paths:
       summary: List files in a public share
       description: List the files and folders accessible through a public share link. No authentication required.
       tags: [Sharing]
+      security: []
       parameters:
         - $ref: "#/components/parameters/ShareToken"
       responses:
