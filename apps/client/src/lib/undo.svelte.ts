@@ -21,7 +21,15 @@ export async function undoLast() {
 	if (!current) return;
 	const action = current;
 	dismissUndo();
-	await action.execute();
+	try {
+		await action.execute();
+	} catch (err) {
+		console.error('Undo failed:', err);
+	}
+}
+
+export function hasPending() {
+	return current !== null;
 }
 
 export function dismissUndo() {

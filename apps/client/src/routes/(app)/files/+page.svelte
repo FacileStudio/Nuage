@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { backend, type NuageFile, type Folder, type Share } from '$lib/backend';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { pushUndo, dismissUndo } from '$lib/undo.svelte';
+	import { pushUndo } from '$lib/undo.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null; refreshQuota: () => void }>('app');
 
@@ -203,7 +203,6 @@
 			} else {
 				await backend.updateFolder(app.token, id, { parent_id: folderId });
 			}
-			dismissUndo();
 			pushUndo({
 				label: 'Item moved',
 				async execute() {
@@ -262,7 +261,6 @@
 			} else {
 				await backend.updateFolder(app.token, id, { parent_id: targetId });
 			}
-			dismissUndo();
 			pushUndo({
 				label: 'Item moved',
 				async execute() {

@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { backend, type UserProfile, type QuotaResponse } from '$lib/backend';
-	import { undoLast } from '$lib/undo.svelte';
+	import { undoLast, hasPending } from '$lib/undo.svelte';
 	import UndoToast from '$lib/components/UndoToast.svelte';
 
 	let { children } = $props();
@@ -37,31 +37,32 @@
 	});
 
 	function handleUndoKeydown(e: KeyboardEvent) {
+		if (e.repeat) return;
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 		const mod = navigator.platform.includes('Mac') ? e.metaKey : e.ctrlKey;
-		if (mod && e.key === 'z' && !e.shiftKey) {
+		if (mod && e.key === 'z' && !e.shiftKey && hasPending()) {
 			e.preventDefault();
 			undoLast();
 		}
 	}
 
-	onMount(async () => {
+	onMount(() => {
 		document.addEventListener('keydown', handleUndoKeydown);
 
-		const stored = localStorage.getItem(TOKEN_KEY) ?? '';
-		if (!stored) {
-			goto('/login');
-			return () => document.removeEventListener('keydown', handleUndoKeydown);
-		}
-		try {
-			const result = await backend.me(stored);
-			token = stored;
-			user = result.user;
-			loaded = true;
-			refreshQuota();
-		} catch {
-			goto('/login');
-		}
+		(async () => {
+			const stored = localStorage.getItem(TOKEN_KEY) ?? '';
+			if (!stored) { goto('/login'); return; }
+			try {
+				const result = await backend.me(stored);
+				token = stored;
+				user = result.user;
+				loaded = true;
+				refreshQuota();
+			} catch {
+				goto('/login');
+			}
+		})();
+
 		return () => document.removeEventListener('keydown', handleUndoKeydown);
 	});
 
