@@ -95,7 +95,7 @@
 		</div>
 		{#if !loading && !isEmpty}
 			<button
-				class="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-50"
+				class="inline-flex h-9 items-center gap-2 rounded-md bg-red-700 px-4 text-sm font-medium text-white transition-colors hover:bg-red-800 disabled:opacity-50"
 				onclick={emptyTrash}
 				disabled={actionLoading !== null}
 			>
@@ -156,7 +156,7 @@
 											Restore
 										</button>
 										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-700/10 disabled:opacity-50"
 											onclick={() => permanentDelete(item.type, item.id)}
 											disabled={actionLoading !== null}
 											aria-label="Permanently delete {item.type}"
