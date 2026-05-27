@@ -3,6 +3,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { backend, type UserProfile, type QuotaResponse } from '$lib/backend';
+	import { undoLast } from '$lib/undo.svelte';
+	import UndoToast from '$lib/components/UndoToast.svelte';
 
 	let { children } = $props();
 
@@ -34,11 +36,22 @@
 		refreshQuota
 	});
 
+	function handleUndoKeydown(e: KeyboardEvent) {
+		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+		const mod = navigator.platform.includes('Mac') ? e.metaKey : e.ctrlKey;
+		if (mod && e.key === 'z' && !e.shiftKey) {
+			e.preventDefault();
+			undoLast();
+		}
+	}
+
 	onMount(async () => {
+		document.addEventListener('keydown', handleUndoKeydown);
+
 		const stored = localStorage.getItem(TOKEN_KEY) ?? '';
 		if (!stored) {
 			goto('/login');
-			return;
+			return () => document.removeEventListener('keydown', handleUndoKeydown);
 		}
 		try {
 			const result = await backend.me(stored);
@@ -49,6 +62,7 @@
 		} catch {
 			goto('/login');
 		}
+		return () => document.removeEventListener('keydown', handleUndoKeydown);
 	});
 
 	function getInitials(value: string) {
@@ -188,4 +202,6 @@
 			{@render children()}
 		</main>
 	</div>
+
+	<UndoToast />
 {/if}
