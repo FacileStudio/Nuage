@@ -16,6 +16,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Actor struct {
@@ -160,6 +161,7 @@ func (n *Notifier) matchesFilter(ctx context.Context, eventType string) bool {
 	}
 	var types []string
 	if err := json.Unmarshal([]byte(setting.Value), &types); err != nil {
+		slog.Warn("nook: invalid nook_event_types JSON, allowing all events", slog.String("value", setting.Value))
 		return true
 	}
 	if len(types) == 0 {
@@ -218,6 +220,7 @@ func (n *Notifier) processQueue() {
 	var deliveries []schemas.NookDelivery
 	now := time.Now()
 	if err := n.orm.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
 		Where("status = ? AND next_retry_at <= ?", "pending", now).
 		Order("created_at asc").
 		Limit(10).
@@ -233,8 +236,23 @@ func (n *Notifier) processQueue() {
 		return
 	}
 
-	if n.isBatchEnabled(ctx) && len(deliveries) > 1 {
-		n.deliverBatch(ctx, deliveries, webhookURL, secret)
+	if n.isBatchEnabled(ctx) {
+		var newDeliveries, retryDeliveries []schemas.NookDelivery
+		for i := range deliveries {
+			if deliveries[i].Attempts == 0 {
+				newDeliveries = append(newDeliveries, deliveries[i])
+			} else {
+				retryDeliveries = append(retryDeliveries, deliveries[i])
+			}
+		}
+		for i := range retryDeliveries {
+			n.deliverOne(ctx, &retryDeliveries[i], webhookURL, secret)
+		}
+		if len(newDeliveries) > 1 {
+			n.deliverBatch(ctx, newDeliveries, webhookURL, secret)
+		} else if len(newDeliveries) == 1 {
+			n.deliverOne(ctx, &newDeliveries[0], webhookURL, secret)
+		}
 	} else {
 		for i := range deliveries {
 			n.deliverOne(ctx, &deliveries[i], webhookURL, secret)
@@ -292,7 +310,16 @@ func (n *Notifier) deliverOne(ctx context.Context, d *schemas.NookDelivery, webh
 		n.scheduleRetry(d)
 	}
 
-	n.orm.WithContext(ctx).Save(d)
+	n.orm.WithContext(ctx).Model(d).Updates(map[string]any{
+		"status":        d.Status,
+		"attempts":      d.Attempts,
+		"next_retry_at": d.NextRetryAt,
+		"response_code": d.ResponseCode,
+		"response_body": d.ResponseBody,
+		"error_message": d.ErrorMessage,
+		"latency_ms":    d.LatencyMs,
+		"delivered_at":  d.DeliveredAt,
+	})
 }
 
 func (n *Notifier) scheduleRetry(d *schemas.NookDelivery) {
@@ -347,7 +374,16 @@ func (n *Notifier) deliverBatch(ctx context.Context, deliveries []schemas.NookDe
 			n.scheduleRetry(d)
 		}
 
-		n.orm.WithContext(ctx).Save(d)
+		n.orm.WithContext(ctx).Model(d).Updates(map[string]any{
+			"status":        d.Status,
+			"attempts":      d.Attempts,
+			"next_retry_at": d.NextRetryAt,
+			"response_code": d.ResponseCode,
+			"response_body": d.ResponseBody,
+			"error_message": d.ErrorMessage,
+			"latency_ms":    d.LatencyMs,
+			"delivered_at":  d.DeliveredAt,
+		})
 	}
 }
 
