@@ -461,25 +461,35 @@ func (s *Service) deleteFolder(ctx context.Context, userID int64, folderID strin
 		return errors.Internal("failed to read folder", err)
 	}
 
-	var fileCount int64
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("folder_id = ? AND deleted_at IS NULL", id).Count(&fileCount).Error; err != nil {
-		return errors.Internal("failed to check folder contents", err)
-	}
-	if fileCount > 0 {
-		return errors.Failed("folder is not empty")
-	}
-
-	var subfolderCount int64
-	if err := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("parent_id = ? AND deleted_at IS NULL", id).Count(&subfolderCount).Error; err != nil {
-		return errors.Internal("failed to check subfolders", err)
-	}
-	if subfolderCount > 0 {
-		return errors.Failed("folder contains subfolders")
+	var descendantIDs []int64
+	if err := s.orm.WithContext(ctx).Raw(`
+		WITH RECURSIVE folder_tree AS (
+			SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL
+			UNION ALL
+			SELECT f.id FROM folders f INNER JOIN folder_tree ft ON f.parent_id = ft.id WHERE f.deleted_at IS NULL
+		)
+		SELECT id FROM folder_tree
+	`, id).Scan(&descendantIDs).Error; err != nil {
+		return errors.Internal("failed to resolve folder tree", err)
 	}
 
 	now := time.Now()
-	if err := s.orm.WithContext(ctx).Model(&folder).Update("deleted_at", now).Error; err != nil {
-		return errors.Internal("failed to soft delete folder", err)
+
+	err = s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&schemas.File{}).
+			Where("folder_id IN ? AND deleted_at IS NULL", descendantIDs).
+			Update("deleted_at", now).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&schemas.Folder{}).
+			Where("id IN ? AND deleted_at IS NULL", descendantIDs).
+			Update("deleted_at", now).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Internal("failed to soft delete folder tree", err)
 	}
 
 	s.notifier.Notify(ctx, userID, "folder.deleted", nook.EventData{
