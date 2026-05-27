@@ -208,7 +208,7 @@
 
 	<div class="flex-1 overflow-auto px-4 py-6 md:px-8">
 		{#if activeTab === 'profile'}
-			<div class="mx-auto max-w-xl space-y-8">
+			<div class="max-w-xl space-y-8">
 				<div class="space-y-4">
 					<h2 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Avatar</h2>
 					<div class="flex items-center gap-4">
@@ -282,7 +282,7 @@
 			</div>
 
 		{:else if activeTab === 'developers'}
-			<div class="mx-auto max-w-xl space-y-8">
+			<div class="max-w-xl space-y-8">
 				<div class="space-y-2">
 					<h2 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">API Tokens</h2>
 					<p class="text-sm text-muted-foreground">Tokens are used to authenticate CLI tools and API integrations. The token value is only shown once at creation.</p>
@@ -354,7 +354,7 @@
 			</div>
 
 		{:else}
-			<div class="mx-auto max-w-xl space-y-8">
+			<div class="max-w-xl space-y-8">
 				<div class="space-y-4">
 					<h2 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Instance</h2>
 					<div>
