@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { onMount, getContext } from 'svelte';
-	import { backend, type NuageFile, type Folder } from '$lib/backend';
+	import { backend, type TrashItem } from '$lib/backend';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
 
-	let files = $state<NuageFile[]>([]);
-	let folders = $state<Folder[]>([]);
+	let items = $state<TrashItem[]>([]);
 	let loading = $state(true);
 	let actionLoading = $state<string | null>(null);
 
@@ -17,11 +16,9 @@
 		loading = true;
 		try {
 			const res = await backend.listTrash(app.token);
-			files = res.files ?? [];
-			folders = res.folders ?? [];
+			items = res.items ?? [];
 		} catch {
-			files = [];
-			folders = [];
+			items = [];
 		}
 		loading = false;
 	}
@@ -48,14 +45,7 @@
 		if (!confirm('Permanently delete all items in trash? This cannot be undone.')) return;
 		actionLoading = 'empty-all';
 		try {
-			const promises: Promise<any>[] = [];
-			for (const file of files) {
-				promises.push(backend.permanentDelete(app.token, 'file', file.id));
-			}
-			for (const folder of folders) {
-				promises.push(backend.permanentDelete(app.token, 'folder', folder.id));
-			}
-			await Promise.all(promises);
+			await Promise.all(items.map((item) => backend.permanentDelete(app.token, item.type, item.id)));
 			await loadTrash();
 		} catch {}
 		actionLoading = null;
@@ -90,7 +80,7 @@
 		return 'text-blue-600';
 	}
 
-	let isEmpty = $derived(files.length === 0 && folders.length === 0);
+	let isEmpty = $derived(items.length === 0);
 </script>
 
 <svelte:head>
@@ -138,66 +128,38 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each folders as folder}
+						{#each items as item}
 							<tr class="border-b border-border/50 transition-colors hover:bg-muted/50">
 								<td class="py-2.5 pr-4">
 									<div class="flex items-center gap-3">
-										<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
-										<span class="truncate font-medium">{folder.name}</span>
+										{#if item.type === 'folder'}
+											<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
+										{:else}
+											<iconify-icon icon={fileIcon(item.mime_type ?? '')} width="20" class="{fileIconColor(item.mime_type ?? '')} shrink-0"></iconify-icon>
+										{/if}
+										<span class="truncate font-medium">{item.name}</span>
 									</div>
 								</td>
-								<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">—</td>
-								<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(folder.created_at)}</td>
+								<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">
+									{item.type === 'file' && item.size != null ? formatSize(item.size) : '—'}
+								</td>
+								<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(item.deleted_at)}</td>
 								<td class="py-2.5">
 									<div class="flex items-center justify-end gap-1">
 										<button
 											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
-											onclick={() => restoreItem('folder', folder.id)}
+											onclick={() => restoreItem(item.type, item.id)}
 											disabled={actionLoading !== null}
-											aria-label="Restore folder"
+											aria-label="Restore {item.type}"
 										>
 											<iconify-icon icon="solar:restart-linear" width="14"></iconify-icon>
 											Restore
 										</button>
 										<button
 											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-											onclick={() => permanentDelete('folder', folder.id)}
+											onclick={() => permanentDelete(item.type, item.id)}
 											disabled={actionLoading !== null}
-											aria-label="Permanently delete folder"
-										>
-											<iconify-icon icon="solar:trash-bin-2-linear" width="14"></iconify-icon>
-											Delete
-										</button>
-									</div>
-								</td>
-							</tr>
-						{/each}
-						{#each files as file}
-							<tr class="border-b border-border/50 transition-colors hover:bg-muted/50">
-								<td class="py-2.5 pr-4">
-									<div class="flex items-center gap-3">
-										<iconify-icon icon={fileIcon(file.mime_type)} width="20" class="{fileIconColor(file.mime_type)} shrink-0"></iconify-icon>
-										<span class="truncate font-medium">{file.name}</span>
-									</div>
-								</td>
-								<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">{formatSize(file.size)}</td>
-								<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(file.updated_at)}</td>
-								<td class="py-2.5">
-									<div class="flex items-center justify-end gap-1">
-										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
-											onclick={() => restoreItem('file', file.id)}
-											disabled={actionLoading !== null}
-											aria-label="Restore file"
-										>
-											<iconify-icon icon="solar:restart-linear" width="14"></iconify-icon>
-											Restore
-										</button>
-										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-											onclick={() => permanentDelete('file', file.id)}
-											disabled={actionLoading !== null}
-											aria-label="Permanently delete file"
+											aria-label="Permanently delete {item.type}"
 										>
 											<iconify-icon icon="solar:trash-bin-2-linear" width="14"></iconify-icon>
 											Delete

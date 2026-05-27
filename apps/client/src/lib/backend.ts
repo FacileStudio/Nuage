@@ -68,9 +68,18 @@ export type Share = {
 	folder?: Folder;
 };
 
+export type TrashItem = {
+	type: 'file' | 'folder';
+	id: number;
+	facile_id: string;
+	name: string;
+	mime_type?: string;
+	size?: number;
+	deleted_at: string;
+};
+
 export type TrashResponse = {
-	files: NuageFile[];
-	folders: Folder[];
+	items: TrashItem[];
 };
 
 export type ApiToken = {

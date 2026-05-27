@@ -44,6 +44,8 @@ func (s *Service) listTrash(ctx context.Context, userID int64) ([]TrashItem, err
 			ID:        f.ID,
 			FacileID:  f.FacileID,
 			Name:      f.Name,
+			MimeType:  f.MimeType,
+			Size:      f.Size,
 			DeletedAt: f.DeletedAt.UTC().Format(time.RFC3339),
 		})
 	}

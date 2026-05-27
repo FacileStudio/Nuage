@@ -2604,6 +2604,15 @@ components:
           type: string
         name:
           type: string
+        mime_type:
+          type: string
+          nullable: true
+          description: Only set for files
+        size:
+          type: integer
+          format: int64
+          nullable: true
+          description: File size in bytes (only set for files)
         deleted_at:
           type: string
           format: date-time
