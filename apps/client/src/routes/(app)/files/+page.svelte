@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { backend, type NuageFile, type Folder, type Share } from '$lib/backend';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { pushUndo, dismissUndo } from '$lib/undo.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null; refreshQuota: () => void }>('app');
 
@@ -64,6 +65,7 @@
 	let lastClickedIndex = $state(-1);
 	let showDeleteConfirm = $state(false);
 	let bulkDeleting = $state(false);
+	let deleteTargetKeys = $state<string[]>([]);
 	let showSingleDeleteConfirm = $state(false);
 	let singleDeleteTarget = $state<{ type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
 	let singleDeleting = $state(false);
@@ -123,8 +125,6 @@
 	let dndItem = $state<{ type: 'file' | 'folder'; id: number } | null>(null);
 	let dndTargetFolderId = $state<number | null | 'root'>(null);
 	let dndCounter = $state<Record<string, number>>({});
-	let moveToast = $state<string | null>(null);
-	let moveToastTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 
 	function isDndInternal(e: DragEvent): boolean {
 		return e.dataTransfer?.types.includes('application/x-nuage-move') ?? false;
@@ -195,13 +195,23 @@
 		dndCounter = {};
 		if (!dndItem) return;
 		if (dndItem.type === 'folder' && (dndItem.id === folderId || isDescendantDrop(folderId))) return;
+		const { type, id } = dndItem;
+		const oldFolderId = currentFolderId;
 		try {
-			if (dndItem.type === 'file') {
-				await backend.updateFile(app.token, dndItem.id, { folder_id: folderId });
+			if (type === 'file') {
+				await backend.updateFile(app.token, id, { folder_id: folderId });
 			} else {
-				await backend.updateFolder(app.token, dndItem.id, { parent_id: folderId });
+				await backend.updateFolder(app.token, id, { parent_id: folderId });
 			}
-			showMoveToast(folderId);
+			dismissUndo();
+			pushUndo({
+				label: 'Item moved',
+				async execute() {
+					if (type === 'file') await backend.updateFile(app.token, id, { folder_id: oldFolderId });
+					else await backend.updateFolder(app.token, id, { parent_id: oldFolderId });
+					await loadContents();
+				}
+			});
 			await loadContents();
 		} catch {}
 		dndItem = null;
@@ -245,30 +255,27 @@
 		const currentParent = currentFolderId;
 		const targetId = folderId;
 		if (targetId === currentParent) { dndItem = null; return; }
+		const { type, id } = dndItem;
 		try {
-			if (dndItem.type === 'file') {
-				await backend.updateFile(app.token, dndItem.id, { folder_id: targetId });
+			if (type === 'file') {
+				await backend.updateFile(app.token, id, { folder_id: targetId });
 			} else {
-				await backend.updateFolder(app.token, dndItem.id, { parent_id: targetId });
+				await backend.updateFolder(app.token, id, { parent_id: targetId });
 			}
-			showMoveToast(targetId);
+			dismissUndo();
+			pushUndo({
+				label: 'Item moved',
+				async execute() {
+					if (type === 'file') await backend.updateFile(app.token, id, { folder_id: currentParent });
+					else await backend.updateFolder(app.token, id, { parent_id: currentParent });
+					await loadContents();
+				}
+			});
 			await loadContents();
 		} catch {}
 		dndItem = null;
 	}
 
-	function showMoveToast(targetFolderId: number | null | 'root') {
-		if (moveToastTimeout) clearTimeout(moveToastTimeout);
-		if (targetFolderId === null || targetFolderId === 'root') {
-			moveToast = 'Moved to Files (root)';
-		} else {
-			const f = folders.find(fo => fo.id === targetFolderId);
-			const bc = breadcrumbs.find(b => b.id === targetFolderId);
-			const name = f?.name ?? bc?.name ?? 'folder';
-			moveToast = `Moved to ${name}`;
-		}
-		moveToastTimeout = setTimeout(() => { moveToast = null; }, 2500);
-	}
 
 	let shareTarget = $state<{ type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
 	let shareLoading = $state(false);
@@ -596,12 +603,25 @@
 
 	async function submitRename() {
 		if (!renameTarget || !renameValue.trim()) return;
+		const { type, item } = renameTarget;
+		const oldName = item.name;
+		const newName = renameValue.trim();
+		if (oldName === newName) { renameTarget = null; renameValue = ''; return; }
 		try {
-			if (renameTarget.type === 'file') {
-				await backend.updateFile(app.token, (renameTarget.item as NuageFile).id, { name: renameValue.trim() });
+			if (type === 'file') {
+				await backend.updateFile(app.token, (item as NuageFile).id, { name: newName });
 			} else {
-				await backend.updateFolder(app.token, (renameTarget.item as Folder).id, { name: renameValue.trim() });
+				await backend.updateFolder(app.token, (item as Folder).id, { name: newName });
 			}
+			const itemId = item.id;
+			pushUndo({
+				label: `Renamed to ${newName}`,
+				async execute() {
+					if (type === 'file') await backend.updateFile(app.token, itemId, { name: oldName });
+					else await backend.updateFolder(app.token, itemId, { name: oldName });
+					await loadContents();
+				}
+			});
 		} catch {}
 		renameTarget = null;
 		renameValue = '';
@@ -613,12 +633,17 @@
 		renameValue = '';
 	}
 
+	function openBulkDeleteDialog() {
+		deleteTargetKeys = [...selectedKeys];
+		showDeleteConfirm = true;
+	}
+
 	function deleteItem() {
 		if (!contextMenu) return;
 		const { type, item } = contextMenu;
 		contextMenu = null;
 		if (selectionCount > 1) {
-			showDeleteConfirm = true;
+			openBulkDeleteDialog();
 			return;
 		}
 		singleDeleteTarget = { type, item };
@@ -627,13 +652,24 @@
 
 	async function doSingleDelete() {
 		if (!singleDeleteTarget) return;
+		const { type, item } = singleDeleteTarget;
 		singleDeleting = true;
 		try {
-			if (singleDeleteTarget.type === 'file') {
-				await backend.deleteFile(app.token, (singleDeleteTarget.item as NuageFile).id);
+			if (type === 'file') {
+				await backend.deleteFile(app.token, (item as NuageFile).id);
 			} else {
-				await backend.deleteFolder(app.token, (singleDeleteTarget.item as Folder).id);
+				await backend.deleteFolder(app.token, (item as Folder).id);
 			}
+			const itemId = item.id;
+			const itemName = item.name;
+			pushUndo({
+				label: `${itemName} moved to trash`,
+				async execute() {
+					await backend.restoreItem(app.token, type, itemId);
+					await loadContents();
+					app.refreshQuota();
+				}
+			});
 		} catch {}
 		singleDeleting = false;
 		showSingleDeleteConfirm = false;
@@ -828,21 +864,35 @@
 			else closeContextMenu();
 		} else if ((e.key === 'Delete' || e.key === 'Backspace') && selectMode && selectionCount > 0) {
 			e.preventDefault();
-			showDeleteConfirm = true;
+			openBulkDeleteDialog();
 		}
 	}
 
 	async function bulkDelete() {
-		if (selectedKeys.length === 0) return;
+		const keys = [...deleteTargetKeys];
+		if (keys.length === 0) return;
 		bulkDeleting = true;
+		const parsed = keys.map(k => {
+			const [type, idStr] = k.split(':');
+			return { type: type as 'file' | 'folder', id: Number(idStr) };
+		});
 		const promises: Promise<unknown>[] = [];
-		for (const key of selectedKeys) {
-			const [type, idStr] = key.split(':');
-			const id = Number(idStr);
+		for (const { type, id } of parsed) {
 			if (type === 'file') promises.push(backend.deleteFile(app.token, id));
 			else promises.push(backend.deleteFolder(app.token, id));
 		}
 		await Promise.allSettled(promises);
+		const count = parsed.length;
+		pushUndo({
+			label: `${count} ${count === 1 ? 'item' : 'items'} moved to trash`,
+			async execute() {
+				const restores = parsed.map(({ type, id }) => backend.restoreItem(app.token, type, id));
+				await Promise.allSettled(restores);
+				await loadContents();
+				app.refreshQuota();
+			}
+		});
+		deleteTargetKeys = [];
 		selectedKeys = [];
 		lastClickedIndex = -1;
 		bulkDeleting = false;
@@ -1486,7 +1536,7 @@
 			<div class="h-4 w-px bg-border"></div>
 			<button
 				class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
-				onclick={() => showDeleteConfirm = true}
+				onclick={openBulkDeleteDialog}
 			>
 				<iconify-icon icon="solar:trash-bin-2-linear" width="14"></iconify-icon>
 				Delete
@@ -1508,7 +1558,7 @@
 	<ConfirmDialog
 		bind:open={showDeleteConfirm}
 		title="Move to trash?"
-		message="{selectionCount} {selectionCount === 1 ? 'item' : 'items'} will be moved to trash. You can restore them from the Trash page."
+		message="{deleteTargetKeys.length} {deleteTargetKeys.length === 1 ? 'item' : 'items'} will be moved to trash. You can restore them from the Trash page."
 		confirmLabel="Move to trash"
 		loading={bulkDeleting}
 		onconfirm={bulkDelete}
@@ -1522,13 +1572,6 @@
 		loading={singleDeleting}
 		onconfirm={doSingleDelete}
 	/>
-
-	{#if moveToast}
-		<div class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 shadow-xl">
-			<iconify-icon icon="solar:check-circle-linear" width="16" class="text-emerald-600"></iconify-icon>
-			<span class="text-sm font-medium">{moveToast}</span>
-		</div>
-	{/if}
 
 	{#if shareTarget}
 		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog">
