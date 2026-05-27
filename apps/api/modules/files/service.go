@@ -106,6 +106,15 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 
 	if s.quota != nil && estimatedSize > 0 {
 		if err := s.quota.CheckQuota(ctx, userID, estimatedSize); err != nil {
+			if usage, qErr := s.quota.GetUsage(ctx, userID); qErr == nil {
+				s.notifier.Notify(ctx, userID, "quota.exceeded", nook.EventData{
+					Quota: &nook.QuotaData{
+						UserID:       userID,
+						StorageUsed:  usage.StorageUsed,
+						StorageLimit: usage.StorageLimit,
+					},
+				})
+			}
 			return nil, err
 		}
 	}

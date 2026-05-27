@@ -23,15 +23,22 @@ var allowedKeys = map[string]bool{
 	"nook_webhook_url":    true,
 	"nook_webhook_secret": true,
 	"nook_enabled":        true,
+	"nook_event_types":    true,
+	"nook_batch_enabled":  true,
 	"instance_name":       true,
 }
 
 type Service struct {
-	orm *gorm.DB
+	orm      *gorm.DB
+	notifier interface {
+		ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.NookDelivery, int64, error)
+	}
 }
 
-func NewService(orm *gorm.DB) *Service {
-	return &Service{orm: orm}
+func NewService(orm *gorm.DB, notifier interface {
+	ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.NookDelivery, int64, error)
+}) *Service {
+	return &Service{orm: orm, notifier: notifier}
 }
 
 func isPrivateAddress(host string) bool {

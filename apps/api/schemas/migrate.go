@@ -25,6 +25,7 @@ func Migrate(db *gorm.DB) error {
 		&UploadChunk{},
 		&UserQuota{},
 		&ActivityLog{},
+		&NookDelivery{},
 	); err != nil {
 		return err
 	}

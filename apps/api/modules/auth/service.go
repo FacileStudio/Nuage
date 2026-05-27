@@ -9,6 +9,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
+	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
@@ -17,11 +18,12 @@ import (
 
 type Service struct {
 	orm        *gorm.DB
+	notifier   *nook.Notifier
 	controller *Controller
 }
 
-func NewService(orm *gorm.DB) *Service {
-	service := &Service{orm: orm}
+func NewService(orm *gorm.DB, notifier *nook.Notifier) *Service {
+	service := &Service{orm: orm, notifier: notifier}
 	service.controller = newController(service)
 	return service
 }
@@ -52,6 +54,12 @@ func (service *Service) registerUser(context context.Context, email string, pass
 			return "", "", errors.Conflict("email already registered")
 		}
 		return "", "", errors.Internal("failed to create user", err)
+	}
+
+	if service.notifier != nil {
+		service.notifier.Notify(context, record.ID, "user.created", nook.EventData{
+			User: &nook.UserData{ID: record.ID, Email: record.Email},
+		})
 	}
 
 	token, err = authcrypto.NewToken()
@@ -193,6 +201,11 @@ func (service *Service) upsertOIDCUser(context context.Context, email string) (u
 		record = schemas.User{Email: email, Color: color, IsAdmin: userCount == 0}
 		if err := service.orm.WithContext(context).Create(&record).Error; err != nil {
 			return "", "", errors.Internal("failed to create user", err)
+		}
+		if service.notifier != nil {
+			service.notifier.Notify(context, record.ID, "user.created", nook.EventData{
+				User: &nook.UserData{ID: record.ID, Email: record.Email},
+			})
 		}
 	}
 

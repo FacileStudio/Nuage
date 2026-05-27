@@ -143,18 +143,11 @@ Make Nuage a great building block for other tools.
 - [ ] Versioned API (`/v1/`) for stability guarantees
 
 ### Webhook Improvements (Nook v2)
-- [ ] Retry with exponential backoff (3 attempts, 10s/60s/300s)
-- [ ] Delivery log: `GET /settings/nook/deliveries`
-- [ ] New events: `file.versioned`, `user.created`, `quota.exceeded`
-- [ ] Webhook filters: subscribe to specific event types
-- [ ] Batch delivery option (aggregate events over 5s window)
-
-### S3-Compatible API (Subset)
-- [ ] `GET /`, `PUT /{bucket}/{key}`, `GET /{bucket}/{key}`, `DELETE /{bucket}/{key}`
-- [ ] `ListObjectsV2`, `HeadObject`, `CopyObject`
-- [ ] AWS Signature V4 auth using API tokens
-- [ ] Enables use of existing S3 tools (rclone, mc, boto3) against Nuage
-- [ ] Not full S3 — just the subset that covers file CRUD
+- [x] Retry with exponential backoff (3 retries, 10s/60s/300s)
+- [x] Delivery log: `GET /settings/nook/deliveries`
+- [x] New events: `file.versioned`, `user.created`, `quota.exceeded`
+- [x] Webhook filters: subscribe to specific event types
+- [x] Batch delivery option (aggregate events over 5s window)
 
 ### Presigned URLs
 - [x] `POST /files/{id}/presign` — time-limited download URL (no auth header needed)
@@ -232,6 +225,13 @@ Make it feel complete.
 - [ ] Camera upload (auto-upload photos from phone)
 - [ ] Share-to-Nuage from any app (Web Share Target API)
 - [ ] Push notifications for shared files
+
+### S3-Compatible API (Subset)
+- [ ] `GET /`, `PUT /{bucket}/{key}`, `GET /{bucket}/{key}`, `DELETE /{bucket}/{key}`
+- [ ] `ListObjectsV2`, `HeadObject`, `CopyObject`
+- [ ] AWS Signature V4 auth using API tokens
+- [ ] Enables use of existing S3 tools (rclone, mc, boto3) against Nuage
+- [ ] Not full S3 — just the subset that covers file CRUD
 
 ### Office Document Preview
 - [ ] LibreOffice-based server-side rendering (or Collabora CODE)

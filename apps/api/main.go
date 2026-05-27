@@ -93,9 +93,11 @@ func main() {
 	}()
 
 	notifier := nook.NewNotifier(db)
+	notifier.Start()
+	defer notifier.Stop()
 	actLogger := activity.NewLogger(db)
 
-	authService := auth.NewService(db)
+	authService := auth.NewService(db, notifier)
 	userService := users.NewService(db, appEnv.StorageDir)
 	quotaService := quota.NewService(db)
 	var presignSecret []byte
@@ -109,7 +111,7 @@ func main() {
 	trashService := trash.NewService(db, storageClient, actLogger, quotaService)
 	syncService := sync.NewService(db)
 	sharingService := sharing.NewService(db, notifier, actLogger)
-	settingsService := settings.NewService(db)
+	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
 	activityService := activitymod.NewService(db)
 

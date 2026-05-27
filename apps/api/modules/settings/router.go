@@ -16,5 +16,6 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Get("/", handler.list)
 		r.Put("/", handler.update)
 		r.Post("/test-nook", handler.testNook)
+		r.Get("/nook/deliveries", handler.listDeliveries)
 	})
 }

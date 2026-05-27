@@ -101,6 +101,55 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	httpjson.WriteJSON(w, http.StatusOK, resp)
 }
 
+func (h *Handler) listDeliveries(w http.ResponseWriter, r *http.Request) {
+	if ok, _ := h.checkAdmin(w, r); !ok {
+		return
+	}
+
+	limit := 50
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	deliveries, total, err := h.service.notifier.ListDeliveries(r.Context(), limit, offset)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to list deliveries", err))
+		return
+	}
+
+	items := make([]DeliveryResponse, 0, len(deliveries))
+	for _, d := range deliveries {
+		item := DeliveryResponse{
+			ID:           d.ID,
+			EventType:    d.EventType,
+			Status:       d.Status,
+			Attempts:     d.Attempts,
+			ResponseCode: d.ResponseCode,
+			ErrorMessage: d.ErrorMessage,
+			LatencyMs:    d.LatencyMs,
+			CreatedAt:    d.CreatedAt.UTC().Format(time.RFC3339),
+		}
+		if d.DeliveredAt != nil {
+			t := d.DeliveredAt.UTC().Format(time.RFC3339)
+			item.DeliveredAt = &t
+		}
+		items = append(items, item)
+	}
+
+	httpjson.WriteJSON(w, http.StatusOK, DeliveryListResponse{
+		Deliveries: items,
+		Total:      total,
+	})
+}
+
 func (h *Handler) testNook(w http.ResponseWriter, r *http.Request) {
 	if ok, _ := h.checkAdmin(w, r); !ok {
 		return
