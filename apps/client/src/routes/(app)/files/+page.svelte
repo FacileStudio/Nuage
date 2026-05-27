@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { backend, type NuageFile, type Folder, type Share } from '$lib/backend';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null; refreshQuota: () => void }>('app');
 
@@ -63,6 +64,9 @@
 	let lastClickedIndex = $state(-1);
 	let showDeleteConfirm = $state(false);
 	let bulkDeleting = $state(false);
+	let showSingleDeleteConfirm = $state(false);
+	let singleDeleteTarget = $state<{ type: 'file' | 'folder'; item: NuageFile | Folder } | null>(null);
+	let singleDeleting = $state(false);
 	let selectMode = $state(false);
 	let isMac = $state(false);
 	let selectedMap = $derived.by(() => {
@@ -609,7 +613,7 @@
 		renameValue = '';
 	}
 
-	async function deleteItem() {
+	function deleteItem() {
 		if (!contextMenu) return;
 		const { type, item } = contextMenu;
 		contextMenu = null;
@@ -617,13 +621,23 @@
 			showDeleteConfirm = true;
 			return;
 		}
+		singleDeleteTarget = { type, item };
+		showSingleDeleteConfirm = true;
+	}
+
+	async function doSingleDelete() {
+		if (!singleDeleteTarget) return;
+		singleDeleting = true;
 		try {
-			if (type === 'file') {
-				await backend.deleteFile(app.token, (item as NuageFile).id);
+			if (singleDeleteTarget.type === 'file') {
+				await backend.deleteFile(app.token, (singleDeleteTarget.item as NuageFile).id);
 			} else {
-				await backend.deleteFolder(app.token, (item as Folder).id);
+				await backend.deleteFolder(app.token, (singleDeleteTarget.item as Folder).id);
 			}
 		} catch {}
+		singleDeleting = false;
+		showSingleDeleteConfirm = false;
+		singleDeleteTarget = null;
 		selectedKeys = [];
 		lastClickedIndex = -1;
 		await loadContents();
@@ -1491,38 +1505,23 @@
 		</div>
 	{/if}
 
-	{#if showDeleteConfirm}
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="alertdialog">
-			<button class="absolute inset-0" onclick={() => { showDeleteConfirm = false; }} aria-label="Cancel"></button>
-			<div class="relative z-10 w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-xl">
-				<h3 class="text-lg font-semibold">Move to trash?</h3>
-				<p class="mt-2 text-sm text-muted-foreground">
-					{selectionCount} {selectionCount === 1 ? 'item' : 'items'} will be moved to trash. You can restore them from the Trash page.
-				</p>
-				<div class="mt-5 flex justify-end gap-2">
-					<button
-						class="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent"
-						onclick={() => { showDeleteConfirm = false; }}
-						disabled={bulkDeleting}
-					>
-						Cancel
-					</button>
-					<button
-						class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-						onclick={bulkDelete}
-						disabled={bulkDeleting}
-					>
-						{#if bulkDeleting}
-							<div class="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-						{:else}
-							<iconify-icon icon="solar:trash-bin-2-linear" width="16"></iconify-icon>
-						{/if}
-						Move to trash
-					</button>
-				</div>
-			</div>
-		</div>
-	{/if}
+	<ConfirmDialog
+		bind:open={showDeleteConfirm}
+		title="Move to trash?"
+		message="{selectionCount} {selectionCount === 1 ? 'item' : 'items'} will be moved to trash. You can restore them from the Trash page."
+		confirmLabel="Move to trash"
+		loading={bulkDeleting}
+		onconfirm={bulkDelete}
+	/>
+
+	<ConfirmDialog
+		bind:open={showSingleDeleteConfirm}
+		title="Move to trash?"
+		message="{singleDeleteTarget?.item.name ?? 'This item'} will be moved to trash. You can restore it from the Trash page."
+		confirmLabel="Move to trash"
+		loading={singleDeleting}
+		onconfirm={doSingleDelete}
+	/>
 
 	{#if moveToast}
 		<div class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 shadow-xl">

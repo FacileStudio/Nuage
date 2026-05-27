@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { onMount, getContext } from 'svelte';
 	import { backend, type TrashItem } from '$lib/backend';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
 
 	let items = $state<TrashItem[]>([]);
 	let loading = $state(true);
 	let actionLoading = $state<string | null>(null);
+	let showEmptyConfirm = $state(false);
+	let showDeleteConfirm = $state(false);
+	let deleteTarget = $state<TrashItem | null>(null);
 
 	onMount(async () => {
 		await loadTrash();
@@ -32,20 +36,28 @@
 		actionLoading = null;
 	}
 
-	async function permanentDelete(type: 'file' | 'folder', id: number) {
-		actionLoading = `delete-${type}-${id}`;
+	function confirmDelete(item: TrashItem) {
+		deleteTarget = item;
+		showDeleteConfirm = true;
+	}
+
+	async function doDelete() {
+		if (!deleteTarget) return;
+		actionLoading = `delete-${deleteTarget.type}-${deleteTarget.id}`;
 		try {
-			await backend.permanentDelete(app.token, type, id);
+			await backend.permanentDelete(app.token, deleteTarget.type, deleteTarget.id);
+			showDeleteConfirm = false;
+			deleteTarget = null;
 			await loadTrash();
 		} catch {}
 		actionLoading = null;
 	}
 
-	async function emptyTrash() {
-		if (!confirm('Permanently delete all items in trash? This cannot be undone.')) return;
+	async function doEmptyTrash() {
 		actionLoading = 'empty-all';
 		try {
 			await Promise.all(items.map((item) => backend.permanentDelete(app.token, item.type, item.id)));
+			showEmptyConfirm = false;
 			await loadTrash();
 		} catch {}
 		actionLoading = null;
@@ -95,8 +107,8 @@
 		</div>
 		{#if !loading && !isEmpty}
 			<button
-				class="inline-flex h-9 items-center gap-2 rounded-md bg-red-700 px-4 text-sm font-medium text-white transition-colors hover:bg-red-800 disabled:opacity-50"
-				onclick={emptyTrash}
+				class="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+				onclick={() => (showEmptyConfirm = true)}
 				disabled={actionLoading !== null}
 			>
 				<iconify-icon icon="solar:trash-bin-2-linear" width="16"></iconify-icon>
@@ -156,8 +168,8 @@
 											Restore
 										</button>
 										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-700/10 disabled:opacity-50"
-											onclick={() => permanentDelete(item.type, item.id)}
+											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-600/10 disabled:opacity-50"
+											onclick={() => confirmDelete(item)}
 											disabled={actionLoading !== null}
 											aria-label="Permanently delete {item.type}"
 										>
@@ -174,3 +186,21 @@
 		{/if}
 	</div>
 </div>
+
+<ConfirmDialog
+	bind:open={showEmptyConfirm}
+	title="Empty trash?"
+	message="All {items.length} {items.length === 1 ? 'item' : 'items'} will be permanently deleted. This cannot be undone."
+	confirmLabel="Empty trash"
+	loading={actionLoading === 'empty-all'}
+	onconfirm={doEmptyTrash}
+/>
+
+<ConfirmDialog
+	bind:open={showDeleteConfirm}
+	title="Permanently delete?"
+	message="{deleteTarget?.name ?? 'This item'} will be permanently deleted. This cannot be undone."
+	confirmLabel="Delete forever"
+	loading={deleteTarget != null && actionLoading === `delete-${deleteTarget.type}-${deleteTarget.id}`}
+	onconfirm={doDelete}
+/>
