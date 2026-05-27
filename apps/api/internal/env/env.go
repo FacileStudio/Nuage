@@ -32,6 +32,7 @@ type Config struct {
 	SSOOnly        bool
 	MinIO          MinIOConfig
 	AllowedOrigins []string
+	PresignSecret  string
 }
 
 func Load() (Config, error) {
@@ -75,6 +76,8 @@ func Load() (Config, error) {
 			SuccessURL:   successURL,
 		}
 	}
+
+	env.PresignSecret = os.Getenv("PRESIGN_SECRET")
 
 	if origins := os.Getenv("ALLOWED_ORIGINS"); origins != "" {
 		env.AllowedOrigins = strings.Split(origins, ",")

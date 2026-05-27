@@ -3,6 +3,7 @@ package files
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -156,7 +157,9 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(record.Name)))
 	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, reader)
+	if _, err := io.Copy(w, reader); err != nil {
+		slog.Error("file stream interrupted", slog.Int64("file_id", record.ID), slog.Any("error", err))
+	}
 }
 
 func (h *Handler) presign(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +203,7 @@ func (h *Handler) presign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	scheme := "https"
-	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto == "http" || proto == "https" {
 		scheme = proto
 	} else if r.TLS == nil {
 		scheme = "http"
@@ -209,7 +212,13 @@ func (h *Handler) presign(w http.ResponseWriter, r *http.Request) {
 	if host == "" {
 		host = r.Host
 	}
+	if strings.ContainsAny(host, "/ \\") {
+		host = r.Host
+	}
 	prefix := r.Header.Get("X-Forwarded-Prefix")
+	if prefix != "" && (prefix[0] != '/' || strings.Contains(prefix, "//")) {
+		prefix = ""
+	}
 
 	presignedURL := fmt.Sprintf("%s://%s%s/presigned/%s", scheme, host, prefix, token)
 
@@ -233,7 +242,9 @@ func (h *Handler) presignedDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, reader)
+	if _, err := io.Copy(w, reader); err != nil {
+		slog.Error("presigned stream interrupted", slog.Any("error", err))
+	}
 }
 
 func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {

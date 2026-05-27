@@ -8,6 +8,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
+
+	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -149,6 +152,64 @@ func TestPresignedDownloadInvalidToken(t *testing.T) {
 	resp := w.Result()
 
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestPresignedDownloadExpiredToken(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "presign-expired@example.com", "password12345")
+
+	resp := uploadFile(ts, token, "expired.txt", "expired content", nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &file)
+
+	secret := presign.DeriveSecret("test-secret", "nuage-presign-v1")
+	expiredToken, err := presign.Sign(file.ID, time.Now().Add(-1*time.Hour), secret)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/presigned/"+expiredToken, nil)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	dlResp := w.Result()
+
+	require.Equal(t, http.StatusUnauthorized, dlResp.StatusCode)
+}
+
+func TestPresignedDownloadDeletedFile(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "presign-deleted@example.com", "password12345")
+
+	resp := uploadFile(ts, token, "doomed.txt", "doomed content", nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &file)
+
+	presignResp := doJSON(ts, "POST", fmt.Sprintf("/files/%d/presign", file.ID), nil, token)
+	require.Equal(t, http.StatusOK, presignResp.StatusCode)
+
+	var result struct {
+		URL string `json:"url"`
+	}
+	parseJSON(presignResp, &result)
+
+	delResp := doDelete(ts, fmt.Sprintf("/files/%d", file.ID), token)
+	require.Equal(t, http.StatusOK, delResp.StatusCode)
+
+	parsed, err := url.Parse(result.URL)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", parsed.RequestURI(), nil)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	dlResp := w.Result()
+
+	require.Equal(t, http.StatusNotFound, dlResp.StatusCode)
 }
 
 func TestPresignedDownloadTamperedToken(t *testing.T) {

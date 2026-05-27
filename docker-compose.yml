@@ -84,6 +84,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-nuage-internal-storage}
       MINIO_BUCKET: nuage
       MINIO_USE_SSL: "false"
+      PRESIGN_SECRET: ${PRESIGN_SECRET:-}
     volumes:
       - api_data:/app/data
     healthcheck:

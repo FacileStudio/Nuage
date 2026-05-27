@@ -42,7 +42,7 @@ var Documentation = documentation.Module{
 			Method:      "GET",
 			Path:        "/files/{id}/download",
 			Summary:     "Download a file",
-			Description: "Redirects to a presigned download URL.",
+			Description: "Streams the file content with appropriate Content-Type header.",
 			Auth:        "bearer token required",
 		},
 		{
@@ -83,6 +83,13 @@ var Documentation = documentation.Module{
 				{Status: 401, Code: "unauthenticated", Description: "Authorization header is missing or invalid."},
 				{Status: 404, Code: "not_found", Description: "File does not exist."},
 			},
+		},
+		{
+			Method:      "GET",
+			Path:        "/presigned/{token}",
+			Summary:     "Download via presigned URL",
+			Description: "Downloads a file using an HMAC-signed presigned token. No authentication required.",
+			Auth:        "none (token is the authorization)",
 		},
 		{
 			Method:       "POST",

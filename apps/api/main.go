@@ -98,7 +98,13 @@ func main() {
 	authService := auth.NewService(db)
 	userService := users.NewService(db, appEnv.StorageDir)
 	quotaService := quota.NewService(db)
-	presignSecret := presign.DeriveSecret(appEnv.MinIO.SecretKey, "nuage-presign-v1")
+	var presignSecret []byte
+	if appEnv.PresignSecret != "" {
+		presignSecret = []byte(appEnv.PresignSecret)
+	} else {
+		presignSecret = presign.DeriveSecret(appEnv.MinIO.SecretKey, "nuage-presign-v1")
+		appLogger.Warn("PRESIGN_SECRET not set, deriving from MINIO_SECRET_KEY — set PRESIGN_SECRET in production")
+	}
 	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService, presignSecret)
 	trashService := trash.NewService(db, storageClient, actLogger, quotaService)
 	syncService := sync.NewService(db)
