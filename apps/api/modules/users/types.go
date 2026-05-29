@@ -1,12 +1,13 @@
 package users
 
 type User struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	AvatarURL string `json:"avatar_url"`
-	Color     string `json:"color"`
-	CreatedAt string `json:"created_at"`
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	Name         string `json:"name"`
+	AvatarURL    string `json:"avatar_url"`
+	AvatarSource string `json:"avatar_source"`
+	Color        string `json:"color"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type MeResponse struct {

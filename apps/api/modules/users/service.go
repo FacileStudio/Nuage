@@ -247,12 +247,13 @@ func (service *Service) ensureUserColor(context context.Context, record *schemas
 
 func mapUser(record schemas.User) *User {
 	return &User{
-		ID:        strconv.FormatInt(record.ID, 10),
-		Email:     record.Email,
-		Name:      record.Name,
-		AvatarURL: record.AvatarURL,
-		Color:     record.Color,
-		CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339),
+		ID:           strconv.FormatInt(record.ID, 10),
+		Email:        record.Email,
+		Name:         record.Name,
+		AvatarURL:    record.AvatarURL,
+		AvatarSource: record.AvatarSource,
+		Color:        record.Color,
+		CreatedAt:    record.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 

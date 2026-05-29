@@ -15,6 +15,7 @@ export type UserProfile = {
 	email: string;
 	name: string;
 	avatar_url: string;
+	avatar_source: string;
 	color: string;
 	created_at: string;
 };

@@ -219,24 +219,29 @@
 								{getInitials(profileName || profileEmail)}
 							</div>
 						{/if}
-						<div class="flex gap-2">
-							<label class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50">
-								{#if avatarUploading}
-									<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
-								{:else}
-									<iconify-icon icon="solar:camera-linear" width="16"></iconify-icon>
+						<div class="flex flex-col gap-2">
+							<div class="flex gap-2">
+								<label class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50">
+									{#if avatarUploading}
+										<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
+									{:else}
+										<iconify-icon icon="solar:camera-linear" width="16"></iconify-icon>
+									{/if}
+									Change
+									<input type="file" accept="image/*" class="hidden" onchange={handleAvatarUpload} disabled={avatarUploading} />
+								</label>
+								{#if avatarUrl}
+									<button
+										class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+										onclick={removeAvatar}
+										disabled={avatarUploading}
+									>
+										Remove
+									</button>
 								{/if}
-								Change
-								<input type="file" accept="image/*" class="hidden" onchange={handleAvatarUpload} disabled={avatarUploading} />
-							</label>
-							{#if avatarUrl}
-								<button
-									class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-									onclick={removeAvatar}
-									disabled={avatarUploading}
-								>
-									Remove
-								</button>
+							</div>
+							{#if app.user?.avatar_source === 'oidc'}
+								<p class="text-xs text-muted-foreground">Synced from SSO</p>
 							{/if}
 						</div>
 					</div>
