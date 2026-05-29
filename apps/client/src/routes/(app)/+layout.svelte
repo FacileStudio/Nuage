@@ -58,6 +58,9 @@
 				user = result.user;
 				loaded = true;
 				refreshQuota();
+				backend.syncProfile(stored).then(({ synced }) => {
+					if (synced) backend.me(stored).then((r) => { user = r.user; });
+				}).catch(() => {});
 			} catch {
 				goto('/login');
 			}

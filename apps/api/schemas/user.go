@@ -12,6 +12,10 @@ type User struct {
 	Color          string    `gorm:"column:color"`
 	PasswordHash string    `gorm:"column:password_hash"`
 	IsAdmin      bool      `gorm:"column:is_admin;default:false"`
+	OIDCAccessToken  string    `gorm:"column:oidc_access_token"`
+	OIDCRefreshToken string    `gorm:"column:oidc_refresh_token"`
+	OIDCTokenExpiry  time.Time `gorm:"column:oidc_token_expiry"`
+	ProfileSyncedAt  time.Time `gorm:"column:profile_synced_at"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 

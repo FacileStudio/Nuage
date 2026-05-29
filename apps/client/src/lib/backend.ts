@@ -464,6 +464,10 @@ export const backend = {
 		return `${backendBaseUrl}/shared/${shareToken}/download/${fileId}`;
 	},
 
+	syncProfile(token: string) {
+		return apiFetch<{ synced: boolean }>('/auth/sync-profile', { method: 'POST' }, token);
+	},
+
 	listActivity(token: string, params?: { page?: number; per_page?: number; event_type?: string; resource_type?: string }) {
 		const qs = new URLSearchParams();
 		if (params?.page != null) qs.set('page', String(params.page));
