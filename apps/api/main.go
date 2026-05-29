@@ -97,7 +97,7 @@ func main() {
 	defer notifier.Stop()
 	actLogger := activity.NewLogger(db)
 
-	authService := auth.NewService(db, notifier)
+	authService := auth.NewService(db, notifier, appEnv.StorageDir, appLogger)
 	userService := users.NewService(db, appEnv.StorageDir)
 	quotaService := quota.NewService(db)
 	var presignSecret []byte

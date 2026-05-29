@@ -11,6 +11,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
+	"github.com/FacileStudio/Nuage/apps/api/internal/oidcavatar"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -101,8 +102,13 @@ func (h *oidcHandler) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var claims struct {
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"email_verified"`
+		Email            string `json:"email"`
+		EmailVerified    bool   `json:"email_verified"`
+		Name             string `json:"name"`
+		PreferredUsername string `json:"preferred_username"`
+		GivenName        string `json:"given_name"`
+		FamilyName       string `json:"family_name"`
+		Picture          string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		httpjson.WriteError(w, errors.Internal("failed to parse claims", err))
@@ -113,7 +119,14 @@ func (h *oidcHandler) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, token, err := h.service.upsertOIDCUser(r.Context(), claims.Email)
+	profile := oidcavatar.Profile{
+		Name:             claims.Name,
+		PreferredUsername: claims.PreferredUsername,
+		GivenName:        claims.GivenName,
+		FamilyName:       claims.FamilyName,
+		Picture:          claims.Picture,
+	}
+	_, token, err := h.service.upsertOIDCUser(r.Context(), claims.Email, profile)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

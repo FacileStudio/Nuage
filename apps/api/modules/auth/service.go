@@ -7,9 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+	"path/filepath"
+
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/oidcavatar"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
@@ -19,11 +23,13 @@ import (
 type Service struct {
 	orm        *gorm.DB
 	notifier   *nook.Notifier
+	storageDir string
+	logger     *slog.Logger
 	controller *Controller
 }
 
-func NewService(orm *gorm.DB, notifier *nook.Notifier) *Service {
-	service := &Service{orm: orm, notifier: notifier}
+func NewService(orm *gorm.DB, notifier *nook.Notifier, storageDir string, logger *slog.Logger) *Service {
+	service := &Service{orm: orm, notifier: notifier, storageDir: storageDir, logger: logger}
 	service.controller = newController(service)
 	return service
 }
@@ -185,13 +191,15 @@ func (service *Service) deleteSession(ctx context.Context, authorization string)
 	return nil
 }
 
-func (service *Service) upsertOIDCUser(context context.Context, email string) (userID string, token string, err error) {
+func (service *Service) upsertOIDCUser(context context.Context, email string, profile oidcavatar.Profile) (userID string, token string, err error) {
 	var record schemas.User
 	err = service.orm.WithContext(context).Where("email = ?", email).First(&record).Error
 	if err != nil && !stderrors.Is(err, gorm.ErrRecordNotFound) {
 		return "", "", errors.Internal("failed to look up user", err)
 	}
-	if stderrors.Is(err, gorm.ErrRecordNotFound) {
+	isNew := stderrors.Is(err, gorm.ErrRecordNotFound)
+
+	if isNew {
 		color, colorErr := usercolor.NextAvailable(context, service.orm)
 		if colorErr != nil {
 			return "", "", errors.Internal("failed to choose user color", colorErr)
@@ -199,6 +207,9 @@ func (service *Service) upsertOIDCUser(context context.Context, email string) (u
 		var userCount int64
 		service.orm.WithContext(context).Model(&schemas.User{}).Count(&userCount)
 		record = schemas.User{Email: email, Color: color, IsAdmin: userCount == 0}
+		if displayName := profile.DisplayName(); displayName != "" {
+			record.Name = displayName
+		}
 		if err := service.orm.WithContext(context).Create(&record).Error; err != nil {
 			return "", "", errors.Internal("failed to create user", err)
 		}
@@ -206,6 +217,46 @@ func (service *Service) upsertOIDCUser(context context.Context, email string) (u
 			service.notifier.Notify(context, record.ID, "user.created", nook.EventData{
 				User: &nook.UserData{ID: record.ID, Email: record.Email},
 			})
+		}
+		if profile.Picture != "" {
+			relPath, fetchErr := oidcavatar.FetchAvatar(profile.Picture, service.storageDir, record.ID, service.logger)
+			if fetchErr != nil {
+				service.logger.Warn("failed to fetch OIDC avatar for new user", slog.Int64("user_id", record.ID), slog.Any("error", fetchErr))
+			} else {
+				record.AvatarURL = "/api/" + strings.ReplaceAll(relPath, string(filepath.Separator), "/")
+				record.AvatarSource = "oidc"
+				record.OIDCPictureURL = profile.Picture
+				service.orm.WithContext(context).Save(&record)
+			}
+		}
+	} else {
+		changed := false
+		if displayName := profile.DisplayName(); displayName != "" {
+			record.Name = displayName
+			changed = true
+		}
+		if profile.Picture != "" {
+			if profile.Picture != record.OIDCPictureURL {
+				if record.AvatarSource != "upload" {
+					if record.AvatarSource == "oidc" && record.AvatarURL != "" {
+						oldRel := strings.TrimPrefix(record.AvatarURL, "/api/")
+						oidcavatar.RemoveFile(service.storageDir, oldRel)
+					}
+					relPath, fetchErr := oidcavatar.FetchAvatar(profile.Picture, service.storageDir, record.ID, service.logger)
+					if fetchErr != nil {
+						service.logger.Warn("failed to fetch OIDC avatar", slog.Int64("user_id", record.ID), slog.Any("error", fetchErr))
+					} else {
+						record.AvatarURL = "/api/" + strings.ReplaceAll(relPath, string(filepath.Separator), "/")
+						record.AvatarSource = "oidc"
+						changed = true
+					}
+				}
+				record.OIDCPictureURL = profile.Picture
+				changed = true
+			}
+		}
+		if changed {
+			service.orm.WithContext(context).Save(&record)
 		}
 	}
 
