@@ -20,7 +20,7 @@ RUN addgroup -S nuage && adduser -S nuage -G nuage
 WORKDIR /app
 
 COPY --from=build /repo/apps/api/bin/api /app/api
-RUN mkdir -p /app/data && chown -R nuage:nuage /app
+RUN mkdir -p /app/data/avatars && chown -R nuage:nuage /app
 
 USER nuage
 
