@@ -184,9 +184,13 @@
 
 			<div class="flex flex-col gap-2 p-4">
 				<div class="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/40 p-2.5">
-					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-foreground text-xs font-semibold text-background">
-						{getInitials(userLabel(user))}
-					</div>
+					{#if user?.avatar_url}
+						<img src={user.avatar_url} alt="Avatar" class="h-9 w-9 rounded-full border border-border object-cover shrink-0" />
+					{:else}
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-foreground text-xs font-semibold text-background">
+							{getInitials(userLabel(user))}
+						</div>
+					{/if}
 					<div class="min-w-0 flex-1">
 						<p class="truncate text-sm font-medium">{user?.name || 'Set your profile'}</p>
 						<p class="truncate text-xs text-muted-foreground">{user?.email ?? ''}</p>
