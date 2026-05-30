@@ -144,6 +144,7 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 			versionBytes += v.Size
 		}
 		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Delete(&schemas.FileVersion{})
+		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Delete(&schemas.Share{})
 		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
 			return errors.Internal("failed to delete file record", err)
 		}
@@ -198,6 +199,7 @@ func (s *Service) emptyTrash(ctx context.Context, userID int64) (int64, error) {
 			versionBytes += v.Size
 		}
 		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Delete(&schemas.FileVersion{})
+		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Delete(&schemas.Share{})
 		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
 			return count, errors.Internal("failed to delete file record", err)
 		}
