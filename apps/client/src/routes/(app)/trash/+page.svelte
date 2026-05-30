@@ -46,20 +46,20 @@
 		actionLoading = `delete-${deleteTarget.type}-${deleteTarget.id}`;
 		try {
 			await backend.permanentDelete(app.token, deleteTarget.type, deleteTarget.id);
-			showDeleteConfirm = false;
-			deleteTarget = null;
-			await loadTrash();
 		} catch {}
+		showDeleteConfirm = false;
+		deleteTarget = null;
+		await loadTrash();
 		actionLoading = null;
 	}
 
 	async function doEmptyTrash() {
 		actionLoading = 'empty-all';
 		try {
-			await Promise.all(items.map((item) => backend.permanentDelete(app.token, item.type, item.id)));
-			showEmptyConfirm = false;
-			await loadTrash();
+			await backend.emptyTrash(app.token);
 		} catch {}
+		showEmptyConfirm = false;
+		await loadTrash();
 		actionLoading = null;
 	}
 

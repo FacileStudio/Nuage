@@ -88,3 +88,25 @@ func (h *Handler) permanentDelete(w http.ResponseWriter, r *http.Request) {
 
 	httpjson.WriteJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
+
+func (h *Handler) emptyTrash(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	count, err := h.service.emptyTrash(r.Context(), userID)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	httpjson.WriteJSON(w, http.StatusOK, map[string]int64{"deleted": count})
+}

@@ -171,3 +171,57 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 	}
 	return nil
 }
+
+func (s *Service) emptyTrash(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+
+	var trashFiles []schemas.File
+	if err := s.orm.WithContext(ctx).Where("uploaded_by = ? AND deleted_at IS NOT NULL", userID).Find(&trashFiles).Error; err != nil {
+		return 0, errors.Internal("failed to list trashed files", err)
+	}
+
+	for _, record := range trashFiles {
+		_ = s.storage.DeleteObject(ctx, record.BucketKey)
+		var versions []schemas.FileVersion
+		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Find(&versions)
+		var versionBytes int64
+		for _, v := range versions {
+			_ = s.storage.DeleteObject(ctx, v.BucketKey)
+			versionBytes += v.Size
+		}
+		s.orm.WithContext(ctx).Where("file_id = ?", record.ID).Delete(&schemas.FileVersion{})
+		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
+			return count, errors.Internal("failed to delete file record", err)
+		}
+		if s.quota != nil {
+			s.quota.UpdateUsage(ctx, userID, -(record.Size + versionBytes))
+		}
+		if s.activity != nil {
+			s.activity.Log(ctx, activity.Entry{
+				UserID: userID, EventType: "file.permanently_deleted", ResourceType: "file",
+				ResourceID: record.ID, ResourceName: record.Name,
+			})
+		}
+		count++
+	}
+
+	var trashFolders []schemas.Folder
+	if err := s.orm.WithContext(ctx).Where("owner_id = ? AND deleted_at IS NOT NULL", userID).Find(&trashFolders).Error; err != nil {
+		return count, errors.Internal("failed to list trashed folders", err)
+	}
+
+	for _, record := range trashFolders {
+		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
+			return count, errors.Internal("failed to delete folder record", err)
+		}
+		if s.activity != nil {
+			s.activity.Log(ctx, activity.Entry{
+				UserID: userID, EventType: "folder.permanently_deleted", ResourceType: "folder",
+				ResourceID: record.ID, ResourceName: record.Name,
+			})
+		}
+		count++
+	}
+
+	return count, nil
+}

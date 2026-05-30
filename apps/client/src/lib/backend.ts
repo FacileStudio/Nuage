@@ -295,6 +295,10 @@ export const backend = {
 		return apiFetch<{}>(`/trash/${type}/${id}`, { method: 'DELETE' }, token);
 	},
 
+	emptyTrash(token: string) {
+		return apiFetch<{ deleted: number }>('/trash', { method: 'DELETE' }, token);
+	},
+
 	createShare(token: string, data: { file_id?: number; folder_id?: number; permission?: string; expires_at?: string }) {
 		return apiFetch<Share>('/shares', {
 			method: 'POST',

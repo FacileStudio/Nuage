@@ -14,6 +14,7 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Use(middleware.RequireAuth(authService))
 
 		r.Get("/", handler.list)
+		r.Delete("/", handler.emptyTrash)
 		r.Post("/{type}/{id}/restore", handler.restore)
 		r.Delete("/{type}/{id}", handler.permanentDelete)
 	})
