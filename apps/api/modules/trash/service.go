@@ -111,6 +111,13 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 	return nil
 }
 
+func (s *Service) clearFolderRefs(ctx context.Context, folderID int64) {
+	s.orm.WithContext(ctx).Model(&schemas.File{}).Where("folder_id = ?", folderID).Update("folder_id", nil)
+	s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("parent_id = ?", folderID).Update("parent_id", nil)
+	s.orm.WithContext(ctx).Where("folder_id = ?", folderID).Delete(&schemas.Share{})
+	s.orm.WithContext(ctx).Model(&schemas.UploadSession{}).Where("folder_id = ?", folderID).Update("folder_id", nil)
+}
+
 func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType string, itemID string) error {
 	id, err := strconv.ParseInt(itemID, 10, 64)
 	if err != nil {
@@ -157,6 +164,7 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 			}
 			return errors.Internal("failed to find folder", err)
 		}
+		s.clearFolderRefs(ctx, record.ID)
 		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
 			return errors.Internal("failed to delete folder record", err)
 		}
@@ -211,6 +219,7 @@ func (s *Service) emptyTrash(ctx context.Context, userID int64) (int64, error) {
 	}
 
 	for _, record := range trashFolders {
+		s.clearFolderRefs(ctx, record.ID)
 		if err := s.orm.WithContext(ctx).Unscoped().Delete(&record).Error; err != nil {
 			return count, errors.Internal("failed to delete folder record", err)
 		}
