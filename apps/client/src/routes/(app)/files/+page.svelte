@@ -1486,7 +1486,7 @@
 							<track kind="captions" />
 						</video>
 					{:else if previewFile.mime_type.startsWith('audio/')}
-						<audio controls src={backend.downloadUrl(app.token, previewFile.id)} class="w-80">
+						<audio controls src={backend.downloadUrl(app.token, previewFile.id)} class="w-full max-w-80">
 							<track kind="captions" />
 						</audio>
 					{/if}

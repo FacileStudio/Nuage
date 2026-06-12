@@ -5,6 +5,7 @@
 	import { backend, type UserProfile, type QuotaResponse } from '$lib/backend';
 	import { undoLast, hasPending } from '$lib/undo.svelte';
 	import UndoToast from '$lib/components/UndoToast.svelte';
+	import MobileNav from '$lib/components/MobileNav.svelte';
 
 	let { children } = $props();
 
@@ -13,7 +14,6 @@
 	let token = $state('');
 	let user = $state<UserProfile | null>(null);
 	let loaded = $state(false);
-	let mobileMenuOpen = $state(false);
 	let quota = $state<QuotaResponse | null>(null);
 
 	function setUser(nextUser: UserProfile) {
@@ -111,23 +111,7 @@
 
 {#if loaded}
 	<div class="flex h-[100dvh] w-full overflow-hidden">
-		<button
-			class="fixed top-4 left-4 z-50 flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background md:hidden"
-			onclick={() => mobileMenuOpen = !mobileMenuOpen}
-			aria-label="Toggle menu"
-		>
-			<iconify-icon icon={mobileMenuOpen ? 'solar:close-circle-linear' : 'solar:hamburger-menu-linear'} width="20"></iconify-icon>
-		</button>
-
-		{#if mobileMenuOpen}
-			<button
-				class="fixed inset-0 z-30 bg-black/40 md:hidden"
-				onclick={() => mobileMenuOpen = false}
-				aria-label="Close menu"
-			></button>
-		{/if}
-
-		<aside class="fixed z-40 top-0 left-0 flex h-[100dvh] w-60 flex-col border-r bg-background transition-transform md:sticky md:translate-x-0 {mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}">
+		<aside class="sticky top-0 hidden h-[100dvh] w-60 flex-col border-r bg-background md:flex">
 			<div class="flex items-center gap-3 px-5 pt-8 pb-6">
 				<iconify-icon icon="solar:cloud-bold-duotone" width="28" class="text-foreground"></iconify-icon>
 				<span class="text-2xl font-bold font-heading tracking-tight">Nuage</span>
@@ -146,7 +130,6 @@
 					{:else}
 						<a
 							href={link.href}
-							onclick={() => mobileMenuOpen = false}
 							class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors {active
 								? 'bg-foreground text-background font-medium'
 								: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
@@ -206,9 +189,10 @@
 			</div>
 		</aside>
 
-		<main class="flex-1 overflow-auto">
+		<main class="flex-1 overflow-auto pb-24 md:pb-0">
 			{@render children()}
 		</main>
+		<MobileNav />
 	</div>
 
 	<UndoToast />

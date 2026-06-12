@@ -103,7 +103,7 @@
 		createdToken = null;
 		try {
 			const res = await backend.createApiToken(app.token, { name: newTokenName.trim() });
-			createdToken = res.token;
+			createdToken = res.token ?? null;
 			newTokenName = '';
 			await loadApiTokens();
 		} catch {}
