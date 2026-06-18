@@ -174,13 +174,13 @@
 				{#each grouped as group}
 					<div class="mb-6">
 						<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.heading}</h2>
-						<div class="relative pl-8">
+						<div class="space-y-3">
 							{#each group.items as entry}
-								<div class="relative mb-4 last:mb-0">
-									<div class="absolute top-3 left-0 flex h-5 w-5 items-center justify-center rounded-full {eventColor(entry.event_type)}">
+								<div class="flex items-start gap-3">
+									<div class="mt-2.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full {eventColor(entry.event_type)}">
 										<iconify-icon icon={eventIcon(entry.event_type)} width="12"></iconify-icon>
 									</div>
-									<div class="rounded-lg border border-border/60 bg-background p-3 transition-colors hover:bg-muted/30">
+									<div class="min-w-0 flex-1 rounded-lg border border-border/60 bg-background p-3 transition-colors hover:bg-muted/30">
 										<div class="flex items-start justify-between gap-3">
 											<div class="min-w-0 flex-1">
 												<p class="text-sm">
