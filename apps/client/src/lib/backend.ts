@@ -221,12 +221,13 @@ export const backend = {
 		return apiFetch<MeResponse>('/users/me', {}, token);
 	},
 
-	listFiles(token: string, params?: { folder_id?: number; search?: string; linked_to?: string; origin_app?: string }) {
+	listFiles(token: string, params?: { folder_id?: number; search?: string; linked_to?: string; origin_app?: string; space_id?: number | null }) {
 		const qs = new URLSearchParams();
 		if (params?.folder_id != null) qs.set('folder_id', String(params.folder_id));
 		if (params?.search) qs.set('search', params.search);
 		if (params?.linked_to) qs.set('linked_to', params.linked_to);
 		if (params?.origin_app) qs.set('origin_app', params.origin_app);
+		if (params?.space_id != null) qs.set('space_id', String(params.space_id));
 		const query = qs.size ? `?${qs}` : '';
 		return apiFetch<{ files: NuageFile[] }>(`/files${query}`, {}, token);
 	},
@@ -285,9 +286,10 @@ export const backend = {
 		}, token);
 	},
 
-	listFolders(token: string, params?: { parent_id?: number | null }) {
+	listFolders(token: string, params?: { parent_id?: number | null; space_id?: number | null }) {
 		const qs = new URLSearchParams();
 		if (params?.parent_id != null) qs.set('parent_id', String(params.parent_id));
+		if (params?.space_id != null) qs.set('space_id', String(params.space_id));
 		const query = qs.size ? `?${qs}` : '';
 		return apiFetch<{ folders: Folder[] }>(`/folders${query}`, {}, token);
 	},

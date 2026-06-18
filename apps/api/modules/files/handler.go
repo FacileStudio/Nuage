@@ -101,7 +101,17 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		folderID = &id
 	}
 
-	records, err := h.service.listFiles(r.Context(), userID, folderID, query.Get("search"), query.Get("linked_to"), query.Get("origin_app"))
+	var spaceID *int64
+	if raw := query.Get("space_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			httpjson.WriteError(w, errors.Invalid("invalid space_id"))
+			return
+		}
+		spaceID = &id
+	}
+
+	records, err := h.service.listFiles(r.Context(), userID, folderID, query.Get("search"), query.Get("linked_to"), query.Get("origin_app"), spaceID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -386,7 +396,17 @@ func (h *Handler) listFolders(w http.ResponseWriter, r *http.Request) {
 		parentID = &id
 	}
 
-	records, err := h.service.listFolders(r.Context(), userID, parentID)
+	var spaceID *int64
+	if raw := r.URL.Query().Get("space_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			httpjson.WriteError(w, errors.Invalid("invalid space_id"))
+			return
+		}
+		spaceID = &id
+	}
+
+	records, err := h.service.listFolders(r.Context(), userID, parentID, spaceID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

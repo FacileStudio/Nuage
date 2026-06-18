@@ -174,9 +174,13 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 	return record, nil
 }
 
-func (s *Service) listFiles(ctx context.Context, userID int64, folderID *int64, search string, linkedTo string, originApp string) ([]schemas.File, error) {
+func (s *Service) listFiles(ctx context.Context, userID int64, folderID *int64, search string, linkedTo string, originApp string, spaceID *int64) ([]schemas.File, error) {
 	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("created_at desc")
-	query = query.Where("uploaded_by = ?", userID)
+	if spaceID != nil {
+		query = query.Where("space_id = ?", *spaceID)
+	} else {
+		query = query.Where("uploaded_by = ? AND space_id IS NULL", userID)
+	}
 
 	if folderID != nil {
 		query = query.Where("folder_id = ?", *folderID)
@@ -359,9 +363,13 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 	return record, nil
 }
 
-func (s *Service) listFolders(ctx context.Context, userID int64, parentID *int64) ([]schemas.Folder, error) {
+func (s *Service) listFolders(ctx context.Context, userID int64, parentID *int64, spaceID *int64) ([]schemas.Folder, error) {
 	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("name asc")
-	query = query.Where("owner_id = ?", userID)
+	if spaceID != nil {
+		query = query.Where("space_id = ?", *spaceID)
+	} else {
+		query = query.Where("owner_id = ? AND space_id IS NULL", userID)
+	}
 
 	if parentID != nil {
 		query = query.Where("parent_id = ?", *parentID)

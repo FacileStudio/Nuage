@@ -5,8 +5,10 @@
 	import { backend, type NuageFile, type Folder, type Share } from '$lib/backend';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { pushUndo } from '$lib/undo.svelte';
+	import { getSpaceStore } from '$lib/space.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null; refreshQuota: () => void }>('app');
+	const spaceStore = getSpaceStore();
 
 	let files = $state<NuageFile[]>([]);
 	let folders = $state<Folder[]>([]);
@@ -370,6 +372,7 @@
 
 	$effect(() => {
 		const urlFolderId = currentFolderIdFromUrl;
+		const _spaceId = spaceStore.id;
 		currentFolderId = urlFolderId;
 		loadContents();
 		loadBreadcrumbs();
@@ -390,12 +393,14 @@
 		selectedKeys = [];
 		lastClickedIndex = -1;
 		try {
+			const sid = spaceStore.id ?? undefined;
 			const [fileRes, folderRes] = await Promise.all([
 				backend.listFiles(app.token, {
 					folder_id: currentFolderId ?? undefined,
-					search: searchQuery || undefined
+					search: searchQuery || undefined,
+					space_id: sid
 				}),
-				backend.listFolders(app.token, currentFolderId != null ? { parent_id: currentFolderId } : undefined)
+				backend.listFolders(app.token, currentFolderId != null ? { parent_id: currentFolderId, space_id: sid } : { space_id: sid })
 			]);
 			files = fileRes.files ?? [];
 			folders = searchQuery ? [] : (folderRes.folders ?? []);
