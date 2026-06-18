@@ -143,6 +143,30 @@ export type ActivityListResponse = {
 	per_page: number;
 };
 
+export type Space = {
+	id: number;
+	facile_id: string;
+	name: string;
+	description: string;
+	role: string;
+	created_at: string;
+	updated_at: string;
+};
+
+export type SpaceMember = {
+	id: number;
+	user_id: number;
+	role: string;
+	joined_at: string;
+	user?: {
+		id: number;
+		email: string;
+		name: string;
+		avatar_url: string;
+		color: string;
+	};
+};
+
 export type UploadProgressCallback = (loaded: number, total: number) => void;
 
 type ApiErrorPayload = {
@@ -471,6 +495,54 @@ export const backend = {
 
 	syncProfile(token: string) {
 		return apiFetch<{ synced: boolean }>('/auth/sync-profile', { method: 'POST' }, token);
+	},
+
+	listSpaces(token: string) {
+		return apiFetch<{ spaces: Space[] }>('/spaces', {}, token);
+	},
+
+	createSpace(token: string, data: { name: string; description?: string }) {
+		return apiFetch<Space>('/spaces', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	getSpace(token: string, id: number) {
+		return apiFetch<Space>(`/spaces/${id}`, {}, token);
+	},
+
+	updateSpace(token: string, id: number, data: { name?: string; description?: string }) {
+		return apiFetch<Space>(`/spaces/${id}`, {
+			method: 'PUT',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	deleteSpace(token: string, id: number) {
+		return apiFetch<{ deleted: boolean }>(`/spaces/${id}`, { method: 'DELETE' }, token);
+	},
+
+	listSpaceMembers(token: string, spaceId: number) {
+		return apiFetch<{ members: SpaceMember[] }>(`/spaces/${spaceId}/members`, {}, token);
+	},
+
+	addSpaceMember(token: string, spaceId: number, data: { user_id: number; role?: string }) {
+		return apiFetch<SpaceMember>(`/spaces/${spaceId}/members`, {
+			method: 'POST',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	updateSpaceMember(token: string, spaceId: number, memberId: number, data: { role: string }) {
+		return apiFetch<SpaceMember>(`/spaces/${spaceId}/members/${memberId}`, {
+			method: 'PUT',
+			body: JSON.stringify(data)
+		}, token);
+	},
+
+	removeSpaceMember(token: string, spaceId: number, memberId: number) {
+		return apiFetch<{ deleted: boolean }>(`/spaces/${spaceId}/members/${memberId}`, { method: 'DELETE' }, token);
 	},
 
 	listActivity(token: string, params?: { page?: number; per_page?: number; event_type?: string; resource_type?: string }) {

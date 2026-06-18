@@ -16,6 +16,8 @@ func Migrate(db *gorm.DB) error {
 		&User{},
 		&Session{},
 		&ApiToken{},
+		&Space{},
+		&SpaceMember{},
 		&File{},
 		&Folder{},
 		&Share{},

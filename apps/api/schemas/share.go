@@ -8,12 +8,14 @@ type Share struct {
 	FileID     *int64     `json:"file_id" gorm:"index"`
 	FolderID   *int64     `json:"folder_id" gorm:"index"`
 	SharedBy   int64      `json:"shared_by" gorm:"not null"`
+	SpaceID    *int64     `json:"space_id" gorm:"index"`
 	Permission string     `json:"permission" gorm:"not null;default:'view'"`
 	ExpiresAt  *time.Time `json:"expires_at"`
 	CreatedAt  time.Time  `json:"created_at"`
 	File       *File      `json:"file,omitempty" gorm:"foreignKey:FileID"`
 	Folder     *Folder    `json:"folder,omitempty" gorm:"foreignKey:FolderID"`
 	Owner      User       `json:"owner,omitempty" gorm:"foreignKey:SharedBy"`
+	Space      *Space     `json:"space,omitempty" gorm:"foreignKey:SpaceID"`
 }
 
 func (Share) TableName() string { return "shares" }

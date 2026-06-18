@@ -4,8 +4,10 @@
 	import { page } from '$app/state';
 	import { backend, type UserProfile, type QuotaResponse } from '$lib/backend';
 	import { undoLast, hasPending } from '$lib/undo.svelte';
+	import { getSpaceStore } from '$lib/space.svelte';
 	import UndoToast from '$lib/components/UndoToast.svelte';
 	import MobileNav from '$lib/components/MobileNav.svelte';
+	import SpaceSwitcher from '$lib/components/SpaceSwitcher.svelte';
 
 	let { children } = $props();
 
@@ -29,9 +31,13 @@
 		}
 	}
 
+	const spaceStore = getSpaceStore();
+
 	setContext('app', {
 		get token() { return token; },
 		get user() { return user; },
+		get space() { return spaceStore.current; },
+		get spaceId() { return spaceStore.id; },
 		setUser,
 		refreshQuota
 	});
@@ -105,6 +111,7 @@
 		{ href: '/shared', label: 'Shared links', icon: 'solar:share-linear', disabled: false },
 		{ href: '/trash', label: 'Trash', icon: 'solar:trash-bin-2-linear', disabled: false },
 		{ href: '/activity', label: 'Activity', icon: 'solar:history-linear', disabled: false },
+		{ href: '/spaces', label: 'Spaces', icon: 'solar:users-group-rounded-linear', disabled: false },
 		{ href: '/settings', label: 'Settings', icon: 'solar:settings-linear', disabled: false }
 	];
 </script>
@@ -112,10 +119,12 @@
 {#if loaded}
 	<div class="flex h-[100dvh] w-full overflow-hidden">
 		<aside class="sticky top-0 hidden h-[100dvh] w-60 flex-col border-r bg-background md:flex">
-			<div class="flex items-center gap-3 px-5 pt-8 pb-6">
+			<div class="flex items-center gap-3 px-5 pt-8 pb-4">
 				<iconify-icon icon="solar:cloud-bold-duotone" width="28" class="text-foreground"></iconify-icon>
 				<span class="text-2xl font-bold font-heading tracking-tight">Nuage</span>
 			</div>
+
+			<SpaceSwitcher {token} />
 
 			<nav class="flex flex-1 flex-col gap-1 px-3">
 				{#each navLinks as link}

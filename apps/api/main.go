@@ -28,6 +28,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/search"
 	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sharing"
+	"github.com/FacileStudio/Nuage/apps/api/modules/spaces"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sync"
 	"github.com/FacileStudio/Nuage/apps/api/modules/trash"
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
@@ -113,6 +114,7 @@ func main() {
 	sharingService := sharing.NewService(db, notifier, actLogger)
 	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
+	spacesService := spaces.NewService(db)
 	activityService := activitymod.NewService(db)
 
 	router := chi.NewRouter()
@@ -153,6 +155,7 @@ func main() {
 	sync.RegisterRoutes(router, syncService, authService)
 	quota.RegisterRoutes(router, quotaService, authService)
 	search.RegisterRoutes(router, searchService, authService)
+	spaces.RegisterRoutes(router, spacesService, authService)
 	activitymod.RegisterRoutes(router, activityService, authService)
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, appLogger)
 

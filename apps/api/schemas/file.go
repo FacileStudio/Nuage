@@ -14,11 +14,13 @@ type File struct {
 	OriginApp  string     `json:"origin_app"`
 	LinkedTo   string     `json:"linked_to" gorm:"index"`
 	UploadedBy int64      `json:"uploaded_by" gorm:"not null"`
+	SpaceID    *int64     `json:"space_id" gorm:"index"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 	DeletedAt  *time.Time `json:"deleted_at" gorm:"index"`
 	Folder     *Folder    `json:"folder,omitempty" gorm:"foreignKey:FolderID"`
 	User       User       `json:"user,omitempty" gorm:"foreignKey:UploadedBy"`
+	Space      *Space     `json:"space,omitempty" gorm:"foreignKey:SpaceID"`
 }
 
 func (File) TableName() string { return "files" }
