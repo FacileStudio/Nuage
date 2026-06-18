@@ -95,7 +95,7 @@ func setupTestServer(t *testing.T) *testServer {
 
 	notifier := nook.NewNotifier(db)
 	actLogger := activity.NewLogger(db)
-	authService := auth.NewService(db)
+	authService := auth.NewService(db, notifier, t.TempDir(), slog.Default())
 	userService := users.NewService(db, t.TempDir())
 	quotaService := quota.NewService(db)
 	presignSecret := presign.DeriveSecret("test-secret", "nuage-presign-v1")
@@ -103,7 +103,7 @@ func setupTestServer(t *testing.T) *testServer {
 	trashService := trash.NewService(db, storageClient, actLogger, quotaService)
 	syncService := sync.NewService(db)
 	sharingService := sharing.NewService(db, notifier, actLogger)
-	settingsService := settings.NewService(db)
+	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
 	activityService := activitymod.NewService(db)
 

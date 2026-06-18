@@ -174,10 +174,10 @@
 				{#each grouped as group}
 					<div class="mb-6">
 						<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.heading}</h2>
-						<div class="relative border-l-2 border-border pl-6">
+						<div class="relative pl-8">
 							{#each group.items as entry}
 								<div class="relative mb-4 last:mb-0">
-									<div class="absolute top-3 -left-[25px] -translate-x-1/2 flex h-5 w-5 items-center justify-center rounded-full {eventColor(entry.event_type)}">
+									<div class="absolute top-3 left-0 flex h-5 w-5 items-center justify-center rounded-full {eventColor(entry.event_type)}">
 										<iconify-icon icon={eventIcon(entry.event_type)} width="12"></iconify-icon>
 									</div>
 									<div class="rounded-lg border border-border/60 bg-background p-3 transition-colors hover:bg-muted/30">
