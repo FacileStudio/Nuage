@@ -86,6 +86,15 @@ func parseListParams(r *http.Request) ListParams {
 		}
 	}
 
+	if raw := q.Get("space_id"); raw != "" {
+		params.HasSpace = true
+		if raw != "null" {
+			if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
+				params.SpaceID = &id
+			}
+		}
+	}
+
 	return params
 }
 

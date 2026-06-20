@@ -1,22 +1,26 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { getContext } from 'svelte';
 	import { backend, type Share } from '$lib/backend';
+	import { getSpaceStore } from '$lib/space.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
+	const spaceStore = getSpaceStore();
 
 	let shares = $state<Share[]>([]);
 	let loading = $state(true);
 	let revoking = $state<number | null>(null);
 	let copiedId = $state<number | null>(null);
 
-	onMount(async () => {
-		await loadShares();
+	$effect(() => {
+		const _spaceId = spaceStore.id;
+		loadShares();
 	});
 
 	async function loadShares() {
 		loading = true;
 		try {
-			const res = await backend.listMyShares(app.token);
+			const sid = spaceStore.id;
+			const res = await backend.listMyShares(app.token, { space_id: sid });
 			shares = res.shares ?? [];
 		} catch {
 			shares = [];

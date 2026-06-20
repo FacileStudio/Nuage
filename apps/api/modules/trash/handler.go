@@ -32,7 +32,18 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := h.service.listTrash(r.Context(), userID)
+	var spaceID *int64
+	hasSpace := false
+	if raw := r.URL.Query().Get("space_id"); raw != "" {
+		hasSpace = true
+		if raw != "null" {
+			if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
+				spaceID = &id
+			}
+		}
+	}
+
+	items, err := h.service.listTrash(r.Context(), userID, hasSpace, spaceID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { getContext } from 'svelte';
 	import { backend, type ActivityEntry } from '$lib/backend';
+	import { getSpaceStore } from '$lib/space.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
+	const spaceStore = getSpaceStore();
 
 	let activities = $state<ActivityEntry[]>([]);
 	let loading = $state(true);
@@ -13,14 +15,16 @@
 
 	let hasMore = $derived(activities.length < total);
 
-	onMount(async () => {
-		await loadActivity();
+	$effect(() => {
+		const _spaceId = spaceStore.id;
+		loadActivity();
 	});
 
 	async function loadActivity() {
 		loading = true;
 		try {
-			const res = await backend.listActivity(app.token, { page: 1, per_page: perPage });
+			const sid = spaceStore.id;
+			const res = await backend.listActivity(app.token, { page: 1, per_page: perPage, space_id: sid });
 			activities = res.activities ?? [];
 			total = res.total;
 			currentPage = 1;
@@ -36,7 +40,8 @@
 		loadingMore = true;
 		try {
 			const nextPage = currentPage + 1;
-			const res = await backend.listActivity(app.token, { page: nextPage, per_page: perPage });
+			const sid = spaceStore.id;
+			const res = await backend.listActivity(app.token, { page: nextPage, per_page: perPage, space_id: sid });
 			activities = [...activities, ...(res.activities ?? [])];
 			total = res.total;
 			currentPage = nextPage;

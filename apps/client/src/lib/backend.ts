@@ -309,8 +309,13 @@ export const backend = {
 		return apiFetch<{ deleted: boolean }>(`/folders/${id}`, { method: 'DELETE' }, token);
 	},
 
-	listTrash(token: string) {
-		return apiFetch<TrashResponse>('/trash', {}, token);
+	listTrash(token: string, params?: { space_id?: number | null }) {
+		const qs = new URLSearchParams();
+		if (params?.space_id !== undefined) {
+			qs.set('space_id', params.space_id === null ? 'null' : String(params.space_id));
+		}
+		const query = qs.size ? `?${qs}` : '';
+		return apiFetch<TrashResponse>(`/trash${query}`, {}, token);
 	},
 
 	restoreItem(token: string, type: 'file' | 'folder', id: number) {
@@ -332,8 +337,13 @@ export const backend = {
 		}, token);
 	},
 
-	listMyShares(token: string) {
-		return apiFetch<{ shares: Share[] }>('/shares/by-me', {}, token);
+	listMyShares(token: string, params?: { space_id?: number | null }) {
+		const qs = new URLSearchParams();
+		if (params?.space_id !== undefined) {
+			qs.set('space_id', params.space_id === null ? 'null' : String(params.space_id));
+		}
+		const query = qs.size ? `?${qs}` : '';
+		return apiFetch<{ shares: Share[] }>(`/shares/by-me${query}`, {}, token);
 	},
 
 	deleteShare(token: string, id: number) {
@@ -547,12 +557,15 @@ export const backend = {
 		return apiFetch<{ deleted: boolean }>(`/spaces/${spaceId}/members/${memberId}`, { method: 'DELETE' }, token);
 	},
 
-	listActivity(token: string, params?: { page?: number; per_page?: number; event_type?: string; resource_type?: string }) {
+	listActivity(token: string, params?: { page?: number; per_page?: number; event_type?: string; resource_type?: string; space_id?: number | null }) {
 		const qs = new URLSearchParams();
 		if (params?.page != null) qs.set('page', String(params.page));
 		if (params?.per_page != null) qs.set('per_page', String(params.per_page));
 		if (params?.event_type) qs.set('event_type', params.event_type);
 		if (params?.resource_type) qs.set('resource_type', params.resource_type);
+		if (params?.space_id !== undefined) {
+			qs.set('space_id', params.space_id === null ? 'null' : String(params.space_id));
+		}
 		const query = qs.size ? `?${qs}` : '';
 		return apiFetch<ActivityListResponse>(`/activity/me${query}`, {}, token);
 	}

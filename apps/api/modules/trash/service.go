@@ -26,14 +26,27 @@ func NewService(orm *gorm.DB, storageClient *storage.Client, actLogger *activity
 	return &Service{orm: orm, storage: storageClient, activity: actLogger, quota: quotaService}
 }
 
-func (s *Service) listTrash(ctx context.Context, userID int64) ([]TrashItem, error) {
+func (s *Service) listTrash(ctx context.Context, userID int64, hasSpace bool, spaceID *int64) ([]TrashItem, error) {
+	fileQuery := s.orm.WithContext(ctx).Where("uploaded_by = ? AND deleted_at IS NOT NULL", userID)
+	folderQuery := s.orm.WithContext(ctx).Where("owner_id = ? AND deleted_at IS NOT NULL", userID)
+
+	if hasSpace {
+		if spaceID != nil {
+			fileQuery = fileQuery.Where("space_id = ?", *spaceID)
+			folderQuery = folderQuery.Where("space_id = ?", *spaceID)
+		} else {
+			fileQuery = fileQuery.Where("space_id IS NULL")
+			folderQuery = folderQuery.Where("space_id IS NULL")
+		}
+	}
+
 	var files []schemas.File
-	if err := s.orm.WithContext(ctx).Where("uploaded_by = ? AND deleted_at IS NOT NULL", userID).Order("deleted_at desc").Find(&files).Error; err != nil {
+	if err := fileQuery.Order("deleted_at desc").Find(&files).Error; err != nil {
 		return nil, errors.Internal("failed to list trashed files", err)
 	}
 
 	var folders []schemas.Folder
-	if err := s.orm.WithContext(ctx).Where("owner_id = ? AND deleted_at IS NOT NULL", userID).Order("deleted_at desc").Find(&folders).Error; err != nil {
+	if err := folderQuery.Order("deleted_at desc").Find(&folders).Error; err != nil {
 		return nil, errors.Internal("failed to list trashed folders", err)
 	}
 

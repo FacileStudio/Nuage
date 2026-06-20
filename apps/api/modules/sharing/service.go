@@ -89,13 +89,21 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 	return record, nil
 }
 
-func (s *Service) listSharedByMe(ctx context.Context, userID int64) ([]schemas.Share, error) {
-	var records []schemas.Share
-	if err := s.orm.WithContext(ctx).
+func (s *Service) listSharedByMe(ctx context.Context, userID int64, hasSpace bool, spaceID *int64) ([]schemas.Share, error) {
+	query := s.orm.WithContext(ctx).
 		Preload("File").Preload("Folder").
-		Where("shared_by = ?", userID).
-		Order("created_at desc").
-		Find(&records).Error; err != nil {
+		Where("shared_by = ?", userID)
+
+	if hasSpace {
+		if spaceID != nil {
+			query = query.Where("space_id = ?", *spaceID)
+		} else {
+			query = query.Where("space_id IS NULL")
+		}
+	}
+
+	var records []schemas.Share
+	if err := query.Order("created_at desc").Find(&records).Error; err != nil {
 		return nil, errors.Internal("failed to list shares", err)
 	}
 	return records, nil

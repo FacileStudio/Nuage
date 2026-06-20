@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { getContext } from 'svelte';
 	import { backend, type TrashItem } from '$lib/backend';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { getSpaceStore } from '$lib/space.svelte';
 
 	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
+	const spaceStore = getSpaceStore();
 
 	let items = $state<TrashItem[]>([]);
 	let loading = $state(true);
@@ -12,14 +14,16 @@
 	let showDeleteConfirm = $state(false);
 	let deleteTarget = $state<TrashItem | null>(null);
 
-	onMount(async () => {
-		await loadTrash();
+	$effect(() => {
+		const _spaceId = spaceStore.id;
+		loadTrash();
 	});
 
 	async function loadTrash() {
 		loading = true;
 		try {
-			const res = await backend.listTrash(app.token);
+			const sid = spaceStore.id;
+			const res = await backend.listTrash(app.token, { space_id: sid });
 			items = res.items ?? [];
 		} catch {
 			items = [];

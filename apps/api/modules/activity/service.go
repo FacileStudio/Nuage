@@ -23,6 +23,8 @@ type ListParams struct {
 	EventType    string
 	ResourceType string
 	ResourceID   *int64
+	SpaceID      *int64
+	HasSpace     bool
 	Page         int
 	PerPage      int
 }
@@ -48,6 +50,23 @@ func (s *Service) List(ctx context.Context, params ListParams) ([]schemas.Activi
 	}
 	if params.ResourceID != nil {
 		query = query.Where("resource_id = ?", *params.ResourceID)
+	}
+
+	if params.HasSpace {
+		if params.SpaceID != nil {
+			query = query.Where(
+				"(resource_type = 'file' AND resource_id IN (SELECT id FROM files WHERE space_id = ?)) OR "+
+					"(resource_type = 'folder' AND resource_id IN (SELECT id FROM folders WHERE space_id = ?)) OR "+
+					"(resource_type = 'share' AND resource_id IN (SELECT id FROM shares WHERE space_id = ?))",
+				*params.SpaceID, *params.SpaceID, *params.SpaceID,
+			)
+		} else {
+			query = query.Where(
+				"(resource_type = 'file' AND resource_id IN (SELECT id FROM files WHERE space_id IS NULL)) OR "+
+					"(resource_type = 'folder' AND resource_id IN (SELECT id FROM folders WHERE space_id IS NULL)) OR "+
+					"(resource_type = 'share' AND resource_id IN (SELECT id FROM shares WHERE space_id IS NULL))",
+			)
+		}
 	}
 
 	var total int64
