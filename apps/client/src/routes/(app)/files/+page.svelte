@@ -315,9 +315,10 @@
 		if (!shareTarget) return;
 		shareLoading = true;
 		try {
-			const data: { file_id?: number; folder_id?: number; permission?: string; expires_at?: string } = {};
+			const data: { file_id?: number; folder_id?: number; permission?: string; expires_at?: string; space_id?: number | null } = {};
 			if (shareTarget.type === 'file') data.file_id = (shareTarget.item as NuageFile).id;
 			else data.folder_id = (shareTarget.item as Folder).id;
+			if (spaceStore.id != null) data.space_id = spaceStore.id;
 
 			if (shareExpiration !== 'none') {
 				const now = new Date();
@@ -523,6 +524,7 @@
 		const formData = new FormData();
 		formData.set('file', file);
 		if (currentFolderId != null) formData.set('folder_id', String(currentFolderId));
+		if (spaceStore.id != null) formData.set('space_id', String(spaceStore.id));
 		await backend.uploadFileWithProgress(app.token, formData, (loaded) => {
 			uploadQueue[index].loaded = loaded;
 		});
@@ -536,7 +538,8 @@
 			file_name: file.name,
 			mime_type: file.type || 'application/octet-stream',
 			total_size: file.size,
-			folder_id: currentFolderId
+			folder_id: currentFolderId,
+			space_id: spaceStore.id
 		});
 
 		for (let part = 0; part < totalChunks; part++) {
@@ -556,7 +559,8 @@
 		try {
 			await backend.createFolder(app.token, {
 				name: newFolderName.trim(),
-				parent_id: currentFolderId
+				parent_id: currentFolderId,
+				space_id: spaceStore.id
 			});
 			newFolderName = '';
 			showNewFolderDialog = false;

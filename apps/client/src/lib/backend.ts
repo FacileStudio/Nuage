@@ -279,7 +279,7 @@ export const backend = {
 		}, token);
 	},
 
-	createFolder(token: string, data: { name: string; parent_id?: number | null }) {
+	createFolder(token: string, data: { name: string; parent_id?: number | null; space_id?: number | null }) {
 		return apiFetch<FolderResponse>('/folders', {
 			method: 'POST',
 			body: JSON.stringify(data)
@@ -330,7 +330,7 @@ export const backend = {
 		return apiFetch<{ deleted: number }>('/trash', { method: 'DELETE' }, token);
 	},
 
-	createShare(token: string, data: { file_id?: number; folder_id?: number; permission?: string; expires_at?: string }) {
+	createShare(token: string, data: { file_id?: number; folder_id?: number; permission?: string; expires_at?: string; space_id?: number | null }) {
 		return apiFetch<Share>('/shares', {
 			method: 'POST',
 			body: JSON.stringify(data)
@@ -447,7 +447,7 @@ export const backend = {
 		});
 	},
 
-	initUpload(token: string, data: { file_name: string; mime_type: string; total_size: number; folder_id?: number | null }) {
+	initUpload(token: string, data: { file_name: string; mime_type: string; total_size: number; folder_id?: number | null; space_id?: number | null }) {
 		return apiFetch<InitUploadResponse>('/files/upload/init', {
 			method: 'POST',
 			body: JSON.stringify(data)

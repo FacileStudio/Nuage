@@ -52,6 +52,7 @@ type FolderListResponse struct {
 type CreateFolderRequest struct {
 	Name     string `json:"name"`
 	ParentID *int64 `json:"parent_id"`
+	SpaceID  *int64 `json:"space_id"`
 }
 
 type UpdateFolderRequest struct {

@@ -93,7 +93,7 @@ func (s *Service) deduplicateFolderName(ctx context.Context, name string, parent
 	}
 }
 
-func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string) (*schemas.File, error) {
+func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string, spaceID *int64) (*schemas.File, error) {
 	if folderID != nil {
 		var folder schemas.Folder
 		if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *folderID, userID).First(&folder).Error; err != nil {
@@ -149,6 +149,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		FolderID:   folderID,
 		OriginApp:  originApp,
 		UploadedBy: userID,
+		SpaceID:    spaceID,
 	}
 
 	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {
@@ -327,7 +328,7 @@ func (s *Service) linkFile(ctx context.Context, userID int64, fileID string, lin
 	return &record, nil
 }
 
-func (s *Service) createFolder(ctx context.Context, userID int64, name string, parentID *int64) (*schemas.Folder, error) {
+func (s *Service) createFolder(ctx context.Context, userID int64, name string, parentID *int64, spaceID *int64) (*schemas.Folder, error) {
 	if parentID != nil {
 		var parent schemas.Folder
 		if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *parentID, userID).First(&parent).Error; err != nil {
@@ -344,6 +345,7 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 		Name:     name,
 		ParentID: parentID,
 		OwnerID:  userID,
+		SpaceID:  spaceID,
 	}
 	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {
 		return nil, errors.Internal("failed to create folder", err)

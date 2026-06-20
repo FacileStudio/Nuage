@@ -6,6 +6,7 @@ type InitUploadRequest struct {
 	TotalSize int64  `json:"total_size"`
 	FolderID  *int64 `json:"folder_id"`
 	OriginApp string `json:"origin_app"`
+	SpaceID   *int64 `json:"space_id"`
 }
 
 type InitUploadResponse struct {

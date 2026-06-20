@@ -52,6 +52,7 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 		FileID:     req.FileID,
 		FolderID:   req.FolderID,
 		SharedBy:   userID,
+		SpaceID:    req.SpaceID,
 		Permission: permission,
 		ExpiresAt:  expiresAt,
 	}

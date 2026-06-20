@@ -42,6 +42,7 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 		OriginApp: req.OriginApp,
 		UserID:    userID,
 		TotalSize: req.TotalSize,
+		SpaceID:   req.SpaceID,
 		Status:    "pending",
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
@@ -156,6 +157,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		FolderID:   session.FolderID,
 		OriginApp:  session.OriginApp,
 		UploadedBy: userID,
+		SpaceID:    session.SpaceID,
 	}
 
 	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {

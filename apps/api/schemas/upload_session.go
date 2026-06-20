@@ -10,6 +10,7 @@ type UploadSession struct {
 	OriginApp string    `json:"origin_app"`
 	UserID    int64     `json:"user_id" gorm:"index;not null"`
 	TotalSize int64     `json:"total_size"`
+	SpaceID   *int64    `json:"space_id"`
 	Status    string    `json:"status" gorm:"not null;default:'pending'"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`

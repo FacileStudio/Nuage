@@ -68,7 +68,17 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 
 	originApp := r.FormValue("origin_app")
 
-	record, err := h.service.uploadFile(r.Context(), userID, name, mimeType, header.Size, file, folderID, originApp)
+	var spaceID *int64
+	if raw := r.FormValue("space_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			httpjson.WriteError(w, errors.Invalid("invalid space_id"))
+			return
+		}
+		spaceID = &id
+	}
+
+	record, err := h.service.uploadFile(r.Context(), userID, name, mimeType, header.Size, file, folderID, originApp, spaceID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
@@ -366,7 +376,7 @@ func (h *Handler) createFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := h.service.createFolder(r.Context(), userID, name, req.ParentID)
+	record, err := h.service.createFolder(r.Context(), userID, name, req.ParentID, req.SpaceID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

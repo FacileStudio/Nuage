@@ -5,6 +5,7 @@ type CreateShareRequest struct {
 	FolderID   *int64  `json:"folder_id"`
 	Permission string  `json:"permission"`
 	ExpiresAt  *string `json:"expires_at"`
+	SpaceID    *int64  `json:"space_id"`
 }
 
 type ShareResponse struct {
