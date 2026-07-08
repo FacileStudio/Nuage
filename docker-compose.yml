@@ -85,6 +85,8 @@ services:
       MINIO_BUCKET: nuage
       MINIO_USE_SSL: "false"
       PRESIGN_SECRET: ${PRESIGN_SECRET:-}
+      JOURNAL_URL: ${JOURNAL_URL:-}
+      JOURNAL_TOKEN: ${JOURNAL_TOKEN:-}
     volumes:
       - api_data:/app/data
     healthcheck:

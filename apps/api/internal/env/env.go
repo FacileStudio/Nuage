@@ -33,6 +33,8 @@ type Config struct {
 	MinIO          MinIOConfig
 	AllowedOrigins []string
 	PresignSecret  string
+	JournalURL     string
+	JournalToken   string
 }
 
 func Load() (Config, error) {
@@ -78,6 +80,8 @@ func Load() (Config, error) {
 	}
 
 	env.PresignSecret = os.Getenv("PRESIGN_SECRET")
+	env.JournalURL = os.Getenv("JOURNAL_URL")
+	env.JournalToken = os.Getenv("JOURNAL_TOKEN")
 
 	if origins := os.Getenv("ALLOWED_ORIGINS"); origins != "" {
 		env.AllowedOrigins = strings.Split(origins, ",")

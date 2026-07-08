@@ -14,11 +14,11 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
-	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
 	"github.com/FacileStudio/Nuage/apps/api/internal/logger"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
@@ -35,6 +35,7 @@ import (
 	nuagewebdav "github.com/FacileStudio/Nuage/apps/api/modules/webdav"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
+	"github.com/FacileStudio/Journal/sdk/journal"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
@@ -48,6 +49,12 @@ func main() {
 		return
 	}
 	appLogger = logger.New(appEnv.LogLevel)
+
+	if appEnv.JournalURL != "" && appEnv.JournalToken != "" {
+		journalClient := journal.New(journal.Config{URL: appEnv.JournalURL, Token: appEnv.JournalToken})
+		defer journalClient.Close()
+		appLogger = slog.New(journal.NewHandler(journalClient, appLogger.Handler()))
+	}
 
 	db, err := database.Open(appEnv.DatabaseURL)
 	if err != nil {

@@ -3,8 +3,10 @@ module github.com/FacileStudio/Nuage/apps/api
 go 1.24.0
 
 require (
+	github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/go-chi/chi/v5 v5.2.3
+	github.com/go-chi/httprate v0.15.0
 	github.com/minio/minio-go/v7 v7.0.82
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.42.0
@@ -17,7 +19,6 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/go-chi/httprate v0.15.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.2 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
