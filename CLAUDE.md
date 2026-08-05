@@ -128,12 +128,12 @@ credentials.
 - GORM models live in `apps/api/schemas/` with auto-migration in `schemas/migrate.go`.
 - The client uses Svelte 5 runes (`$state`, `$props`, `$derived`, `$effect`) with TypeScript enabled.
 - All API calls from the client go through `src/lib/backend.ts`.
-- Environment variables: internal services (Postgres, MinIO) use hardcoded defaults inside Docker. Only external-facing vars (ALLOWED_ORIGINS, OIDC, LOG_LEVEL) need configuration.
+- Configuration is read through `tronc/env`: `Config` embeds `troncenv.Core`, so `DATABASE_URL`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` are required and the API exits 1 without them. `CORS_ALLOWED_ORIGINS` is the canonical origin list, with `ALLOWED_ORIGINS` and the other drifted names still read as fallbacks. `PRESIGN_SECRET` stays optional — unset, it is derived from `MINIO_SECRET_KEY`.
 
 ## Gotchas
 
 - The API Dockerfile context is the repo root (not `apps/api/`) because it copies from `apps/api/`. The client Dockerfile context is `apps/client/`.
 - Tests are integration tests that need real Postgres and MinIO running. There is no mock layer.
-- The client has `BODY_SIZE_LIMIT=Infinity` to support large file uploads via chunked transfer.
+- The client builds with `adapter-static` and is served by the Go binary, so there is no SvelteKit server and no `BODY_SIZE_LIMIT` to raise: upload size is bounded by the API and Traefik alone.
 - Rate limiting is set at 100 requests/minute per IP on the API.
 - Production routing uses Traefik labels in docker-compose.yml (Dokploy deployment on `nuage.facile.studio`). The `/api` prefix is stripped by Traefik before hitting the Go API.
