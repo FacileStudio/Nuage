@@ -34,11 +34,11 @@ type SpaceListResponse struct {
 }
 
 type MemberResponse struct {
-	ID       int64        `json:"id"`
-	UserID   int64        `json:"user_id"`
-	Role     string       `json:"role"`
-	JoinedAt string       `json:"joined_at"`
-	User     *MemberUser  `json:"user,omitempty"`
+	ID       int64       `json:"id"`
+	UserID   int64       `json:"user_id"`
+	Role     string      `json:"role"`
+	JoinedAt string      `json:"joined_at"`
+	User     *MemberUser `json:"user,omitempty"`
 }
 
 type MemberUser struct {

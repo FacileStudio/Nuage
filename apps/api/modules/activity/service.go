@@ -62,8 +62,8 @@ func (s *Service) List(ctx context.Context, params ListParams) ([]schemas.Activi
 			)
 		} else {
 			query = query.Where(
-				"(resource_type = 'file' AND resource_id IN (SELECT id FROM files WHERE space_id IS NULL)) OR "+
-					"(resource_type = 'folder' AND resource_id IN (SELECT id FROM folders WHERE space_id IS NULL)) OR "+
+				"(resource_type = 'file' AND resource_id IN (SELECT id FROM files WHERE space_id IS NULL)) OR " +
+					"(resource_type = 'folder' AND resource_id IN (SELECT id FROM folders WHERE space_id IS NULL)) OR " +
 					"(resource_type = 'share' AND resource_id IN (SELECT id FROM shares WHERE space_id IS NULL))",
 			)
 		}

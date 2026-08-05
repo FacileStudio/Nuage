@@ -24,10 +24,10 @@ type VirtualDir struct {
 	pos      int
 }
 
-func (d *VirtualDir) Read([]byte) (int, error)                  { return 0, os.ErrInvalid }
-func (d *VirtualDir) Write([]byte) (int, error)                 { return 0, os.ErrInvalid }
-func (d *VirtualDir) Seek(int64, int) (int64, error)            { return 0, os.ErrInvalid }
-func (d *VirtualDir) Close() error                              { return nil }
+func (d *VirtualDir) Read([]byte) (int, error)       { return 0, os.ErrInvalid }
+func (d *VirtualDir) Write([]byte) (int, error)      { return 0, os.ErrInvalid }
+func (d *VirtualDir) Seek(int64, int) (int64, error) { return 0, os.ErrInvalid }
+func (d *VirtualDir) Close() error                   { return nil }
 func (d *VirtualDir) Stat() (os.FileInfo, error) {
 	return &DirInfo{name: d.dirName, modTime: d.modTime}, nil
 }
@@ -199,12 +199,12 @@ type nuageFileInfo struct {
 	mimeType string
 }
 
-func (fi *nuageFileInfo) Name() string      { return fi.name }
-func (fi *nuageFileInfo) Size() int64       { return fi.size }
-func (fi *nuageFileInfo) Mode() os.FileMode { return 0644 }
+func (fi *nuageFileInfo) Name() string       { return fi.name }
+func (fi *nuageFileInfo) Size() int64        { return fi.size }
+func (fi *nuageFileInfo) Mode() os.FileMode  { return 0644 }
 func (fi *nuageFileInfo) ModTime() time.Time { return fi.modTime.UTC() }
-func (fi *nuageFileInfo) IsDir() bool       { return false }
-func (fi *nuageFileInfo) Sys() any          { return nil }
+func (fi *nuageFileInfo) IsDir() bool        { return false }
+func (fi *nuageFileInfo) Sys() any           { return nil }
 
 func (fi *nuageFileInfo) ContentType(_ context.Context) (string, error) {
 	if fi.mimeType != "" {
@@ -218,22 +218,22 @@ type DirInfo struct {
 	modTime time.Time
 }
 
-func (di *DirInfo) Name() string      { return di.name }
-func (di *DirInfo) Size() int64       { return 0 }
-func (di *DirInfo) Mode() os.FileMode { return os.ModeDir | 0755 }
+func (di *DirInfo) Name() string       { return di.name }
+func (di *DirInfo) Size() int64        { return 0 }
+func (di *DirInfo) Mode() os.FileMode  { return os.ModeDir | 0755 }
 func (di *DirInfo) ModTime() time.Time { return di.modTime.UTC() }
-func (di *DirInfo) IsDir() bool       { return true }
-func (di *DirInfo) Sys() any          { return nil }
+func (di *DirInfo) IsDir() bool        { return true }
+func (di *DirInfo) Sys() any           { return nil }
 
 type DevNullFile struct {
 	name string
 }
 
-func (d *DevNullFile) Read([]byte) (int, error)       { return 0, io.EOF }
-func (d *DevNullFile) Write(p []byte) (int, error)    { return len(p), nil }
-func (d *DevNullFile) Seek(int64, int) (int64, error) { return 0, nil }
+func (d *DevNullFile) Read([]byte) (int, error)           { return 0, io.EOF }
+func (d *DevNullFile) Write(p []byte) (int, error)        { return len(p), nil }
+func (d *DevNullFile) Seek(int64, int) (int64, error)     { return 0, nil }
 func (d *DevNullFile) Readdir(int) ([]os.FileInfo, error) { return nil, os.ErrInvalid }
-func (d *DevNullFile) Close() error                   { return nil }
+func (d *DevNullFile) Close() error                       { return nil }
 func (d *DevNullFile) Stat() (os.FileInfo, error) {
 	return &nuageFileInfo{name: d.name, size: 0, modTime: time.Now()}, nil
 }
