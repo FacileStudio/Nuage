@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
-	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/oidcavatar"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/tronc/errors"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"

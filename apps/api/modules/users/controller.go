@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
-	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
+	"github.com/FacileStudio/tronc/errors"
 )
 
 type Controller struct {

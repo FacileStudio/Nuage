@@ -15,7 +15,6 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
-	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
@@ -31,6 +30,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
 	nuagewebdav "github.com/FacileStudio/Nuage/apps/api/modules/webdav"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	troncmiddleware "github.com/FacileStudio/tronc/middleware"
 
 	"github.com/go-chi/chi/v5"
 	"gorm.io/driver/postgres"
@@ -109,7 +109,7 @@ func setupTestServer(t *testing.T) *testServer {
 
 	appEnv := env.Config{SSOOnly: false}
 	router := chi.NewRouter()
-	router.Use(middleware.CORS([]string{"*"}))
+	router.Use(troncmiddleware.CORS(troncmiddleware.CORSConfig{AllowedOrigins: []string{"*"}}))
 
 	auth.RegisterRoutes(router, authService, appEnv)
 	users.RegisterRoutes(router, userService, authService)

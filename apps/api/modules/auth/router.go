@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
-	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
 	mw "github.com/FacileStudio/Nuage/apps/api/internal/middleware"
+	"github.com/FacileStudio/tronc/httpjson"
 
 	"github.com/go-chi/chi/v5"
 )

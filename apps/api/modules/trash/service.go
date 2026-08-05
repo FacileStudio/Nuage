@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
-	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
 )
