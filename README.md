@@ -1,74 +1,104 @@
 # Nuage
 
-Cloud file storage for the Facile Suite.
+Self-hosted cloud file storage for the Facile Suite. Go API, SvelteKit client, PostgreSQL
+for metadata and MinIO for bytes.
 
-## Architecture
+Files live in spaces, are versioned on every reupload, survive deletion in a trash, and are
+reachable over WebDAV as well as the browser. Large uploads go through a resumable chunked
+session rather than a single request.
 
-Single public endpoint: the SvelteKit client handles all user traffic and proxies `/api/*` requests to the Go API internally. Postgres and MinIO are internal Docker services with hardcoded credentials — no configuration needed.
+Live at [nuage.facile.studio](https://nuage.facile.studio).
 
-```
-Internet → SvelteKit (:3000) → Go API (:4000) → Postgres / MinIO
-```
+## What it does
+
+- Uploads, downloads, renames, and organizes files in nested folders
+- Chunked resumable uploads for large files, with per-session status and abort
+- Keeps a version history per file and restores any earlier version
+- Soft-deletes to a trash with restore, permanent delete, and empty
+- Shares files or folders through public tokenized links with an optional expiry
+- Signs time-limited presigned download URLs for unauthenticated clients
+- Mounts the whole tree over WebDAV using an API token as the Basic auth password
+- Enforces per-user storage quotas, with an admin view and recalculation
+- Exposes an incremental sync feed with tombstones so offline clients converge
+- Records an activity log, emits events to Nook, and tees its logs to Journal
+- Email and password accounts plus optional OIDC SSO with an `SSO_ONLY` mode
 
 ## Stack
 
-- `apps/api`: Go, Chi, GORM, PostgreSQL, MinIO
-- `apps/client`: SvelteKit 5, Tailwind CSS 4, Bun
-- `docker-compose.yml`: PostgreSQL, MinIO, API, and client services
+| Layer | Tech |
+|---|---|
+| API | Go 1.24, Chi v5, GORM, PostgreSQL 16, MinIO, `go-oidc/v3`, Journal SDK |
+| Client | SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, `adapter-node`, Bun |
+| Storage | MinIO for file bytes, a local volume for avatars |
+| Deploy | Docker Compose, four services behind Traefik |
 
 ## Quick start
 
-### Docker
-
 ```sh
 cp .env.example .env
-docker compose up --build
+# set POSTGRES_PASSWORD, MINIO_SECRET_KEY, PRESIGN_SECRET (openssl rand -base64 36)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-Open `http://localhost:3000`.
+Then open <http://localhost:3000>. Compose refuses to start when a required secret is
+missing — there are no default credentials. Plain `docker compose up` is the production
+shape and publishes no host ports.
 
-Postgres and MinIO are internal services with fixed credentials — there is nothing to configure for them.
+The first account created is promoted to administrator on the next migration run.
 
 ### Local development
 
-1. Start PostgreSQL and MinIO:
+Start the backing services, then each half in its own terminal:
 
 ```sh
-docker compose up db minio -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up nuage-db nuage-minio -d
 ```
-
-2. Start the API:
 
 ```sh
-cd apps/api
-cp .env.example .env
-go run .
+cd apps/api && cp .env.example .env && go run .
 ```
-
-3. Start the client in another terminal:
 
 ```sh
-cd apps/client
-bun install
-bun run dev
+cd apps/client && bun install && bun run dev
 ```
 
-The client defaults to `http://localhost:5173` and talks to `http://localhost:4000`.
+The client serves on `5173` and proxies to the API on `4000`.
 
 ## Configuration
 
-Only external-facing variables need configuration. Internal services (Postgres, MinIO) use hardcoded defaults inside Docker.
+| Variable | What it does |
+|---|---|
+| `DATABASE_URL` | Postgres connection string |
+| `PRESIGN_SECRET` | Signing key for presigned download links; the API refuses to boot without it |
+| `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` | Object storage connection |
+| `STORAGE_DIR` | Local directory for avatars, mounted as a volume |
+| `ALLOWED_ORIGINS` | Comma-separated CORS origins |
+| `OIDC_ISSUER` | Enables OIDC; four companion variables become required with it |
+| `ORIGIN` | Public URL of the SvelteKit client, needed for its CSRF check |
 
-| Variable | Description | Default |
-|---|---|---|
-| `ORIGIN` | Public URL of the SvelteKit app (needed for CSRF) | `http://localhost:3000` |
-| `DOMAINS` | Allowed frontend origins for CORS | `http://localhost:3000` |
-| `LOG_LEVEL` | `debug`, `info`, `warn`, or `error` | `info` |
-| `OIDC_ISSUER` | OIDC provider issuer URL | — |
-| `OIDC_CLIENT_ID` | OIDC client ID | — |
-| `OIDC_CLIENT_SECRET` | OIDC client secret | — |
-| `OIDC_REDIRECT_URL` | OIDC callback URL (e.g. `https://nuage.example.com/api/auth/oidc/callback`) | — |
-| `OIDC_SUCCESS_URL` | Post-login redirect | — |
-| `SSO_ONLY` | Hide password login | `false` |
+Full reference: [docs/configuration.md](docs/configuration.md).
 
-See [`.env.example`](.env.example) for a production-ready template.
+## Structure
+
+```
+apps/
+  api/       Go backend — modules/ (auth, files, sharing, sync, webdav, ...),
+             schemas/ (GORM models and migrations), internal/, tests/ (integration)
+  client/    SvelteKit frontend, also a reverse proxy for /api/*
+docs/        Architecture, configuration, development, deployment, API
+```
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [Architecture](docs/architecture.md) | Request flow, data model, how the pieces fit |
+| [Configuration](docs/configuration.md) | Every environment variable and default |
+| [Development](docs/development.md) | Local setup, tests, the quality gate |
+| [Deployment](docs/deployment.md) | Docker Compose, Dokploy, Traefik routing |
+| [API](docs/api.md) | HTTP endpoints and payloads |
+
+---
+
+Part of the [Facile Suite](https://facile.studio) — self-hosted tools for creative studios
+and freelancers. One login, zero cloud dependency.
