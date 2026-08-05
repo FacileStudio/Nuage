@@ -1,5 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { STRIPPED_REQUEST_HEADERS, proxyResponseHeaders } from '$lib/server/proxy';
 
 const API_URL = env.API_URL || 'http://localhost:4000';
 
@@ -8,8 +9,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const target = `${API_URL}${event.url.pathname}${event.url.search}`;
 
 		const headers = new Headers(event.request.headers);
-		headers.delete('host');
-		headers.delete('connection');
+		for (const header of STRIPPED_REQUEST_HEADERS) {
+			headers.delete(header);
+		}
 
 		const init: RequestInit = {
 			method: event.request.method,
@@ -25,8 +27,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		const response = await fetch(target, init);
 
-		const responseHeaders = new Headers(response.headers);
-		responseHeaders.delete('transfer-encoding');
+		const responseHeaders = proxyResponseHeaders(response.headers);
 
 		return new Response(response.body, {
 			status: response.status,
