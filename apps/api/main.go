@@ -39,6 +39,8 @@ import (
 	"github.com/FacileStudio/tronc/httpx"
 	"github.com/FacileStudio/tronc/logger"
 	troncmiddleware "github.com/FacileStudio/tronc/middleware"
+	"github.com/FacileStudio/tronc/spa"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
 )
 
@@ -146,26 +148,37 @@ func main() {
 	router.Use(httprate.LimitByIP(100, time.Minute))
 
 	health.Mount(router, health.DB(sqlDB))
-	docs.RegisterRoutes(router)
 
-	avatarFS := http.StripPrefix("/avatars/", http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
-	router.Get("/avatars/*", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
-		avatarFS.ServeHTTP(w, r)
+	avatarFS := http.StripPrefix("/api/avatars/", http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
+
+	router.Route("/api", func(r chi.Router) {
+		docs.RegisterRoutes(r)
+
+		r.Get("/avatars/*", func(w http.ResponseWriter, request *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+			avatarFS.ServeHTTP(w, request)
+		})
+
+		auth.RegisterRoutes(r, authService, appEnv)
+		users.RegisterRoutes(r, userService, authService)
+		files.RegisterRoutes(r, fileService, authService)
+		trash.RegisterRoutes(r, trashService, authService)
+		sharing.RegisterRoutes(r, sharingService, authService, storageClient)
+		settings.RegisterRoutes(r, settingsService, authService)
+		sync.RegisterRoutes(r, syncService, authService)
+		quota.RegisterRoutes(r, quotaService, authService)
+		search.RegisterRoutes(r, searchService, authService)
+		spaces.RegisterRoutes(r, spacesService, authService)
+		activitymod.RegisterRoutes(r, activityService, authService)
 	})
 
-	auth.RegisterRoutes(router, authService, appEnv)
-	users.RegisterRoutes(router, userService, authService)
-	files.RegisterRoutes(router, fileService, authService)
-	trash.RegisterRoutes(router, trashService, authService)
-	sharing.RegisterRoutes(router, sharingService, authService, storageClient)
-	settings.RegisterRoutes(router, settingsService, authService)
-	sync.RegisterRoutes(router, syncService, authService)
-	quota.RegisterRoutes(router, quotaService, authService)
-	search.RegisterRoutes(router, searchService, authService)
-	spaces.RegisterRoutes(router, spacesService, authService)
-	activitymod.RegisterRoutes(router, activityService, authService)
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, appLogger)
+
+	clientDir := spa.DirFromEnv()
+	if spa.Available(clientDir) {
+		router.Handle("/*", spa.Handler(spa.Config{Dir: clientDir}))
+		appLogger.Info("serving client", slog.String("dir", clientDir))
+	}
 
 	addr := ":" + appEnv.Port
 	server := &http.Server{

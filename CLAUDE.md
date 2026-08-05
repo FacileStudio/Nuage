@@ -7,7 +7,7 @@ Cloud file storage for the Facile Suite. Self-hosted, Docker-deployed, with a Go
 | Layer | Tech |
 |-------|------|
 | API | Go 1.24, Chi router, GORM, PostgreSQL 16, MinIO (S3-compatible) |
-| Client | SvelteKit 5 (Svelte 5 runes), Tailwind CSS 4, Bun, adapter-node |
+| Client | SvelteKit 5 (Svelte 5 runes), Tailwind CSS 4, Bun, adapter-static |
 | Auth | Session cookies, OIDC/SSO (optional), API tokens |
 | Infra | Docker Compose, Traefik (production), Dokploy |
 | Tests | Go `testing` + `testify` (integration tests against real DB + MinIO) |
@@ -18,7 +18,7 @@ Cloud file storage for the Facile Suite. Self-hosted, Docker-deployed, with a Go
 
 ```sh
 cp .env.example .env
-docker compose up --build          # all services on localhost:3000
+docker compose up --build          # the whole app on localhost:4000
 ```
 
 ### Local Development
@@ -113,10 +113,14 @@ Nuage/
 ## Architecture
 
 ```
-Internet --> SvelteKit (:3000) --> Go API (:4000) --> PostgreSQL / MinIO
+Internet --> Go API (:4000, serves the SPA) --> PostgreSQL / MinIO
 ```
 
-The SvelteKit client is the only public endpoint. It reverse-proxies `/api/*` requests to the Go API internally. PostgreSQL and MinIO are internal Docker services with hardcoded credentials.
+One container. The Go binary registers the application modules under `/api`, WebDAV at
+`/webdav` (external clients such as Finder depend on that URL, so it must never move under
+`/api`), `/health` at the root, and mounts the built SvelteKit client last as the catch-all
+via tronc's `spa` package. PostgreSQL and MinIO are internal Docker services with hardcoded
+credentials.
 
 ## Conventions
 
@@ -124,7 +128,7 @@ The SvelteKit client is the only public endpoint. It reverse-proxies `/api/*` re
 - GORM models live in `apps/api/schemas/` with auto-migration in `schemas/migrate.go`.
 - The client uses Svelte 5 runes (`$state`, `$props`, `$derived`, `$effect`) with TypeScript enabled.
 - All API calls from the client go through `src/lib/backend.ts`.
-- Environment variables: internal services (Postgres, MinIO) use hardcoded defaults inside Docker. Only external-facing vars (ORIGIN, OIDC, LOG_LEVEL) need configuration.
+- Environment variables: internal services (Postgres, MinIO) use hardcoded defaults inside Docker. Only external-facing vars (ALLOWED_ORIGINS, OIDC, LOG_LEVEL) need configuration.
 
 ## Gotchas
 

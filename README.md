@@ -4,17 +4,20 @@ Cloud file storage for the Facile Suite.
 
 ## Architecture
 
-Single public endpoint: the SvelteKit client handles all user traffic and proxies `/api/*` requests to the Go API internally. Postgres and MinIO are internal Docker services with hardcoded credentials — no configuration needed.
+Single container, single public endpoint: the Go binary serves `/api/*`, `/webdav/*` and the
+static SvelteKit build. Postgres and MinIO are internal Docker services with hardcoded
+credentials — no configuration needed.
 
 ```
-Internet → SvelteKit (:3000) → Go API (:4000) → Postgres / MinIO
+Internet → Go API (:4000, serves the SPA) → Postgres / MinIO
 ```
 
 ## Stack
 
 - `apps/api`: Go, Chi, GORM, PostgreSQL, MinIO
-- `apps/client`: SvelteKit 5, Tailwind CSS 4, Bun
-- `docker-compose.yml`: PostgreSQL, MinIO, API, and client services
+- `apps/client`: SvelteKit 5, Tailwind CSS 4, Bun, adapter-static
+- `Dockerfile`: builds the client, then the API, into one image
+- `docker-compose.yml`: PostgreSQL, MinIO and the API service
 
 ## Quick start
 
@@ -25,7 +28,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:4000`.
 
 Postgres and MinIO are internal services with fixed credentials — there is nothing to configure for them.
 
@@ -53,7 +56,8 @@ bun install
 bun run dev
 ```
 
-The client defaults to `http://localhost:5173` and talks to `http://localhost:4000`.
+The client serves `http://localhost:5173` and the Vite dev server proxies `/api` and
+`/webdav` to the API on `http://localhost:4000`.
 
 ## Configuration
 
@@ -61,8 +65,7 @@ Only external-facing variables need configuration. Internal services (Postgres, 
 
 | Variable | Description | Default |
 |---|---|---|
-| `ORIGIN` | Public URL of the SvelteKit app (needed for CSRF) | `http://localhost:3000` |
-| `DOMAINS` | Allowed frontend origins for CORS | `http://localhost:3000` |
+| `ALLOWED_ORIGINS` | Allowed frontend origins for CORS | — |
 | `LOG_LEVEL` | `debug`, `info`, `warn`, or `error` | `info` |
 | `OIDC_ISSUER` | OIDC provider issuer URL | — |
 | `OIDC_CLIENT_ID` | OIDC client ID | — |
