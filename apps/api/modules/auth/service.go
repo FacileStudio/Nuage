@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
-	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/oidcavatar"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/tronc/errors"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -313,22 +313,22 @@ func (service *Service) SyncOIDCProfile(ctx context.Context, userID int64, provi
 	}
 
 	var claims struct {
-		Name             string `json:"name"`
+		Name              string `json:"name"`
 		PreferredUsername string `json:"preferred_username"`
-		GivenName        string `json:"given_name"`
-		FamilyName       string `json:"family_name"`
-		Picture          string `json:"picture"`
+		GivenName         string `json:"given_name"`
+		FamilyName        string `json:"family_name"`
+		Picture           string `json:"picture"`
 	}
 	if err := userInfo.Claims(&claims); err != nil {
 		return false, errors.Internal("failed to parse userinfo claims", err)
 	}
 
 	profile := oidcavatar.Profile{
-		Name:             claims.Name,
+		Name:              claims.Name,
 		PreferredUsername: claims.PreferredUsername,
-		GivenName:        claims.GivenName,
-		FamilyName:       claims.FamilyName,
-		Picture:          claims.Picture,
+		GivenName:         claims.GivenName,
+		FamilyName:        claims.FamilyName,
+		Picture:           claims.Picture,
 	}
 
 	changed := false

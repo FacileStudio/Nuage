@@ -17,11 +17,11 @@ import (
 const maxAvatarSize = 5 << 20
 
 type Profile struct {
-	Name             string
+	Name              string
 	PreferredUsername string
-	GivenName        string
-	FamilyName       string
-	Picture          string
+	GivenName         string
+	FamilyName        string
+	Picture           string
 }
 
 func (p Profile) DisplayName() string {

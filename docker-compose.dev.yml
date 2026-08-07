@@ -13,7 +13,3 @@ services:
   nuage-api:
     ports:
       - "127.0.0.1:4000:4000"
-
-  nuage-client:
-    ports:
-      - "127.0.0.1:3000:3000"

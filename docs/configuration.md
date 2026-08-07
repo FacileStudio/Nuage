@@ -67,18 +67,12 @@ while every line is discarded.
 
 ## Client
 
-The SvelteKit server reads very little, all through `$env/dynamic/private` or the
-`adapter-node` runtime.
+The client builds with `adapter-static` and is served by the API binary, so at runtime it
+reads nothing at all — there is no SvelteKit server, no `API_URL`, no `ORIGIN` and no
+`BODY_SIZE_LIMIT`. The browser always talks to same-origin `/api/*`.
 
-| Variable | Required | Default | What it does |
-|---|---|---|---|
-| `API_URL` | no | `http://localhost:4000` | Upstream for both the `/api/[...path]` proxy and the `/webdav` hook |
-| `ORIGIN` | no | `http://localhost:3000` | Public URL, set in the image. `adapter-node` needs it for its CSRF origin check |
-| `PORT` | no | `3000` | Listen port, set in the image |
-| `BODY_SIZE_LIMIT` | no | `2000000000` | `adapter-node` request body cap, set to 2 GB so large uploads survive the proxy |
-
-`API_URL` is a **server-side** variable. It is never exposed to the browser: the client
-always talks to same-origin `/api/*`, and either Traefik or the SvelteKit proxy resolves it.
+`CLIENT_DIR` tells the API where the built bundle lives; the image pins it, and tronc's
+`spa` package refuses to mount a directory that is not there rather than serving 404s.
 
 ## Compose substitutions
 

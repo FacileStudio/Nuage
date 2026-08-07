@@ -32,7 +32,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up nuage-db nuage
 ```
 
 The dev overlay is what publishes ports, all bound to `127.0.0.1`: `5432` for Postgres,
-`9000` and `9001` for MinIO, `4000` for the API, `3000` for the client.
+`9000` and `9001` for MinIO, `4000` for the API. There is no client port — the API serves
+the built client itself.
 
 Then the API:
 
@@ -53,8 +54,8 @@ bun install
 bun run dev
 ```
 
-Vite serves on `5173`. The API's `ALLOWED_ORIGINS` example already lists both `3000` and
-`5173` on `localhost` and `127.0.0.1`.
+Vite serves on `5173` and proxies `/api` and `/webdav` to the API on `4000`. The API's
+`ALLOWED_ORIGINS` example already lists `5173` on `localhost` and `127.0.0.1`.
 
 To run everything in containers instead:
 

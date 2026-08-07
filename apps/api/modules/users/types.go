@@ -19,11 +19,11 @@ type ListResponse struct {
 }
 
 type UpdateRequest struct {
-	Name     *string `json:"name"`
-	Email    *string `json:"email"`
+	Name            *string `json:"name"`
+	Email           *string `json:"email"`
 	Password        *string `json:"password"`
 	CurrentPassword *string `json:"current_password"`
-	Color    *string `json:"color"`
+	Color           *string `json:"color"`
 }
 
 type ApiTokenResponse struct {

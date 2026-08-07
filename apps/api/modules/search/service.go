@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
+	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
 )
@@ -19,14 +19,14 @@ func NewService(orm *gorm.DB) *Service {
 }
 
 type searchRow struct {
-	ID        int64   `gorm:"column:id"`
-	FacileID  string  `gorm:"column:facile_id"`
-	Name      string  `gorm:"column:name"`
-	Type      string  `gorm:"column:type"`
-	MimeType  *string `gorm:"column:mime_type"`
-	Size      int64   `gorm:"column:size"`
-	FolderID  *int64  `gorm:"column:folder_id"`
-	ParentID  *int64  `gorm:"column:parent_id"`
+	ID        int64     `gorm:"column:id"`
+	FacileID  string    `gorm:"column:facile_id"`
+	Name      string    `gorm:"column:name"`
+	Type      string    `gorm:"column:type"`
+	MimeType  *string   `gorm:"column:mime_type"`
+	Size      int64     `gorm:"column:size"`
+	FolderID  *int64    `gorm:"column:folder_id"`
+	ParentID  *int64    `gorm:"column:parent_id"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 

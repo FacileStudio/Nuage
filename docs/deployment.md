@@ -1,49 +1,37 @@
 # Nuage — Deployment
 
-How the two images are built, what Compose starts, and how Traefik splits one hostname
-across three routes.
+How the image is built, what Compose starts, and how Traefik maps one hostname to it.
 
-## Images
+## Image
 
-Nuage ships two images, not one.
+Nuage ships one image, built by the root `Dockerfile` with the repo root as context:
 
-**API** — `apps/api/Dockerfile`, context the repo root:
+1. `oven/bun:1` installs with `--frozen-lockfile` and builds the client with
+   `adapter-static`.
+2. `golang:1.25-alpine` downloads the module's dependencies, copies `apps/api`, and builds a
+   static binary with `CGO_ENABLED=0`.
+3. The runtime stage copies the binary and the built client, and runs on port `4000`.
 
-1. `golang:1.24.9-alpine` downloads the module's dependencies, copies `apps/api`, and builds
-   a static binary with `CGO_ENABLED=0`.
-2. `alpine:3.20` installs `wget` for the healthcheck, creates a `nuage` system user, copies
-   the binary to `/app/api`, creates `/app/data/avatars`, and runs as `nuage` on port `4000`.
-
-The runtime is Alpine rather than distroless because the container writes to `/app/data` and
-the compose healthcheck shells out to `wget`.
-
-**Client** — `apps/client/Dockerfile`, context `apps/client`:
-
-1. `oven/bun:1.3` installs with `--frozen-lockfile` and builds with `adapter-node`.
-2. `oven/bun:1.3-slim` copies `build/` and `package.json`, creates a `nuage` user, and runs
-   `bun ./build/index.js` with `PORT=3000`, `ORIGIN`, and `BODY_SIZE_LIMIT=2000000000`
-   baked in as defaults.
-
-The 2 GB body limit is what lets a large upload survive the SvelteKit proxy hop.
+There is no client image and no `BODY_SIZE_LIMIT`: with no SvelteKit server in the path,
+upload size is bounded by the API and Traefik alone. The healthcheck is the binary's own
+`healthcheck` subcommand, so the runtime needs no shell and no `wget`.
 
 ## Compose topology
 
 ```
-dokploy-network ──▶ nuage-client (:3000)  ──┐
-                └──▶ nuage-api    (:4000)  ─┤
-                                            ▼
-default network ──▶ nuage-db    (postgres:16.11-alpine, expose only)
-                └──▶ nuage-minio (RELEASE.2025-04-22T22-12-26Z, expose only)
+dokploy-network ──▶ nuage-api (:4000, serves the SPA)
+                                            │
+default network ──▶ nuage-db    (postgres:16-alpine, expose only)
+                └──▶ nuage-minio (expose only)
 ```
 
 | Service | Notes |
 |---|---|
 | `nuage-db` | Named volume `nuage_db_data`, `pg_isready` healthcheck |
 | `nuage-minio` | `server /data --console-address :9001`, volume `nuage_storage_data`, `/minio/health/live` healthcheck |
-| `nuage-api` | Volume `nuage_api_data` at `/app/data` for avatars, `wget` healthcheck on `/health`, waits on both backing services being healthy |
-| `nuage-client` | Healthcheck fetches `/` with `bun -e`, waits on the API being healthy |
+| `nuage-api` | Volume `nuage_api_data` at `/app/data` for avatars, `/api healthcheck` healthcheck, waits on both backing services being healthy |
 
-Both application services set `stop_grace_period: 60s`, which matters because the API's own
+The API sets `stop_grace_period: 60s`, which matters because its own
 shutdown budget is 45 seconds — a transfer in flight gets a chance to finish instead of
 being killed mid-stream.
 
@@ -53,29 +41,19 @@ floating ones. `docker-compose.dev.yml` is the only file that binds host ports, 
 
 ## Traefik
 
-One hostname, two services, three route groups:
+One hostname, one service. `Host(`nuage.facile.studio`)` goes to `nuage-svc`, with a `web`
+router redirecting to HTTPS through `redirect-to-https@file` and a `websecure` router with
+`tls.certresolver: letsencrypt`. A second pair of routers exists for
+``PathPrefix(`/webdav`)``, pointing at the same service — kept explicit because that prefix
+must never move under `/api`, and a named router makes that visible.
 
-| Rule | Target | Middleware |
-|---|---|---|
-| ``Host(`nuage.facile.studio`) && PathPrefix(`/api`)`` | `nuage-api-svc` | `nuage-strip-api` strips `/api` |
-| ``Host(`nuage.facile.studio`) && PathPrefix(`/webdav`)`` | `nuage-api-svc` | none — the Go handler owns the `/webdav` prefix |
-| ``Host(`nuage.facile.studio`)`` at `priority: 1` | `nuage-client-svc` | none |
+**No strip-prefix middleware.** `/api` is owned by the Go router, not by Traefik, so the
+API's routes are declared *with* the prefix and a local `curl` against port `4000` must
+include it. That also keeps the persisted `avatar_url` values — which carry `/api/` in the
+stored string — resolving unchanged across the move to one container.
 
-The catch-all sits at priority 1 so the two prefixed rules always win. Each group has a
-`web` router redirecting to HTTPS through `redirect-to-https@file` and a `websecure` router
-with `tls.certresolver: letsencrypt`.
-
-This is where Nuage diverges from the suite's one-container, one-router, one-hostname rule:
-two containers answer one hostname, and the `/api` prefix is a Traefik concern rather than
-part of the Go router. Two consequences follow. The API's own routes are declared without
-the prefix — `/auth/login`, not `/api/auth/login` — so any local `curl` against port `4000`
-must drop it. And `avatar_url` values are persisted with `/api/` already in them, so the
-public mount point is effectively part of the data. Consolidating to one container means
-either preserving the same public paths or migrating that column.
-
-Note that Traefik is not the only path to the API: the SvelteKit server proxies `/api/*` and
-`/webdav*` to `API_URL` itself, which is what makes a bare `docker compose up` work without
-an edge proxy in front.
+Because nothing is stripped and nothing is proxied, a bare `docker compose up` works with no
+edge proxy in front.
 
 ## Deploying on la ruche
 

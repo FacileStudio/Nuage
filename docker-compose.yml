@@ -1,11 +1,10 @@
 services:
   nuage-db:
     container_name: nuage-db
-    image: postgres:16.11-alpine
-    restart: unless-stopped
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nuage}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nuage-internal-db}
       POSTGRES_DB: ${POSTGRES_DB:-nuage}
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -19,12 +18,11 @@ services:
 
   nuage-minio:
     container_name: nuage-minio
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    restart: unless-stopped
+    image: minio/minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-nuage-minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-nuage-internal-storage}
     volumes:
       - storage_data:/data
     healthcheck:
@@ -40,10 +38,7 @@ services:
     container_name: nuage-api
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
-      network: host
-    restart: unless-stopped
-    stop_grace_period: 60s
+      dockerfile: Dockerfile
     expose:
       - "4000"
     networks:
@@ -52,27 +47,26 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: dokploy-network
-      traefik.http.routers.nuage-api-web.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/api`)"
-      traefik.http.routers.nuage-api-web.entrypoints: web
-      traefik.http.routers.nuage-api-web.middlewares: redirect-to-https@file
-      traefik.http.routers.nuage-api-web.service: nuage-api-svc
-      traefik.http.routers.nuage-api-secure.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/api`)"
-      traefik.http.routers.nuage-api-secure.entrypoints: websecure
-      traefik.http.routers.nuage-api-secure.tls.certresolver: letsencrypt
-      traefik.http.routers.nuage-api-secure.middlewares: nuage-strip-api
-      traefik.http.routers.nuage-api-secure.service: nuage-api-svc
+      traefik.http.routers.nuage-web.rule: "Host(`nuage.facile.studio`)"
+      traefik.http.routers.nuage-web.entrypoints: web
+      traefik.http.routers.nuage-web.middlewares: redirect-to-https@file
+      traefik.http.routers.nuage-web.service: nuage-svc
+      traefik.http.routers.nuage-secure.rule: "Host(`nuage.facile.studio`)"
+      traefik.http.routers.nuage-secure.entrypoints: websecure
+      traefik.http.routers.nuage-secure.tls.certresolver: letsencrypt
+      traefik.http.routers.nuage-secure.service: nuage-svc
       traefik.http.routers.nuage-webdav-web.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/webdav`)"
       traefik.http.routers.nuage-webdav-web.entrypoints: web
       traefik.http.routers.nuage-webdav-web.middlewares: redirect-to-https@file
-      traefik.http.routers.nuage-webdav-web.service: nuage-api-svc
+      traefik.http.routers.nuage-webdav-web.service: nuage-svc
       traefik.http.routers.nuage-webdav-secure.rule: "Host(`nuage.facile.studio`) && PathPrefix(`/webdav`)"
       traefik.http.routers.nuage-webdav-secure.entrypoints: websecure
       traefik.http.routers.nuage-webdav-secure.tls.certresolver: letsencrypt
-      traefik.http.routers.nuage-webdav-secure.service: nuage-api-svc
-      traefik.http.middlewares.nuage-strip-api.stripprefix.prefixes: /api
-      traefik.http.services.nuage-api-svc.loadbalancer.server.port: "4000"
+      traefik.http.routers.nuage-webdav-secure.service: nuage-svc
+      traefik.http.services.nuage-svc.loadbalancer.server.port: "4000"
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-nuage}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@nuage-db:5432/${POSTGRES_DB:-nuage}?sslmode=disable
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-nuage}:${POSTGRES_PASSWORD:-nuage-internal-db}@nuage-db:5432/${POSTGRES_DB:-nuage}?sslmode=disable
       PORT: "4000"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       STORAGE_DIR: /app/data
@@ -85,16 +79,16 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       MINIO_ENDPOINT: nuage-minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-nuage-minio}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-nuage-internal-storage}
       MINIO_BUCKET: nuage
       MINIO_USE_SSL: "false"
-      PRESIGN_SECRET: ${PRESIGN_SECRET:?set PRESIGN_SECRET in .env}
+      PRESIGN_SECRET: ${PRESIGN_SECRET:-}
       JOURNAL_URL: ${JOURNAL_URL:-}
       JOURNAL_TOKEN: ${JOURNAL_TOKEN:-}
     volumes:
       - api_data:/app/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      test: ["CMD", "/api", "healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -103,47 +97,6 @@ services:
       nuage-db:
         condition: service_healthy
       nuage-minio:
-        condition: service_healthy
-
-  nuage-client:
-    container_name: nuage-client
-    build:
-      context: apps/client
-      dockerfile: Dockerfile
-      network: host
-    restart: unless-stopped
-    stop_grace_period: 60s
-    expose:
-      - "3000"
-    networks:
-      - default
-      - dokploy-network
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: dokploy-network
-      traefik.http.routers.nuage-client-web.rule: "Host(`nuage.facile.studio`)"
-      traefik.http.routers.nuage-client-web.entrypoints: web
-      traefik.http.routers.nuage-client-web.priority: "1"
-      traefik.http.routers.nuage-client-web.middlewares: redirect-to-https@file
-      traefik.http.routers.nuage-client-web.service: nuage-client-svc
-      traefik.http.routers.nuage-client-secure.rule: "Host(`nuage.facile.studio`)"
-      traefik.http.routers.nuage-client-secure.entrypoints: websecure
-      traefik.http.routers.nuage-client-secure.priority: "1"
-      traefik.http.routers.nuage-client-secure.tls.certresolver: letsencrypt
-      traefik.http.routers.nuage-client-secure.service: nuage-client-svc
-      traefik.http.services.nuage-client-svc.loadbalancer.server.port: "3000"
-    environment:
-      API_URL: http://nuage-api:4000
-      ORIGIN: ${ORIGIN:-http://localhost:3000}
-      BODY_SIZE_LIMIT: "2000000000"
-    healthcheck:
-      test: ["CMD", "bun", "-e", "const res = await fetch('http://localhost:3000/'); if (!res.ok) process.exit(1)"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    depends_on:
-      nuage-api:
         condition: service_healthy
 
 networks:

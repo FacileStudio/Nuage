@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
-	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
 )

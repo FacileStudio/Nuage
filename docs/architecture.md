@@ -6,39 +6,29 @@ sharing, and WebDAV are built on top.
 ## Runtime topology
 
 ```
-                    ┌──▶ /api/*   ──strip /api──┐
-Internet ──▶ Traefik ┤   /webdav  ──────────────┼──▶ Go API (:4000) ──┬──▶ Postgres 16
-                    └──▶ everything else        │                    ├──▶ MinIO (bucket)
-                                                │                    └──▶ /app/data/avatars
-                              SvelteKit (:3000) ┘
-                                    │
-                                    └── /api/[...path] also proxies to the Go API
+                     ┌──▶ /api/*    ──┐
+Internet ──▶ Traefik ┤   /webdav/*  ──┼──▶ Go API (:4000) ──┬──▶ Postgres 16
+                     └──▶ everything ─┘   serves the SPA    ├──▶ MinIO (bucket)
+                                                            └──▶ /app/data/avatars
 ```
 
-Four containers, one hostname. Traefik routes `Host(nuage.facile.studio)` three ways:
-`PathPrefix(/api)` to the API with a strip-prefix middleware, `PathPrefix(/webdav)` to the
-API without one, and everything else to the SvelteKit server at priority 1. Postgres and
-MinIO are internal — they only `expose` their ports on the compose network.
+One container, one hostname. Traefik routes `Host(nuage.facile.studio)` to the API and
+nothing else; the Go binary owns `/api` inside its own router, serves `/webdav` at the root
+because external clients such as Finder depend on that URL, and mounts the built SvelteKit
+bundle last as the catch-all through tronc's `spa` package. Postgres and MinIO are internal —
+they only `expose` their ports on the compose network.
 
-Nuage predates the suite's one-container rule and is the visible exception to it: it runs a
-separate `adapter-node` SvelteKit server rather than serving a static build from the Go
-binary, and it uses `PathPrefix` plus a strip middleware rather than owning `/api` inside
-its own router.
-
-There are two routes from the browser to the API, and both work. Traefik answers `/api/*`
-directly, and the SvelteKit route `src/routes/api/[...path]/+server.ts` proxies the same
-paths server-side to `API_URL`, streaming request and response bodies, stripping hop-by-hop
-headers, and setting `X-Forwarded-Prefix: /api`. The proxy returns `502` when the API is
-unreachable and `499` when the client aborts. `src/hooks.server.ts` does the same for
-`/webdav` and `/webdav/*` before SvelteKit routing gets a chance to 404 them, so a WebDAV
-client pointed at the SvelteKit origin works even when Traefik is not in front.
+Nuage used to be the visible exception to the suite's one-container rule, running a separate
+`adapter-node` SvelteKit server and a strip-prefix middleware. That is gone: the client builds
+with `adapter-static`, there is no SvelteKit server, no `/api/[...path]` proxy and no
+`hooks.server.ts`. There is exactly one route from the browser to the API.
 
 ## Components
 
 | Component | Path | Role |
 |---|---|---|
 | API | `apps/api` | Chi router, feature modules, migrations, WebDAV, Nook notifier |
-| Client | `apps/client` | SvelteKit UI plus the `/api/*` reverse proxy |
+| Client | `apps/client` | SvelteKit UI, built static and served by the API binary |
 | Postgres | compose service | All metadata |
 | MinIO | compose service | File bytes and chunk parts |
 

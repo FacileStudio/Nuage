@@ -7,7 +7,9 @@ Files live in spaces, are versioned on every reupload, survive deletion in a tra
 reachable over WebDAV as well as the browser. Large uploads go through a resumable chunked
 session rather than a single request.
 
-Live at [nuage.facile.studio](https://nuage.facile.studio).
+Live at [nuage.facile.studio](https://nuage.facile.studio). Single container, single public
+endpoint: the Go binary serves `/api/*`, `/webdav/*` and the static SvelteKit build. Postgres
+and MinIO are internal Docker services.
 
 ## What it does
 
@@ -22,15 +24,23 @@ Live at [nuage.facile.studio](https://nuage.facile.studio).
 - Exposes an incremental sync feed with tombstones so offline clients converge
 - Records an activity log, emits events to Nook, and tees its logs to Journal
 - Email and password accounts plus optional OIDC SSO with an `SSO_ONLY` mode
+- Gates every space-scoped endpoint on membership, so a caller-supplied `space_id`
+  cannot reach another space
+
+```
+Internet → Go API (:4000, serves the SPA) → Postgres / MinIO
+```
+
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| API | Go 1.24, Chi v5, GORM, PostgreSQL 16, MinIO, `go-oidc/v3`, Journal SDK |
-| Client | SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, `adapter-node`, Bun |
+| API | Go 1.25, Chi v5, GORM, PostgreSQL 16, MinIO, `go-oidc/v3`, tronc, Journal SDK |
+| Client | SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, `adapter-static`, Bun |
 | Storage | MinIO for file bytes, a local volume for avatars |
-| Deploy | Docker Compose, four services behind Traefik |
+| Deploy | One image built by the root `Dockerfile`; compose runs PostgreSQL, MinIO and the API behind Traefik |
+
 
 ## Quick start
 
@@ -40,9 +50,8 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-Then open <http://localhost:3000>. Compose refuses to start when a required secret is
-missing — there are no default credentials. Plain `docker compose up` is the production
-shape and publishes no host ports.
+Then open <http://localhost:4000> — one container serves the client and the API. Plain
+`docker compose up` is the production shape and publishes no host ports.
 
 The first account created is promoted to administrator on the next migration run.
 
@@ -62,7 +71,8 @@ cd apps/api && cp .env.example .env && go run .
 cd apps/client && bun install && bun run dev
 ```
 
-The client serves on `5173` and proxies to the API on `4000`.
+The client serves `http://localhost:5173` and the Vite dev server proxies `/api` and
+`/webdav` to the API on `http://localhost:4000`.
 
 ## Configuration
 
@@ -74,7 +84,6 @@ The client serves on `5173` and proxies to the API on `4000`.
 | `STORAGE_DIR` | Local directory for avatars, mounted as a volume |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins |
 | `OIDC_ISSUER` | Enables OIDC; four companion variables become required with it |
-| `ORIGIN` | Public URL of the SvelteKit client, needed for its CSRF check |
 
 Full reference: [docs/configuration.md](docs/configuration.md).
 

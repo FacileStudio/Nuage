@@ -8,14 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
-	"github.com/FacileStudio/Nuage/apps/api/internal/httpjson"
-	"github.com/FacileStudio/Nuage/apps/api/internal/logger"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
@@ -36,15 +35,22 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/FacileStudio/Journal/sdk/journal"
+	"github.com/FacileStudio/tronc/health"
+	"github.com/FacileStudio/tronc/healthcheck"
+	"github.com/FacileStudio/tronc/httpx"
+	"github.com/FacileStudio/tronc/logger"
+	troncmiddleware "github.com/FacileStudio/tronc/middleware"
+	"github.com/FacileStudio/tronc/spa"
 	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"gorm.io/gorm"
 )
 
 func main() {
-	if err := run(); err != nil {
-		os.Exit(1)
+	if healthcheck.Handle(os.Args) {
+		return
 	}
+
+	os.Exit(run())
 }
 
 // startTombstonePruner keeps the sync deletion-marker table bounded by dropping
@@ -68,37 +74,43 @@ func startTombstonePruner(ctx context.Context, db *gorm.DB, appLogger *slog.Logg
 	}()
 }
 
-func run() error {
+func run() int {
 	appEnv, err := env.Load()
-	appLogger := logger.New("info")
+	appLogger := logger.New(logger.Config{})
 	if err != nil {
 		appLogger.Error("failed to load config", slog.Any("error", err))
-		return err
+		return 1
 	}
-	appLogger = logger.New(appEnv.LogLevel)
-	slog.SetDefault(appLogger)
-
-	if appEnv.JournalURL != "" && appEnv.JournalToken != "" {
-		journalClient := journal.New(journal.Config{URL: appEnv.JournalURL, Token: appEnv.JournalToken})
+	var journalClient *journal.Client
+	appLogger = logger.New(logger.Config{
+		Level: appEnv.LogLevel,
+		Wrap: func(handler slog.Handler) slog.Handler {
+			if appEnv.JournalURL == "" || appEnv.JournalToken == "" {
+				return handler
+			}
+			journalClient = journal.New(journal.Config{URL: appEnv.JournalURL, Token: appEnv.JournalToken})
+			return journal.NewHandler(journalClient, handler)
+		},
+	})
+	if journalClient != nil {
 		defer journalClient.Close()
-		appLogger = slog.New(journal.NewHandler(journalClient, appLogger.Handler()))
-		slog.SetDefault(appLogger)
 	}
+	slog.SetDefault(appLogger)
 
 	db, err := database.Open(appEnv.DatabaseURL)
 	if err != nil {
 		appLogger.Error("failed to open database", slog.Any("error", err))
-		return err
+		return 1
 	}
 
 	if err := schemas.Migrate(db); err != nil {
 		appLogger.Error("failed to run migrations", slog.Any("error", err))
-		return err
+		return 1
 	}
 
 	if err := os.MkdirAll(filepath.Join(appEnv.StorageDir, "avatars"), 0o755); err != nil {
 		appLogger.Error("failed to prepare storage", slog.Any("error", err))
-		return err
+		return 1
 	}
 
 	storageClient, err := storage.NewClient(storage.MinIOConfig{
@@ -110,18 +122,18 @@ func run() error {
 	})
 	if err != nil {
 		appLogger.Error("failed to create storage client", slog.Any("error", err))
-		return err
+		return 1
 	}
 
 	if err := storageClient.EnsureBucket(context.Background()); err != nil {
 		appLogger.Error("failed to ensure storage bucket", slog.Any("error", err))
-		return err
+		return 1
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
 		appLogger.Error("failed to access database handle", slog.Any("error", err))
-		return err
+		return 1
 	}
 	defer func() {
 		if err := sqlDB.Close(); err != nil {
@@ -138,9 +150,8 @@ func run() error {
 	userService := users.NewService(db, appEnv.StorageDir)
 	quotaService := quota.NewService(db)
 	if appEnv.PresignSecret == "" {
-		err := errors.New("PRESIGN_SECRET is required: unauthenticated download links are signed with it")
-		appLogger.Error("failed to load config", slog.Any("error", err))
-		return err
+		appLogger.Error("failed to load config", slog.Any("error", errors.New("PRESIGN_SECRET is required: unauthenticated download links are signed with it")))
+		return 1
 	}
 	presignSecret := []byte(appEnv.PresignSecret)
 	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService, presignSecret)
@@ -152,54 +163,53 @@ func run() error {
 	spacesService := spaces.NewService(db)
 	activityService := activitymod.NewService(db)
 
-	router := chi.NewRouter()
-	router.Use(chimiddleware.RequestID)
+	router := httpx.NewRouter(httpx.Config{
+		Logger: appLogger,
+		CORS: troncmiddleware.CORSConfig{
+			AllowedOrigins: appEnv.CORSAllowedOrigins,
+		},
+	})
 	router.Use(middleware.RealIP)
-	router.Use(middleware.CORS(appEnv.AllowedOrigins))
 	router.Use(middleware.SecurityHeaders)
-	router.Use(middleware.RequestLogger(appLogger))
-	router.Use(chimiddleware.Recoverer)
-	router.Use(middleware.RateLimitExcept(100, time.Minute, "/files/upload", "/webdav"))
-	router.Use(middleware.RateLimitPaths(10, time.Minute, "/auth/login", "/auth/register"))
+	router.Use(middleware.RateLimitExcept(100, time.Minute, "/api/files/upload", "/webdav"))
+	router.Use(middleware.RateLimitPaths(10, time.Minute, "/api/auth/login", "/api/auth/register"))
 
-	router.Get("/health", func(w http.ResponseWriter, request *http.Request) {
-		httpjson.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	router.Get("/ready", func(w http.ResponseWriter, request *http.Request) {
-		readinessContext, cancel := context.WithTimeout(request.Context(), 2*time.Second)
-		defer cancel()
-		if err := sqlDB.PingContext(readinessContext); err != nil {
-			httpjson.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready", "reason": "database"})
-			return
-		}
-		if err := storageClient.EnsureBucket(readinessContext); err != nil {
-			httpjson.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready", "reason": "storage"})
-			return
-		}
-		httpjson.WriteJSON(w, http.StatusOK, map[string]string{"status": "ready"})
-	})
-	docs.RegisterRoutes(router)
-
-	avatarFS := http.StripPrefix("/avatars/", http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
-	router.Get("/avatars/*", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
-		avatarFS.ServeHTTP(w, r)
+	health.Mount(router, health.DB(sqlDB), func(ctx context.Context) error {
+		return storageClient.EnsureBucket(ctx)
 	})
 
-	auth.RegisterRoutes(router, authService, appEnv)
-	users.RegisterRoutes(router, userService, authService)
-	files.RegisterRoutes(router, fileService, authService)
-	trash.RegisterRoutes(router, trashService, authService)
-	sharing.RegisterRoutes(router, sharingService, authService, storageClient)
-	settings.RegisterRoutes(router, settingsService, authService)
-	sync.RegisterRoutes(router, syncService, authService)
-	quota.RegisterRoutes(router, quotaService, authService)
-	search.RegisterRoutes(router, searchService, authService)
-	spaces.RegisterRoutes(router, spacesService, authService)
-	activitymod.RegisterRoutes(router, activityService, authService)
+	avatarFS := http.StripPrefix("/api/avatars/", http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
+
+	router.Route("/api", func(r chi.Router) {
+		docs.RegisterRoutes(r)
+
+		r.Get("/avatars/*", func(w http.ResponseWriter, request *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+			avatarFS.ServeHTTP(w, request)
+		})
+
+		auth.RegisterRoutes(r, authService, appEnv)
+		users.RegisterRoutes(r, userService, authService)
+		files.RegisterRoutes(r, fileService, authService)
+		trash.RegisterRoutes(r, trashService, authService)
+		sharing.RegisterRoutes(r, sharingService, authService, storageClient)
+		settings.RegisterRoutes(r, settingsService, authService)
+		sync.RegisterRoutes(r, syncService, authService)
+		quota.RegisterRoutes(r, quotaService, authService)
+		search.RegisterRoutes(r, searchService, authService)
+		spaces.RegisterRoutes(r, spacesService, authService)
+		activitymod.RegisterRoutes(r, activityService, authService)
+	})
+
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, appLogger)
 
-	addr := ":" + appEnv.Port
+	clientDir := spa.DirFromEnv()
+	if spa.Available(clientDir) {
+		router.Handle("/*", spa.Handler(spa.Config{Dir: clientDir}))
+		appLogger.Info("serving client", slog.String("dir", clientDir))
+	}
+
+	addr := ":" + strconv.Itoa(appEnv.Port)
 	server := &http.Server{
 		Addr:    addr,
 		Handler: router,
@@ -228,7 +238,7 @@ func run() error {
 	case err := <-serverErrCh:
 		if !errors.Is(err, http.ErrServerClosed) {
 			appLogger.Error("server stopped", slog.Any("error", err))
-			return err
+			return 1
 		}
 	case <-shutdownSignal.Done():
 		appLogger.Info("server shutting down")
@@ -236,10 +246,10 @@ func run() error {
 		defer cancel()
 		if err := server.Shutdown(shutdownContext); err != nil {
 			appLogger.Error("server shutdown failed", slog.Any("error", err))
-			return err
+			return 1
 		}
 		appLogger.Info("server stopped")
 	}
 
-	return nil
+	return 0
 }
