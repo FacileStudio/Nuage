@@ -13,8 +13,12 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 	router.Route("/activity", func(r chi.Router) {
 		r.Use(middleware.RequireAuth(authService))
 
-		r.Get("/", handler.listAll)
 		r.Get("/me", handler.listMine)
 		r.Get("/files/{id}", handler.forFile)
+
+		r.Group(func(admin chi.Router) {
+			admin.Use(middleware.RequireAdmin())
+			admin.Get("/", handler.listAll)
+		})
 	})
 }

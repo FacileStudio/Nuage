@@ -16,7 +16,8 @@ type AuthResponse struct {
 }
 
 type Data struct {
-	Email string `json:"email"`
+	Email   string `json:"email"`
+	IsAdmin bool   `json:"is_admin"`
 }
 
 func (d *Data) GetEmail() string {
@@ -24,4 +25,11 @@ func (d *Data) GetEmail() string {
 		return ""
 	}
 	return d.Email
+}
+
+func (d *Data) GetIsAdmin() bool {
+	if d == nil {
+		return false
+	}
+	return d.IsAdmin
 }

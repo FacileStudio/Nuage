@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -51,22 +52,25 @@ func isPrivateAddress(host string) bool {
 		return true
 	}
 
-	ip := net.ParseIP(hostname)
-	if ip == nil {
+	candidates := []net.IP{}
+	if ip := net.ParseIP(hostname); ip != nil {
+		candidates = append(candidates, ip)
+	} else {
 		ips, err := net.LookupIP(hostname)
 		if err != nil || len(ips) == 0 {
 			return true
 		}
-		ip = ips[0]
-	}
-
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-		return true
+		candidates = append(candidates, ips...)
 	}
 
 	metadata := net.ParseIP("169.254.169.254")
-	if ip.Equal(metadata) {
-		return true
+	for _, ip := range candidates {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return true
+		}
+		if ip.Equal(metadata) {
+			return true
+		}
 	}
 
 	return false
@@ -92,6 +96,16 @@ func (s *Service) updateSettings(ctx context.Context, values map[string]string) 
 	for key := range values {
 		if !allowedKeys[key] {
 			return nil, errors.Invalid("unknown setting key: " + key)
+		}
+	}
+
+	if webhookURL, ok := values["nook_webhook_url"]; ok && webhookURL != "" {
+		parsed, err := url.Parse(webhookURL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return nil, errors.Invalid("nook_webhook_url must start with http:// or https://")
+		}
+		if isPrivateAddress(parsed.Host) {
+			return nil, errors.Invalid("nook_webhook_url must not point to a private or internal address")
 		}
 	}
 
@@ -153,7 +167,12 @@ func (s *Service) testNook(ctx context.Context, input TestNookRequest) (bool, st
 		req.Header.Set("X-Nuage-Signature-256", sig)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return stderrors.New("redirects are not followed for webhooks")
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, "request failed: " + err.Error(), nil

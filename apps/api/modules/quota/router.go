@@ -15,7 +15,11 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 
 		r.Get("/me", handler.getMyUsage)
 		r.Post("/me/recalculate", handler.recalculate)
-		r.Get("/users", handler.listAllUsage)
-		r.Put("/users/{userId}", handler.setUserQuota)
+
+		r.Group(func(admin chi.Router) {
+			admin.Use(middleware.RequireAdmin())
+			admin.Get("/users", handler.listAllUsage)
+			admin.Put("/users/{userId}", handler.setUserQuota)
+		})
 	})
 }

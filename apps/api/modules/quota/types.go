@@ -7,6 +7,10 @@ type UsageResponse struct {
 	Percentage   float64 `json:"percentage"`
 }
 
+// UnlimitedStorageLimit is the only accepted negative storage_limit value; it
+// grants unlimited storage. A limit of 0 applies the instance default quota.
+const UnlimitedStorageLimit int64 = -1
+
 type SetQuotaRequest struct {
 	StorageLimit int64 `json:"storage_limit"`
 }

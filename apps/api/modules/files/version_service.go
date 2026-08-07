@@ -18,6 +18,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const defaultMaxVersions = 5
@@ -42,25 +43,6 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 		}
 	}
 
-	var maxVersion int
-	s.orm.WithContext(ctx).Model(&schemas.FileVersion{}).
-		Where("file_id = ?", id).
-		Select("COALESCE(MAX(version), 0)").
-		Scan(&maxVersion)
-
-	version := &schemas.FileVersion{
-		FileID:    record.ID,
-		Version:   maxVersion + 1,
-		BucketKey: record.BucketKey,
-		Hash:      record.Hash,
-		Size:      record.Size,
-		CreatedBy: userID,
-	}
-
-	if err := s.orm.WithContext(ctx).Create(version).Error; err != nil {
-		return nil, errors.Internal("failed to create version record", err)
-	}
-
 	newFacileID := facile.NewID()
 	newBucketKey := fmt.Sprintf("%d/%s/%s", userID, newFacileID, record.Name)
 
@@ -74,20 +56,53 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 	fileHash := hex.EncodeToString(hasher.Sum(nil))
 	info, err := s.storage.StatObject(ctx, newBucketKey)
 	if err != nil {
+		_ = s.storage.DeleteObject(ctx, newBucketKey)
 		return nil, errors.Internal("failed to stat new version", err)
 	}
 
 	oldSize := record.Size
-	updates := map[string]any{
-		"bucket_key": newBucketKey,
-		"hash":       fileHash,
-		"size":       info.Size,
-		"mime_type":  mimeType,
-		"updated_at": time.Now(),
-	}
+	txErr := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var current schemas.File
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&current).Error; err != nil {
+			return errors.Internal("failed to lock file record", err)
+		}
 
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-		return nil, errors.Internal("failed to update file record", err)
+		var maxVersion int
+		if err := tx.Model(&schemas.FileVersion{}).
+			Where("file_id = ?", id).
+			Select("COALESCE(MAX(version), 0)").
+			Scan(&maxVersion).Error; err != nil {
+			return errors.Internal("failed to determine next version", err)
+		}
+
+		version := &schemas.FileVersion{
+			FileID:    current.ID,
+			Version:   maxVersion + 1,
+			BucketKey: current.BucketKey,
+			Hash:      current.Hash,
+			Size:      current.Size,
+			CreatedBy: userID,
+		}
+		if err := tx.Create(version).Error; err != nil {
+			return errors.Internal("failed to create version record", err)
+		}
+
+		oldSize = current.Size
+		updates := map[string]any{
+			"bucket_key": newBucketKey,
+			"hash":       fileHash,
+			"size":       info.Size,
+			"mime_type":  mimeType,
+			"updated_at": time.Now(),
+		}
+		if err := tx.Model(&schemas.File{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+			return errors.Internal("failed to update file record", err)
+		}
+		return nil
+	})
+	if txErr != nil {
+		_ = s.storage.DeleteObject(ctx, newBucketKey)
+		return nil, txErr
 	}
 
 	if s.quota != nil {
@@ -165,24 +180,6 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 		return nil, errors.Internal("failed to read version", err)
 	}
 
-	var maxVersion int
-	s.orm.WithContext(ctx).Model(&schemas.FileVersion{}).
-		Where("file_id = ?", fid).
-		Select("COALESCE(MAX(version), 0)").
-		Scan(&maxVersion)
-
-	currentVersion := &schemas.FileVersion{
-		FileID:    record.ID,
-		Version:   maxVersion + 1,
-		BucketKey: record.BucketKey,
-		Hash:      record.Hash,
-		Size:      record.Size,
-		CreatedBy: userID,
-	}
-	if err := s.orm.WithContext(ctx).Create(currentVersion).Error; err != nil {
-		return nil, errors.Internal("failed to save current as version", err)
-	}
-
 	newBucketKey := fmt.Sprintf("%d/%s/%s", userID, facile.NewID(), record.Name)
 	if err := s.storage.CopyObject(ctx, version.BucketKey, newBucketKey); err != nil {
 		return nil, errors.Internal("failed to restore version from storage", err)
@@ -190,19 +187,52 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 
 	info, err := s.storage.StatObject(ctx, newBucketKey)
 	if err != nil {
+		_ = s.storage.DeleteObject(ctx, newBucketKey)
 		return nil, errors.Internal("failed to stat restored file", err)
 	}
 
 	oldSize := record.Size
-	updates := map[string]any{
-		"bucket_key": newBucketKey,
-		"hash":       version.Hash,
-		"size":       info.Size,
-		"updated_at": time.Now(),
-	}
+	txErr := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var current schemas.File
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fid).First(&current).Error; err != nil {
+			return errors.Internal("failed to lock file record", err)
+		}
 
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("id = ?", fid).Updates(updates).Error; err != nil {
-		return nil, errors.Internal("failed to update file record", err)
+		var maxVersion int
+		if err := tx.Model(&schemas.FileVersion{}).
+			Where("file_id = ?", fid).
+			Select("COALESCE(MAX(version), 0)").
+			Scan(&maxVersion).Error; err != nil {
+			return errors.Internal("failed to determine next version", err)
+		}
+
+		currentVersion := &schemas.FileVersion{
+			FileID:    current.ID,
+			Version:   maxVersion + 1,
+			BucketKey: current.BucketKey,
+			Hash:      current.Hash,
+			Size:      current.Size,
+			CreatedBy: userID,
+		}
+		if err := tx.Create(currentVersion).Error; err != nil {
+			return errors.Internal("failed to save current as version", err)
+		}
+
+		oldSize = current.Size
+		updates := map[string]any{
+			"bucket_key": newBucketKey,
+			"hash":       version.Hash,
+			"size":       info.Size,
+			"updated_at": time.Now(),
+		}
+		if err := tx.Model(&schemas.File{}).Where("id = ?", fid).Updates(updates).Error; err != nil {
+			return errors.Internal("failed to update file record", err)
+		}
+		return nil
+	})
+	if txErr != nil {
+		_ = s.storage.DeleteObject(ctx, newBucketKey)
+		return nil, txErr
 	}
 
 	if s.quota != nil {
@@ -233,6 +263,12 @@ func (s *Service) cleanOldVersions(fileID int64, userID int64) {
 		}
 	}
 
+	var current schemas.File
+	if err := s.orm.WithContext(ctx).Where("id = ?", fileID).First(&current).Error; err != nil {
+		slog.Warn("versioning: failed to read file for cleanup", slog.Any("error", err))
+		return
+	}
+
 	var versions []schemas.FileVersion
 	if err := s.orm.WithContext(ctx).Where("file_id = ?", fileID).Order("version desc").Find(&versions).Error; err != nil {
 		slog.Warn("versioning: failed to list versions for cleanup", slog.Any("error", err))
@@ -246,11 +282,16 @@ func (s *Service) cleanOldVersions(fileID int64, userID int64) {
 	toDelete := versions[maxVersions:]
 	var freedBytes int64
 	for _, v := range toDelete {
-		if err := s.storage.DeleteObject(ctx, v.BucketKey); err != nil {
-			slog.Warn("versioning: failed to delete version from storage", slog.Any("error", err))
+		if err := s.orm.WithContext(ctx).Delete(&schemas.FileVersion{}, "id = ?", v.ID).Error; err != nil {
+			slog.Warn("versioning: failed to delete version record", slog.Any("error", err))
+			continue
+		}
+		if v.BucketKey != current.BucketKey {
+			if err := s.storage.DeleteObject(ctx, v.BucketKey); err != nil {
+				slog.Warn("versioning: failed to delete version from storage", slog.Any("error", err))
+			}
 		}
 		freedBytes += v.Size
-		s.orm.WithContext(ctx).Delete(&v)
 	}
 
 	if s.quota != nil && freedBytes > 0 {

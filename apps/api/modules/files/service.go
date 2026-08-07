@@ -15,6 +15,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
@@ -36,21 +37,55 @@ func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Noti
 	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret}
 }
 
-func (s *Service) deduplicateFileName(ctx context.Context, name string, folderID *int64) string {
-	check := func(candidate string) bool {
+const maxDeduplicationAttempts = 1000
+
+// requireWritableFolder rejects writes targeting a folder the caller cannot
+// reach, or one that currently sits in the trash.
+func (s *Service) requireWritableFolder(ctx context.Context, userID int64, folderID int64, spaceID *int64) error {
+	query := s.orm.WithContext(ctx).Model(&schemas.Folder{}).
+		Where("id = ? AND deleted_at IS NULL", folderID)
+	if spaceID != nil {
+		query = query.Where("space_id = ?", *spaceID)
+	} else {
+		query = query.Where("owner_id = ? AND space_id IS NULL", userID)
+	}
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return errors.Internal("failed to verify folder", err)
+	}
+	if count == 0 {
+		return errors.NotFound("folder not found")
+	}
+	return nil
+}
+
+func (s *Service) deduplicateFileName(ctx context.Context, userID int64, name string, folderID *int64, spaceID *int64) (string, error) {
+	check := func(candidate string) (bool, error) {
 		query := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("name = ? AND deleted_at IS NULL", candidate)
+		if spaceID != nil {
+			query = query.Where("space_id = ?", *spaceID)
+		} else {
+			query = query.Where("uploaded_by = ? AND space_id IS NULL", userID)
+		}
 		if folderID != nil {
 			query = query.Where("folder_id = ?", *folderID)
 		} else {
 			query = query.Where("folder_id IS NULL")
 		}
 		var count int64
-		query.Count(&count)
-		return count > 0
+		if err := query.Count(&count).Error; err != nil {
+			return false, errors.Internal("failed to check for name collision", err)
+		}
+		return count > 0, nil
 	}
 
-	if !check(name) {
-		return name
+	taken, err := check(name)
+	if err != nil {
+		return "", err
+	}
+	if !taken {
+		return name, nil
 	}
 
 	ext := ""
@@ -60,47 +95,70 @@ func (s *Service) deduplicateFileName(ctx context.Context, name string, folderID
 		base = name[:dotIdx]
 	}
 
-	for i := 1; ; i++ {
+	for i := 1; i <= maxDeduplicationAttempts; i++ {
 		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
-		if !check(candidate) {
-			return candidate
+		taken, err := check(candidate)
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return candidate, nil
 		}
 	}
+	return "", errors.Invalid("too many files with this name")
 }
 
-func (s *Service) deduplicateFolderName(ctx context.Context, name string, parentID *int64) string {
-	check := func(candidate string) bool {
+func (s *Service) deduplicateFolderName(ctx context.Context, userID int64, name string, parentID *int64, spaceID *int64) (string, error) {
+	check := func(candidate string) (bool, error) {
 		query := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("name = ? AND deleted_at IS NULL", candidate)
+		if spaceID != nil {
+			query = query.Where("space_id = ?", *spaceID)
+		} else {
+			query = query.Where("owner_id = ? AND space_id IS NULL", userID)
+		}
 		if parentID != nil {
 			query = query.Where("parent_id = ?", *parentID)
 		} else {
 			query = query.Where("parent_id IS NULL")
 		}
 		var count int64
-		query.Count(&count)
-		return count > 0
+		if err := query.Count(&count).Error; err != nil {
+			return false, errors.Internal("failed to check for name collision", err)
+		}
+		return count > 0, nil
 	}
 
-	if !check(name) {
-		return name
+	taken, err := check(name)
+	if err != nil {
+		return "", err
+	}
+	if !taken {
+		return name, nil
 	}
 
-	for i := 1; ; i++ {
+	for i := 1; i <= maxDeduplicationAttempts; i++ {
 		candidate := fmt.Sprintf("%s (%d)", name, i)
-		if !check(candidate) {
-			return candidate
+		taken, err := check(candidate)
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return candidate, nil
 		}
 	}
+	return "", errors.Invalid("too many folders with this name")
 }
 
 func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string, spaceID *int64) (*schemas.File, error) {
+	if spaceID != nil {
+		if err := spaceaccess.Require(ctx, s.orm, *spaceID, userID); err != nil {
+			return nil, err
+		}
+	}
+
 	if folderID != nil {
-		var folder schemas.Folder
-		if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *folderID, userID).First(&folder).Error; err != nil {
-			if stderrors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, errors.NotFound("folder not found")
-			}
-			return nil, errors.Internal("failed to verify folder", err)
+		if err := s.requireWritableFolder(ctx, userID, *folderID, spaceID); err != nil {
+			return nil, err
 		}
 	}
 
@@ -121,7 +179,10 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		}
 	}
 
-	name = s.deduplicateFileName(ctx, name, folderID)
+	name, err := s.deduplicateFileName(ctx, userID, name, folderID, spaceID)
+	if err != nil {
+		return nil, err
+	}
 	facileID := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s/%s", userID, facileID, name)
 
@@ -178,6 +239,9 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 func (s *Service) listFiles(ctx context.Context, userID int64, folderID *int64, search string, linkedTo string, originApp string, spaceID *int64) ([]schemas.File, error) {
 	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("created_at desc")
 	if spaceID != nil {
+		if err := spaceaccess.Require(ctx, s.orm, *spaceID, userID); err != nil {
+			return nil, err
+		}
 		query = query.Where("space_id = ?", *spaceID)
 	} else {
 		query = query.Where("uploaded_by = ? AND space_id IS NULL", userID)
@@ -329,17 +393,22 @@ func (s *Service) linkFile(ctx context.Context, userID int64, fileID string, lin
 }
 
 func (s *Service) createFolder(ctx context.Context, userID int64, name string, parentID *int64, spaceID *int64) (*schemas.Folder, error) {
-	if parentID != nil {
-		var parent schemas.Folder
-		if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *parentID, userID).First(&parent).Error; err != nil {
-			if stderrors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, errors.NotFound("parent folder not found")
-			}
-			return nil, errors.Internal("failed to verify parent folder", err)
+	if spaceID != nil {
+		if err := spaceaccess.Require(ctx, s.orm, *spaceID, userID); err != nil {
+			return nil, err
 		}
 	}
 
-	name = s.deduplicateFolderName(ctx, name, parentID)
+	if parentID != nil {
+		if err := s.requireWritableFolder(ctx, userID, *parentID, spaceID); err != nil {
+			return nil, errors.NotFound("parent folder not found")
+		}
+	}
+
+	name, err := s.deduplicateFolderName(ctx, userID, name, parentID, spaceID)
+	if err != nil {
+		return nil, err
+	}
 	record := &schemas.Folder{
 		FacileID: facile.NewID(),
 		Name:     name,
@@ -368,6 +437,9 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 func (s *Service) listFolders(ctx context.Context, userID int64, parentID *int64, spaceID *int64) ([]schemas.Folder, error) {
 	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("name asc")
 	if spaceID != nil {
+		if err := spaceaccess.Require(ctx, s.orm, *spaceID, userID); err != nil {
+			return nil, err
+		}
 		query = query.Where("space_id = ?", *spaceID)
 	} else {
 		query = query.Where("owner_id = ? AND space_id IS NULL", userID)

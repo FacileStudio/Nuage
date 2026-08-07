@@ -15,7 +15,9 @@ type DeletedItem struct {
 	ID        int64  `json:"id"`
 	FacileID  string `json:"facile_id"`
 	Name      string `json:"name"`
+	SpaceID   *int64 `json:"space_id"`
 	DeletedAt string `json:"deleted_at"`
+	Permanent bool   `json:"permanent"`
 }
 
 type ItemResponse struct {
@@ -27,6 +29,7 @@ type ItemResponse struct {
 	Hash      string `json:"hash,omitempty"`
 	FolderID  *int64 `json:"folder_id"`
 	ParentID  *int64 `json:"parent_id,omitempty"`
+	SpaceID   *int64 `json:"space_id"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }

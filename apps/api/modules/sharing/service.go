@@ -10,6 +10,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
@@ -25,12 +26,67 @@ func NewService(orm *gorm.DB, notifier *nook.Notifier, actLogger *activity.Logge
 	return &Service{orm: orm, notifier: notifier, activity: actLogger}
 }
 
+// requireOwnedResource rejects share creation for resources the caller neither
+// owns nor reaches through a space membership.
+func (s *Service) requireOwnedResource(ctx context.Context, userID int64, fileID *int64, folderID *int64) error {
+	spaceIDs, err := spaceaccess.MemberIDs(ctx, s.orm, userID)
+	if err != nil {
+		return err
+	}
+
+	if fileID != nil {
+		reach := s.orm.Where("uploaded_by = ?", userID)
+		if len(spaceIDs) > 0 {
+			reach = reach.Or("space_id IN ?", spaceIDs)
+		}
+		var count int64
+		if err := s.orm.WithContext(ctx).Model(&schemas.File{}).
+			Where("id = ? AND deleted_at IS NULL", *fileID).
+			Where(reach).
+			Count(&count).Error; err != nil {
+			return errors.Internal("failed to verify file", err)
+		}
+		if count == 0 {
+			return errors.NotFound("file not found")
+		}
+	}
+
+	if folderID != nil {
+		reach := s.orm.Where("owner_id = ?", userID)
+		if len(spaceIDs) > 0 {
+			reach = reach.Or("space_id IN ?", spaceIDs)
+		}
+		var count int64
+		if err := s.orm.WithContext(ctx).Model(&schemas.Folder{}).
+			Where("id = ? AND deleted_at IS NULL", *folderID).
+			Where(reach).
+			Count(&count).Error; err != nil {
+			return errors.Internal("failed to verify folder", err)
+		}
+		if count == 0 {
+			return errors.NotFound("folder not found")
+		}
+	}
+
+	return nil
+}
+
 func (s *Service) createShare(ctx context.Context, userID int64, req CreateShareRequest) (*schemas.Share, error) {
 	if req.FileID == nil && req.FolderID == nil {
 		return nil, errors.Invalid("file_id or folder_id is required")
 	}
 	if req.FileID != nil && req.FolderID != nil {
 		return nil, errors.Invalid("only one of file_id or folder_id allowed")
+	}
+
+	if req.SpaceID != nil {
+		if err := spaceaccess.Require(ctx, s.orm, *req.SpaceID, userID); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.requireOwnedResource(ctx, userID, req.FileID, req.FolderID); err != nil {
+		return nil, err
 	}
 
 	permission := req.Permission

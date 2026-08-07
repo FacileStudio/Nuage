@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
@@ -50,7 +51,16 @@ func WriteError(w http.ResponseWriter, err error) {
 		appErr = errors.Internal("internal server error", err)
 	}
 
-	WriteJSON(w, errors.Status(appErr), map[string]any{
+	status := errors.Status(appErr)
+	if status >= http.StatusInternalServerError {
+		slog.Error("request failed",
+			slog.String("code", appErr.Code),
+			slog.String("message", appErr.Message),
+			slog.Any("cause", stderrors.Unwrap(appErr)),
+		)
+	}
+
+	WriteJSON(w, status, map[string]any{
 		"error": map[string]string{
 			"code":    appErr.Code,
 			"message": appErr.Message,

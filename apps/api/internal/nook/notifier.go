@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -90,7 +91,12 @@ func NewNotifier(orm *gorm.DB) *Notifier {
 		orm:    orm,
 		ctx:    ctx,
 		cancel: cancel,
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return stderrors.New("redirects are not followed for webhooks")
+			},
+		},
 	}
 }
 

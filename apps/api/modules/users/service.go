@@ -69,6 +69,32 @@ func (service *Service) listUsers(context context.Context) ([]User, error) {
 	return users, nil
 }
 
+// verifyPassword confirms the caller knows the account's current password, so a
+// stolen session token alone cannot be escalated into a permanent takeover by
+// changing the login credentials.
+func (service *Service) verifyPassword(context context.Context, userID string, candidate string) error {
+	id, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return errors.Internal("failed to parse user id", err)
+	}
+
+	var record schemas.User
+	if err := service.orm.WithContext(context).Where("id = ?", id).First(&record).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.NotFound("user not found")
+		}
+		return errors.Internal("failed to read user", err)
+	}
+
+	if record.PasswordHash == "" {
+		return errors.Invalid("this account has no password set")
+	}
+	if !authcrypto.VerifyPassword(candidate, record.PasswordHash) {
+		return errors.Unauthorized("current password is incorrect")
+	}
+	return nil
+}
+
 func (service *Service) updateUser(context context.Context, userID string, name *string, email *string, password *string, color *string) (*User, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
@@ -112,6 +138,14 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 	}
 	if err := service.ensureUserColor(context, &record); err != nil {
 		return nil, err
+	}
+
+	if password != nil {
+		if err := service.orm.WithContext(context).
+			Where("user_id = ?", id).
+			Delete(&schemas.Session{}).Error; err != nil {
+			return nil, errors.Internal("failed to revoke existing sessions", err)
+		}
 	}
 
 	return mapUser(record), nil

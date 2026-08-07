@@ -87,10 +87,19 @@ func (controller *Controller) updateMe(context context.Context, req *UpdateReque
 
 	var password *string
 	if req.Password != nil {
-		if len(*req.Password) < 8 {
-			return nil, errors.Invalid("password must be at least 8 characters")
+		if len(*req.Password) < 12 {
+			return nil, errors.Invalid("password must be at least 12 characters")
 		}
 		password = req.Password
+	}
+
+	if password != nil || email != nil {
+		if req.CurrentPassword == nil || *req.CurrentPassword == "" {
+			return nil, errors.Invalid("current_password is required to change the email or password")
+		}
+		if err := controller.service.verifyPassword(context, identity.UserID, *req.CurrentPassword); err != nil {
+			return nil, err
+		}
 	}
 
 	var color *string

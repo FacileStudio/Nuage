@@ -31,20 +31,22 @@ func (s *Service) getDefaultLimit() int64 {
 	return defaultQuotaBytes
 }
 
-func (s *Service) ensureQuota(ctx context.Context, userID int64) *schemas.UserQuota {
+func (s *Service) ensureQuota(ctx context.Context, userID int64) (*schemas.UserQuota, error) {
 	var quota schemas.UserQuota
-	result := s.orm.WithContext(ctx).
+	if err := s.orm.WithContext(ctx).
 		Where(schemas.UserQuota{UserID: userID}).
 		Attrs(schemas.UserQuota{StorageUsed: 0, StorageLimit: 0}).
-		FirstOrCreate(&quota)
-	if result.Error != nil {
-		quota = schemas.UserQuota{UserID: userID, StorageUsed: 0, StorageLimit: 0}
+		FirstOrCreate(&quota).Error; err != nil {
+		return nil, errors.Internal("failed to load quota", err)
 	}
-	return &quota
+	return &quota, nil
 }
 
 func (s *Service) GetUsage(ctx context.Context, userID int64) (*UsageResponse, error) {
-	quota := s.ensureQuota(ctx, userID)
+	quota, err := s.ensureQuota(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	limit := quota.StorageLimit
 	if limit == 0 {
 		limit = s.getDefaultLimit()
@@ -67,7 +69,10 @@ func (s *Service) GetUsage(ctx context.Context, userID int64) (*UsageResponse, e
 }
 
 func (s *Service) CheckQuota(ctx context.Context, userID int64, additionalBytes int64) error {
-	quota := s.ensureQuota(ctx, userID)
+	quota, err := s.ensureQuota(ctx, userID)
+	if err != nil {
+		return err
+	}
 	limit := quota.StorageLimit
 	if limit == 0 {
 		limit = s.getDefaultLimit()
@@ -82,26 +87,35 @@ func (s *Service) CheckQuota(ctx context.Context, userID int64, additionalBytes 
 	return nil
 }
 
-func (s *Service) UpdateUsage(ctx context.Context, userID int64, delta int64) {
-	quota := s.ensureQuota(ctx, userID)
-	newUsed := quota.StorageUsed + delta
-	if newUsed < 0 {
-		newUsed = 0
+func (s *Service) UpdateUsage(ctx context.Context, userID int64, delta int64) error {
+	if _, err := s.ensureQuota(ctx, userID); err != nil {
+		return err
 	}
-	s.orm.WithContext(ctx).Model(&schemas.UserQuota{}).Where("user_id = ?", userID).Update("storage_used", newUsed)
+	if err := s.orm.WithContext(ctx).Model(&schemas.UserQuota{}).
+		Where("user_id = ?", userID).
+		Update("storage_used", gorm.Expr("GREATEST(storage_used + ?, 0)", delta)).Error; err != nil {
+		return errors.Internal("failed to update usage", err)
+	}
+	return nil
 }
 
 func (s *Service) RecalculateUsage(ctx context.Context, userID int64) error {
 	var totalSize int64
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).
-		Where("uploaded_by = ? AND deleted_at IS NULL", userID).
-		Select("COALESCE(SUM(size), 0)").
-		Scan(&totalSize).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Raw(`
+		SELECT COALESCE((SELECT SUM(size) FROM files WHERE uploaded_by = ?), 0)
+			+ COALESCE((SELECT SUM(v.size) FROM file_versions v INNER JOIN files f ON f.id = v.file_id WHERE f.uploaded_by = ?), 0)
+	`, userID, userID).Scan(&totalSize).Error; err != nil {
 		return errors.Internal("failed to calculate usage", err)
 	}
 
-	s.ensureQuota(ctx, userID)
-	s.orm.WithContext(ctx).Model(&schemas.UserQuota{}).Where("user_id = ?", userID).Update("storage_used", totalSize)
+	if _, err := s.ensureQuota(ctx, userID); err != nil {
+		return err
+	}
+	if err := s.orm.WithContext(ctx).Model(&schemas.UserQuota{}).
+		Where("user_id = ?", userID).
+		Update("storage_used", totalSize).Error; err != nil {
+		return errors.Internal("failed to update usage", err)
+	}
 	return nil
 }
 
@@ -114,7 +128,9 @@ func (s *Service) SetLimit(ctx context.Context, userID int64, limit int64) error
 		return errors.Internal("failed to find user", err)
 	}
 
-	s.ensureQuota(ctx, userID)
+	if _, err := s.ensureQuota(ctx, userID); err != nil {
+		return err
+	}
 	if err := s.orm.WithContext(ctx).Model(&schemas.UserQuota{}).Where("user_id = ?", userID).Update("storage_limit", limit).Error; err != nil {
 		return errors.Internal("failed to set quota", err)
 	}
@@ -133,7 +149,9 @@ func (s *Service) ListAllUsage(ctx context.Context) ([]UsageResponse, error) {
 	}
 
 	var quotas []schemas.UserQuota
-	s.orm.WithContext(ctx).Where("user_id IN ?", userIDs).Find(&quotas)
+	if err := s.orm.WithContext(ctx).Where("user_id IN ?", userIDs).Find(&quotas).Error; err != nil {
+		return nil, errors.Internal("failed to list quotas", err)
+	}
 	quotaMap := make(map[int64]*schemas.UserQuota, len(quotas))
 	for i := range quotas {
 		quotaMap[quotas[i].UserID] = &quotas[i]

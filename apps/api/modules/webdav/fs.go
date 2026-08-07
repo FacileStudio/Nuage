@@ -1,7 +1,6 @@
 package webdav
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"golang.org/x/net/webdav"
@@ -24,11 +24,12 @@ import (
 type NuageFS struct {
 	db      *gorm.DB
 	storage *storage.Client
+	quota   *quota.Service
 	userID  int64
 }
 
-func NewNuageFS(db *gorm.DB, storageClient *storage.Client, userID int64) webdav.FileSystem {
-	return &NuageFS{db: db, storage: storageClient, userID: userID}
+func NewNuageFS(db *gorm.DB, storageClient *storage.Client, quotaService *quota.Service, userID int64) webdav.FileSystem {
+	return &NuageFS{db: db, storage: storageClient, quota: quotaService, userID: userID}
 }
 
 func (fs *NuageFS) resolvePath(ctx context.Context, name string) (*schemas.Folder, *schemas.File, error) {
@@ -95,15 +96,15 @@ func (fs *NuageFS) resolveParentFolder(ctx context.Context, name string) (*int64
 
 func (fs *NuageFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	name = path.Clean(name)
-	if isJunkFile(name) {
-		return &nuageFileInfo{name: path.Base(name), size: 0, modTime: time.Now()}, nil
-	}
 	if name == "/" || name == "." || name == "" {
 		return &DirInfo{name: "/", modTime: time.Now()}, nil
 	}
 
 	folder, file, err := fs.resolvePath(ctx, name)
 	if err != nil {
+		if isJunkFile(name) {
+			return &nuageFileInfo{name: path.Base(name), size: 0, modTime: time.Now()}, nil
+		}
 		return nil, err
 	}
 	if folder != nil {
@@ -140,10 +141,6 @@ func (fs *NuageFS) Mkdir(ctx context.Context, name string, perm os.FileMode) err
 func (fs *NuageFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	name = path.Clean(name)
 
-	if isJunkFile(name) {
-		return &DevNullFile{name: path.Base(name)}, nil
-	}
-
 	if name == "/" || name == "." || name == "" {
 		return &VirtualDir{fs: fs, ctx: ctx, folderID: nil, dirName: "/"}, nil
 	}
@@ -158,22 +155,32 @@ func (fs *NuageFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 		if flag&os.O_TRUNC != 0 {
 			return &VirtualFile{
 				fs: fs, ctx: ctx, file: file, name: file.Name,
-				writable: true, buf: &bytes.Buffer{},
+				writable: true,
 			}, nil
 		}
-		reader, sErr := fs.storage.GetObject(ctx, file.BucketKey)
+		rc, sErr := fs.storage.GetObject(ctx, file.BucketKey)
 		if sErr != nil {
 			return nil, sErr
 		}
-		data, sErr := io.ReadAll(reader)
-		reader.Close()
+		if rs, ok := rc.(io.ReadSeeker); ok {
+			return &VirtualFile{
+				fs: fs, ctx: ctx, file: file, name: file.Name,
+				reader: rs, closer: rc,
+			}, nil
+		}
+		tmp, sErr := spoolToTemp(rc)
+		rc.Close()
 		if sErr != nil {
 			return nil, sErr
 		}
 		return &VirtualFile{
 			fs: fs, ctx: ctx, file: file, name: file.Name,
-			reader: bytes.NewReader(data),
+			reader: tmp, closer: &removeOnClose{tmp},
 		}, nil
+	}
+
+	if isJunkFile(name) {
+		return &DevNullFile{name: path.Base(name)}, nil
 	}
 
 	if flag&os.O_CREATE != 0 {
@@ -182,7 +189,7 @@ func (fs *NuageFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 		}
 		return &VirtualFile{
 			fs: fs, ctx: ctx, name: path.Base(name), parentPath: path.Dir(name),
-			writable: true, creating: true, buf: &bytes.Buffer{},
+			writable: true, creating: true,
 		}, nil
 	}
 
@@ -291,9 +298,7 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 	return os.ErrNotExist
 }
 
-func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath string, data []byte) error {
-	mimeType := http.DetectContentType(data)
-
+func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath string, content io.ReadSeeker, size int64) error {
 	var folderID *int64
 	if parentPath != "/" && parentPath != "." && parentPath != "" {
 		parent, _, err := fs.resolvePath(ctx, parentPath)
@@ -305,12 +310,23 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 		}
 	}
 
+	if fs.quota != nil {
+		if err := fs.quota.CheckQuota(ctx, fs.userID, size); err != nil {
+			return err
+		}
+	}
+
+	mimeType, err := detectMimeType(content)
+	if err != nil {
+		return err
+	}
+
 	fid := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s/%s", fs.userID, fid, name)
 
 	hasher := sha256.New()
-	tee := io.TeeReader(bytes.NewReader(data), hasher)
-	if err := fs.storage.PutObject(ctx, bucketKey, tee, int64(len(data)), mimeType); err != nil {
+	tee := io.TeeReader(content, hasher)
+	if err := fs.storage.PutObject(ctx, bucketKey, tee, size, mimeType); err != nil {
 		return err
 	}
 
@@ -318,32 +334,69 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 		FacileID:   fid,
 		Name:       name,
 		MimeType:   mimeType,
-		Size:       int64(len(data)),
+		Size:       size,
 		Hash:       hex.EncodeToString(hasher.Sum(nil)),
 		BucketKey:  bucketKey,
 		FolderID:   folderID,
 		UploadedBy: fs.userID,
 	}
-	return fs.db.WithContext(ctx).Create(record).Error
+	if err := fs.db.WithContext(ctx).Create(record).Error; err != nil {
+		_ = fs.storage.DeleteObject(ctx, bucketKey)
+		return err
+	}
+	if fs.quota != nil {
+		fs.quota.UpdateUsage(ctx, fs.userID, size)
+	}
+	return nil
 }
 
-func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, data []byte) error {
+func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, content io.ReadSeeker, size int64) error {
 	if file.UploadedBy != fs.userID {
 		return os.ErrPermission
 	}
-	mimeType := http.DetectContentType(data)
 
-	hasher := sha256.New()
-	tee := io.TeeReader(bytes.NewReader(data), hasher)
-	if err := fs.storage.PutObject(ctx, file.BucketKey, tee, int64(len(data)), mimeType); err != nil {
+	if fs.quota != nil {
+		if delta := size - file.Size; delta > 0 {
+			if err := fs.quota.CheckQuota(ctx, fs.userID, delta); err != nil {
+				return err
+			}
+		}
+	}
+
+	mimeType, err := detectMimeType(content)
+	if err != nil {
 		return err
 	}
 
-	return fs.db.WithContext(ctx).Model(file).Updates(map[string]any{
-		"size":      int64(len(data)),
+	hasher := sha256.New()
+	tee := io.TeeReader(content, hasher)
+	if err := fs.storage.PutObject(ctx, file.BucketKey, tee, size, mimeType); err != nil {
+		return err
+	}
+
+	if err := fs.db.WithContext(ctx).Model(file).Updates(map[string]any{
+		"size":      size,
 		"hash":      hex.EncodeToString(hasher.Sum(nil)),
 		"mime_type": mimeType,
-	}).Error
+	}).Error; err != nil {
+		return err
+	}
+	if fs.quota != nil {
+		fs.quota.UpdateUsage(ctx, fs.userID, size-file.Size)
+	}
+	return nil
+}
+
+func detectMimeType(content io.ReadSeeker) (string, error) {
+	head := make([]byte, 512)
+	n, err := io.ReadFull(content, head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return "", err
+	}
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	return http.DetectContentType(head[:n]), nil
 }
 
 func isJunkFile(name string) bool {

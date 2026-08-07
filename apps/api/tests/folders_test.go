@@ -86,7 +86,7 @@ func TestDeleteEmptyFolder(t *testing.T) {
 	assert.Equal(t, http.StatusOK, delResp.StatusCode)
 }
 
-func TestDeleteNonEmptyFolder(t *testing.T) {
+func TestDeleteNonEmptyFolderCascades(t *testing.T) {
 	ts := setupTestServer(t)
 	_, token := registerUser(ts, "nonempty@example.com", "password12345")
 
@@ -99,5 +99,21 @@ func TestDeleteNonEmptyFolder(t *testing.T) {
 	uploadFile(ts, token, "blocker.txt", "content", &folder.ID)
 
 	delResp := doDelete(ts, fmt.Sprintf("/folders/%d", folder.ID), token)
-	assert.Equal(t, http.StatusPreconditionFailed, delResp.StatusCode)
+	assert.Equal(t, http.StatusOK, delResp.StatusCode)
+
+	trashResp := doGet(ts, "/trash", token)
+	var trash struct {
+		Items []struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"items"`
+	}
+	parseJSON(trashResp, &trash)
+
+	names := map[string]string{}
+	for _, item := range trash.Items {
+		names[item.Name] = item.Type
+	}
+	assert.Equal(t, "folder", names["notempty"], "deleted folder must be in trash")
+	assert.Equal(t, "file", names["blocker.txt"], "contained file must be trashed with its folder")
 }

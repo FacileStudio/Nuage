@@ -26,6 +26,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/search"
 	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sharing"
+	"github.com/FacileStudio/Nuage/apps/api/modules/spaces"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sync"
 	"github.com/FacileStudio/Nuage/apps/api/modules/trash"
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
@@ -43,6 +44,17 @@ type testServer struct {
 	db     *gorm.DB
 }
 
+// skipOrFail lets a developer without Postgres and MinIO run the suite, while
+// making the same missing infrastructure a hard failure in CI so a green run
+// can never mean "nothing was tested".
+func skipOrFail(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatalf("integration test infrastructure required in CI: "+format, args...)
+	}
+	t.Skipf("skipping integration test: "+format, args...)
+}
+
 func setupTestServer(t *testing.T) *testServer {
 	t.Helper()
 
@@ -55,12 +67,12 @@ func setupTestServer(t *testing.T) *testServer {
 		Logger: gormlogger.Discard,
 	})
 	if err != nil {
-		t.Skipf("skipping integration test: database not available: %v", err)
+		skipOrFail(t, "database not available: %v", err)
 	}
 
 	sqlDB, _ := db.DB()
 	if err := sqlDB.Ping(); err != nil {
-		t.Skipf("skipping integration test: database not reachable: %v", err)
+		skipOrFail(t, "database not reachable: %v", err)
 	}
 
 	cleanDB(db)
@@ -89,7 +101,7 @@ func setupTestServer(t *testing.T) *testServer {
 		UseSSL:    false,
 	})
 	if err != nil {
-		t.Skipf("skipping integration test: minio not available: %v", err)
+		skipOrFail(t, "minio not available: %v", err)
 	}
 	_ = storageClient.EnsureBucket(context.Background())
 
@@ -105,6 +117,7 @@ func setupTestServer(t *testing.T) *testServer {
 	sharingService := sharing.NewService(db, notifier, actLogger)
 	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
+	spacesService := spaces.NewService(db)
 	activityService := activitymod.NewService(db)
 
 	appEnv := env.Config{SSOOnly: false}
@@ -120,8 +133,9 @@ func setupTestServer(t *testing.T) *testServer {
 	sync.RegisterRoutes(router, syncService, authService)
 	quota.RegisterRoutes(router, quotaService, authService)
 	search.RegisterRoutes(router, searchService, authService)
+	spaces.RegisterRoutes(router, spacesService, authService)
 	activitymod.RegisterRoutes(router, activityService, authService)
-	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, slog.Default())
+	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, slog.Default())
 
 	t.Cleanup(func() {
 		cleanDB(db)
@@ -133,15 +147,8 @@ func setupTestServer(t *testing.T) *testServer {
 }
 
 func cleanDB(db *gorm.DB) {
-	tables := []string{
-		"activity_logs", "upload_chunks", "upload_sessions",
-		"file_versions", "user_quotas", "shares",
-		"files", "folders", "api_tokens", "sessions",
-		"settings", "users",
-	}
-	for _, t := range tables {
-		db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t))
-	}
+	db.Exec("DROP SCHEMA public CASCADE")
+	db.Exec("CREATE SCHEMA public")
 }
 
 func registerUser(ts *testServer, email, password string) (string, string) {
@@ -180,14 +187,22 @@ func doDelete(ts *testServer, path, token string) *http.Response {
 }
 
 func uploadFile(ts *testServer, token, filename, content string, folderID *int64) *http.Response {
+	fields := map[string]string{}
+	if folderID != nil {
+		fields["folder_id"] = fmt.Sprintf("%d", *folderID)
+	}
+	return uploadFileWithFields(ts, token, filename, content, fields)
+}
+
+func uploadFileWithFields(ts *testServer, token, filename, content string, fields map[string]string) *http.Response {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
 	part, _ := writer.CreateFormFile("file", filename)
 	part.Write([]byte(content))
 
-	if folderID != nil {
-		writer.WriteField("folder_id", fmt.Sprintf("%d", *folderID))
+	for key, value := range fields {
+		writer.WriteField(key, value)
 	}
 
 	writer.Close()

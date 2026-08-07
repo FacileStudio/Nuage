@@ -5,8 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -184,6 +187,84 @@ func TestWebDAVDeleteFolder(t *testing.T) {
 
 	resp = davRequest(ts, "PROPFIND", "/webdav/ToDelete", token, "")
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestWebDAVQuotaEnforced(t *testing.T) {
+	ts := setupTestServer(t)
+	userID, token := registerUser(ts, "dav-quota@example.com", "password12345")
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	require.NoError(t, err)
+
+	q := schemas.UserQuota{UserID: uid}
+	require.NoError(t, ts.db.Where(schemas.UserQuota{UserID: uid}).
+		Assign(schemas.UserQuota{StorageLimit: 10}).FirstOrCreate(&q).Error)
+
+	req := httptest.NewRequest("PUT", "/webdav/big.txt", strings.NewReader(strings.Repeat("x", 100)))
+	req.SetBasicAuth("user@example.com", token)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	assert.GreaterOrEqual(t, w.Result().StatusCode, 400)
+
+	resp := davRequest(ts, "GET", "/webdav/big.txt", token, "")
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestWebDAVQuotaUsageCharged(t *testing.T) {
+	ts := setupTestServer(t)
+	userID, token := registerUser(ts, "dav-usage@example.com", "password12345")
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	require.NoError(t, err)
+
+	content := "twelve bytes"
+	req := httptest.NewRequest("PUT", "/webdav/counted.txt", strings.NewReader(content))
+	req.SetBasicAuth("user@example.com", token)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	require.Equal(t, 201, w.Result().StatusCode)
+
+	var q schemas.UserQuota
+	require.NoError(t, ts.db.Where("user_id = ?", uid).First(&q).Error)
+	assert.Equal(t, int64(len(content)), q.StorageUsed)
+}
+
+func TestWebDAVJunkNameDoesNotShadowFolder(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-junk@example.com", "password12345")
+
+	resp := davRequest(ts, "MKCOL", "/webdav/._archive", token, "")
+	require.Equal(t, 201, resp.StatusCode)
+
+	req := httptest.NewRequest("PUT", "/webdav/._archive/real.txt", strings.NewReader("keep me"))
+	req.SetBasicAuth("user@example.com", token)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	require.Equal(t, 201, w.Result().StatusCode)
+
+	resp = davRequest(ts, "GET", "/webdav/._archive/real.txt", token, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, "keep me", string(body))
+}
+
+func TestWebDAVRangeGet(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-range@example.com", "password12345")
+
+	req := httptest.NewRequest("PUT", "/webdav/range.txt", strings.NewReader("0123456789"))
+	req.SetBasicAuth("user@example.com", token)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	require.Equal(t, 201, w.Result().StatusCode)
+
+	req = httptest.NewRequest("GET", "/webdav/range.txt", nil)
+	req.SetBasicAuth("user@example.com", token)
+	req.Header.Set("Range", "bytes=2-5")
+	w = httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	resp := w.Result()
+	require.Equal(t, http.StatusPartialContent, resp.StatusCode)
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, "2345", string(body))
 }
 
 func TestWebDAVDSStoreIgnored(t *testing.T) {

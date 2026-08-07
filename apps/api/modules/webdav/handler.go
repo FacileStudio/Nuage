@@ -9,6 +9,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
+	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/net/webdav"
@@ -25,7 +26,9 @@ func init() {
 	chi.RegisterMethod("UNLOCK")
 }
 
-func RegisterRoutes(router chi.Router, db *gorm.DB, storageClient *storage.Client, authService *auth.Service, logger *slog.Logger) {
+const maxPutBodyBytes = 2 << 30
+
+func RegisterRoutes(router chi.Router, db *gorm.DB, storageClient *storage.Client, authService *auth.Service, quotaService *quota.Service, logger *slog.Logger) {
 	lockSystem := webdav.NewMemLS()
 
 	router.Route("/webdav", func(r chi.Router) {
@@ -38,9 +41,13 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, storageClient *storage.Clien
 			}
 			uid, _ := strconv.ParseInt(identity.UserID, 10, 64)
 
+			if req.Method == http.MethodPut {
+				req.Body = http.MaxBytesReader(w, req.Body, maxPutBodyBytes)
+			}
+
 			handler := &webdav.Handler{
 				Prefix:     "/webdav",
-				FileSystem: NewNuageFS(db, storageClient, uid),
+				FileSystem: NewNuageFS(db, storageClient, quotaService, uid),
 				LockSystem: lockSystem,
 				Logger: func(r *http.Request, err error) {
 					if err != nil {

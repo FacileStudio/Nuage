@@ -1,17 +1,19 @@
+# Local development only. Publishes service ports on the loopback interface.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 services:
   nuage-db:
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   nuage-minio:
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
 
   nuage-api:
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
 
   nuage-client:
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"

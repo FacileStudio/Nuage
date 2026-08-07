@@ -60,8 +60,19 @@ func (h *Handler) forFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
 	page, perPage := parsePagination(r)
-	records, total, err := h.service.ForFile(r.Context(), fileID, page, perPage)
+	records, total, err := h.service.ForFile(r.Context(), userID, fileID, page, perPage)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

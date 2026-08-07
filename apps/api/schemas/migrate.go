@@ -2,13 +2,30 @@ package schemas
 
 import (
 	"context"
+	stderrors "errors"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 
 	"gorm.io/gorm"
 )
 
+// migrationLockID namespaces the advisory lock that serialises schema
+// migration across concurrently starting instances.
+const migrationLockID = 4919
+
 func Migrate(db *gorm.DB) error {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", migrationLockID).Error; err != nil {
+			return err
+		}
+		return migrateSchema(tx)
+	}); err != nil {
+		return err
+	}
+	return usercolor.BackfillMissing(context.Background(), db)
+}
+
+func migrateSchema(db *gorm.DB) error {
 	if err := preMigrate(db); err != nil {
 		return err
 	}
@@ -28,31 +45,36 @@ func Migrate(db *gorm.DB) error {
 		&UserQuota{},
 		&ActivityLog{},
 		&NookDelivery{},
+		&Tombstone{},
 	); err != nil {
 		return err
 	}
-	if err := ensureAdmin(db); err != nil {
-		return err
-	}
-	return usercolor.BackfillMissing(context.Background(), db)
+	return ensureAdmin(db)
 }
 
+// ensureAdmin promotes the earliest account when no administrator exists, so a
+// fresh instance is always manageable. It never runs once an admin is present.
 func ensureAdmin(db *gorm.DB) error {
 	var adminCount int64
-	db.Model(&User{}).Where("is_admin = ?", true).Count(&adminCount)
+	if err := db.Model(&User{}).Where("is_admin = ?", true).Count(&adminCount).Error; err != nil {
+		return err
+	}
 	if adminCount > 0 {
 		return nil
 	}
 	var firstUser User
 	if err := db.Order("id asc").First(&firstUser).Error; err != nil {
-		return nil
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
 	}
 	return db.Model(&firstUser).Update("is_admin", true).Error
 }
 
 func preMigrate(db *gorm.DB) error {
 	if db.Migrator().HasTable("api_tokens") {
-		db.Exec(`
+		if err := db.Exec(`
 			DO $$ BEGIN
 				IF EXISTS (
 					SELECT 1 FROM information_schema.table_constraints
@@ -74,11 +96,13 @@ func preMigrate(db *gorm.DB) error {
 					END IF;
 				END IF;
 			END $$;
-		`)
+		`).Error; err != nil {
+			return err
+		}
 	}
 
 	if db.Migrator().HasTable("shares") {
-		db.Exec(`
+		if err := db.Exec(`
 			DO $$ BEGIN
 				IF EXISTS (
 					SELECT 1 FROM information_schema.columns
@@ -88,7 +112,9 @@ func preMigrate(db *gorm.DB) error {
 					ALTER TABLE shares DROP COLUMN shared_with;
 				END IF;
 			END $$;
-		`)
+		`).Error; err != nil {
+			return err
+		}
 	}
 
 	return nil

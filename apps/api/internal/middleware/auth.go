@@ -38,11 +38,35 @@ func RequireAuth(authService Authenticator) func(http.Handler) http.Handler {
 				return
 			}
 
-			authContext := authcontext.WithIdentity(request.Context(), authcontext.Identity{
+			identity := authcontext.Identity{
 				UserID: userID,
 				Email:  data.GetEmail(),
-			})
+			}
+			if admin, ok := rawData.(interface{ GetIsAdmin() bool }); ok {
+				identity.IsAdmin = admin.GetIsAdmin()
+			}
+
+			authContext := authcontext.WithIdentity(request.Context(), identity)
 			next.ServeHTTP(w, request.WithContext(authContext))
+		})
+	}
+}
+
+// RequireAdmin rejects authenticated callers that are not administrators. It
+// must be mounted after RequireAuth.
+func RequireAdmin() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			identity, ok := authcontext.IdentityFromContext(request.Context())
+			if !ok {
+				httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+				return
+			}
+			if !identity.IsAdmin {
+				httpjson.WriteError(w, errors.Forbidden("admin access required"))
+				return
+			}
+			next.ServeHTTP(w, request)
 		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
@@ -66,6 +67,7 @@ func (h *oidcHandler) login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   int(oidcStateTTL.Seconds()),
 		HttpOnly: true,
+		Secure:   strings.HasPrefix(h.successURL, "https://"),
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.Redirect(w, r, h.oauth2Cfg.AuthCodeURL(state), http.StatusFound)
@@ -104,13 +106,13 @@ func (h *oidcHandler) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var claims struct {
-		Email            string `json:"email"`
-		EmailVerified    bool   `json:"email_verified"`
-		Name             string `json:"name"`
+		Email             string `json:"email"`
+		EmailVerified     bool   `json:"email_verified"`
+		Name              string `json:"name"`
 		PreferredUsername string `json:"preferred_username"`
-		GivenName        string `json:"given_name"`
-		FamilyName       string `json:"family_name"`
-		Picture          string `json:"picture"`
+		GivenName         string `json:"given_name"`
+		FamilyName        string `json:"family_name"`
+		Picture           string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		httpjson.WriteError(w, errors.Internal("failed to parse claims", err))
@@ -122,11 +124,11 @@ func (h *oidcHandler) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	profile := oidcavatar.Profile{
-		Name:             claims.Name,
+		Name:              claims.Name,
 		PreferredUsername: claims.PreferredUsername,
-		GivenName:        claims.GivenName,
-		FamilyName:       claims.FamilyName,
-		Picture:          claims.Picture,
+		GivenName:         claims.GivenName,
+		FamilyName:        claims.FamilyName,
+		Picture:           claims.Picture,
 	}
 	_, token, err := h.service.upsertOIDCUser(r.Context(), claims.Email, profile, oauth2Token)
 	if err != nil {
@@ -135,9 +137,7 @@ func (h *oidcHandler) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dest, _ := url.Parse(h.successURL)
-	q := dest.Query()
-	q.Set("token", token)
-	dest.RawQuery = q.Encode()
+	dest.Fragment = "token=" + token
 	http.Redirect(w, r, dest.String(), http.StatusFound)
 }
 

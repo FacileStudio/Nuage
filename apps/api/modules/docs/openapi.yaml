@@ -1582,8 +1582,18 @@ paths:
       operationId: getSyncChanges
       summary: Get changes since timestamp
       description: |
-        Returns files and folders that have been created, modified, or deleted
-        since the given timestamp. Used for incremental sync.
+        Returns files and folders created, modified, or deleted since the given
+        timestamp, across the caller's personal items and every space they
+        belong to.
+
+        Cursor protocol: pass the previous response's `server_time` as the next
+        request's `since`. That value is deliberately dated slightly behind the
+        moment the query ran, so a transaction committing during the request is
+        never skipped. The cost is that a small window of changes is delivered
+        twice — clients must apply changes idempotently, keyed on `id`.
+
+        A client that has never synced, or whose cursor is older than the
+        90-day deletion-marker retention, must start from /sync/state instead.
       tags: [Sync]
       security:
         - bearerAuth: []
@@ -1591,7 +1601,9 @@ paths:
         - name: since
           in: query
           required: true
-          description: RFC 3339 timestamp to fetch changes from
+          description: |
+            RFC 3339 timestamp to fetch changes from, normally the `server_time`
+            returned by the previous call.
           schema:
             type: string
             format: date-time
@@ -1642,8 +1654,13 @@ paths:
       operationId: getSyncState
       summary: Get full sync state
       description: |
-        Returns the complete state of all files and folders. Used for initial sync
-        or full reconciliation.
+        Returns every live file and folder the caller can reach, personal and
+        across their spaces. Used for the initial sync and for full
+        reconciliation after a client has been offline longer than the
+        deletion-marker retention window.
+
+        The returned `server_time` is a valid starting cursor for
+        /sync/changes. Anything absent from this response no longer exists.
       tags: [Sync]
       security:
         - bearerAuth: []
@@ -2777,32 +2794,40 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
+          type: integer
+          format: int64
         facile_id:
           type: string
         name:
           type: string
-        type:
+        mime_type:
           type: string
-          enum: [file, folder]
         size:
           type: integer
           format: int64
-          nullable: true
         hash:
           type: string
-          nullable: true
         parent_id:
-          type: string
-          format: uuid
+          type: integer
+          format: int64
           nullable: true
           description: Parent folder ID (for folders)
         folder_id:
-          type: string
-          format: uuid
+          type: integer
+          format: int64
           nullable: true
           description: Containing folder ID (for files)
+        space_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            Owning space, or null for the caller's personal items. Items from
+            different spaces may share a name and folder position, so clients
+            must namespace their local mirror by this field.
+        created_at:
+          type: string
+          format: date-time
         updated_at:
           type: string
           format: date-time
@@ -2811,16 +2836,27 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
+          type: integer
+          format: int64
         facile_id:
           type: string
-        type:
+        name:
           type: string
-          enum: [file, folder]
+        space_id:
+          type: integer
+          format: int64
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+        permanent:
+          type: boolean
+          description: |
+            False when the item was moved to the trash and can still be
+            restored; true when it was destroyed permanently. Permanent
+            deletions are reported from a deletion-marker table that is
+            retained for 90 days, so a client offline for longer must
+            resynchronise from /sync/state rather than trusting /sync/changes.
 
     Setting:
       type: object

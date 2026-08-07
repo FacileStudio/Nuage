@@ -63,6 +63,11 @@ func (h *Handler) setUserQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.StorageLimit < UnlimitedStorageLimit {
+		httpjson.WriteError(w, errors.Invalid("storage_limit must be >= 0, or -1 for unlimited"))
+		return
+	}
+
 	if err := h.service.SetLimit(r.Context(), targetUserID, req.StorageLimit); err != nil {
 		httpjson.WriteError(w, err)
 		return

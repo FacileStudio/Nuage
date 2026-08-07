@@ -21,7 +21,8 @@ type ListResponse struct {
 type UpdateRequest struct {
 	Name     *string `json:"name"`
 	Email    *string `json:"email"`
-	Password *string `json:"password"`
+	Password        *string `json:"password"`
+	CurrentPassword *string `json:"current_password"`
 	Color    *string `json:"color"`
 }
 

@@ -1,0 +1,14 @@
+# Build context for apps/api/Dockerfile is the repo root.
+.git
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.svelte-kit
+**/build
+apps/api/bin
+apps/api/tests
+apps/client
+docker-compose*.yml
+README.md
+CLAUDE.md

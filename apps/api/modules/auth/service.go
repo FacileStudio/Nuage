@@ -136,11 +136,12 @@ func (service *Service) authenticateRequest(context context.Context, authorizati
 	var out struct {
 		UserID    int64
 		Email     string
+		IsAdmin   bool
 		ExpiresAt time.Time
 	}
 	err := service.orm.WithContext(context).
 		Table("sessions s").
-		Select("u.id as user_id, u.email as email, s.expires_at as expires_at").
+		Select("u.id as user_id, u.email as email, u.is_admin as is_admin, s.expires_at as expires_at").
 		Joins("join users u on u.id = s.user_id").
 		Where("s.token = ?", hashed).
 		Scan(&out).Error
@@ -151,16 +152,17 @@ func (service *Service) authenticateRequest(context context.Context, authorizati
 		if time.Now().After(out.ExpiresAt) {
 			return "", nil, errors.Unauthorized("expired auth token")
 		}
-		return strconv.FormatInt(out.UserID, 10), &Data{Email: out.Email}, nil
+		return strconv.FormatInt(out.UserID, 10), &Data{Email: out.Email, IsAdmin: out.IsAdmin}, nil
 	}
 
 	var apiOut struct {
-		UserID int64
-		Email  string
+		UserID  int64
+		Email   string
+		IsAdmin bool
 	}
 	err = service.orm.WithContext(context).
 		Table("api_tokens t").
-		Select("u.id as user_id, u.email as email").
+		Select("u.id as user_id, u.email as email, u.is_admin as is_admin").
 		Joins("join users u on u.id = t.user_id").
 		Where("t.token = ?", hashed).
 		Scan(&apiOut).Error
@@ -170,7 +172,7 @@ func (service *Service) authenticateRequest(context context.Context, authorizati
 	if apiOut.UserID == 0 {
 		return "", nil, errors.Unauthorized("invalid auth token")
 	}
-	return strconv.FormatInt(apiOut.UserID, 10), &Data{Email: apiOut.Email}, nil
+	return strconv.FormatInt(apiOut.UserID, 10), &Data{Email: apiOut.Email, IsAdmin: apiOut.IsAdmin}, nil
 }
 
 func (service *Service) Authenticate(context context.Context, authorization string) (string, any, error) {

@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"net/url"
 	"time"
@@ -9,6 +11,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
+
+const unknownSizePartSize = 16 << 20
 
 type MinIOConfig struct {
 	Endpoint  string
@@ -54,6 +58,9 @@ func (c *Client) EnsureBucket(ctx context.Context) error {
 
 func (c *Client) PutObject(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
 	opts := minio.PutObjectOptions{ContentType: contentType}
+	if size < 0 {
+		opts.PartSize = unknownSizePartSize
+	}
 	_, err := c.mc.PutObject(ctx, c.bucket, key, reader, size, opts)
 	return err
 }
@@ -103,26 +110,63 @@ func (c *Client) StatObject(ctx context.Context, key string) (ObjectInfo, error)
 	}, nil
 }
 
-func (c *Client) AssembleChunks(ctx context.Context, destKey string, chunkKeys []string, totalSize int64, contentType string) error {
-	readers := make([]io.Reader, 0, len(chunkKeys))
-	closers := make([]io.ReadCloser, 0, len(chunkKeys))
-	defer func() {
-		for _, cl := range closers {
-			cl.Close()
-		}
-	}()
+type sequentialObjectReader struct {
+	ctx     context.Context
+	client  *Client
+	keys    []string
+	current io.ReadCloser
+}
 
-	for _, key := range chunkKeys {
-		r, err := c.GetObject(ctx, key)
-		if err != nil {
-			return err
+func (r *sequentialObjectReader) Read(p []byte) (int, error) {
+	for {
+		if r.current == nil {
+			if len(r.keys) == 0 {
+				return 0, io.EOF
+			}
+			obj, err := r.client.GetObject(r.ctx, r.keys[0])
+			if err != nil {
+				return 0, err
+			}
+			r.keys = r.keys[1:]
+			r.current = obj
 		}
-		readers = append(readers, r)
-		closers = append(closers, r)
+		n, err := r.current.Read(p)
+		if err == io.EOF {
+			closeErr := r.current.Close()
+			r.current = nil
+			if closeErr != nil {
+				return n, closeErr
+			}
+			if n > 0 {
+				return n, nil
+			}
+			continue
+		}
+		return n, err
 	}
+}
 
-	multi := io.MultiReader(readers...)
-	return c.PutObject(ctx, destKey, multi, totalSize, contentType)
+func (r *sequentialObjectReader) Close() error {
+	if r.current == nil {
+		return nil
+	}
+	err := r.current.Close()
+	r.current = nil
+	return err
+}
+
+// AssembleChunks streams the chunk objects one at a time into destKey and
+// returns the hex-encoded SHA-256 of the assembled content.
+func (c *Client) AssembleChunks(ctx context.Context, destKey string, chunkKeys []string, totalSize int64, contentType string) (string, error) {
+	reader := &sequentialObjectReader{ctx: ctx, client: c, keys: chunkKeys}
+	defer reader.Close()
+
+	hasher := sha256.New()
+	tee := io.TeeReader(reader, hasher)
+	if err := c.PutObject(ctx, destKey, tee, totalSize, contentType); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func (c *Client) DeletePrefix(ctx context.Context, prefix string) error {
@@ -144,6 +188,6 @@ func (c *Client) DeletePrefix(ctx context.Context, prefix string) error {
 func (c *Client) CopyObject(ctx context.Context, srcKey, destKey string) error {
 	src := minio.CopySrcOptions{Bucket: c.bucket, Object: srcKey}
 	dst := minio.CopyDestOptions{Bucket: c.bucket, Object: destKey}
-	_, err := c.mc.CopyObject(ctx, dst, src)
+	_, err := c.mc.ComposeObject(ctx, dst, src)
 	return err
 }

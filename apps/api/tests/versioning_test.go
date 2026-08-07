@@ -1,9 +1,13 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -82,4 +86,44 @@ func TestRestoreVersion(t *testing.T) {
 	}
 	parseJSON(restoreResp, &restored)
 	assert.Equal(t, originalHash, restored.Hash)
+}
+
+func TestVersionCleanupKeepsLiveObjects(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "version-clean@example.com", "password12345")
+
+	require.NoError(t, ts.db.Create(&schemas.Setting{Key: "max_file_versions", Value: "1"}).Error)
+
+	resp := uploadFile(ts, token, "clean.txt", "v1", nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &file)
+
+	for i := 2; i <= 4; i++ {
+		r := reuploadFile(ts, token, file.ID, fmt.Sprintf("version %d content", i))
+		require.Equal(t, http.StatusOK, r.StatusCode)
+	}
+
+	var versions []schemas.FileVersion
+	require.Eventually(t, func() bool {
+		versions = nil
+		ts.db.Where("file_id = ?", file.ID).Find(&versions)
+		return len(versions) == 1
+	}, 5*time.Second, 100*time.Millisecond)
+
+	storageClient := newTestStorageClient(t)
+	for _, v := range versions {
+		_, err := storageClient.StatObject(context.Background(), v.BucketKey)
+		assert.NoError(t, err, "version row must point at an existing object")
+	}
+
+	var record schemas.File
+	require.NoError(t, ts.db.Where("id = ?", file.ID).First(&record).Error)
+	_, err := storageClient.StatObject(context.Background(), record.BucketKey)
+	assert.NoError(t, err, "live file object must exist")
+
+	dlResp := doGet(ts, fmt.Sprintf("/files/%d/download", file.ID), token)
+	assert.Equal(t, http.StatusOK, dlResp.StatusCode)
 }

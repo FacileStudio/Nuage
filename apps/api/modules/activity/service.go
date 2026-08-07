@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/errors"
+	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
@@ -83,7 +84,28 @@ func (s *Service) List(ctx context.Context, params ListParams) ([]schemas.Activi
 	return records, total, nil
 }
 
-func (s *Service) ForFile(ctx context.Context, fileID int64, page, perPage int) ([]schemas.ActivityLog, int64, error) {
+func (s *Service) ForFile(ctx context.Context, userID int64, fileID int64, page, perPage int) ([]schemas.ActivityLog, int64, error) {
+	spaceIDs, err := spaceaccess.MemberIDs(ctx, s.orm, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	reach := s.orm.Where("uploaded_by = ?", userID)
+	if len(spaceIDs) > 0 {
+		reach = reach.Or("space_id IN ?", spaceIDs)
+	}
+
+	var count int64
+	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).
+		Where("id = ?", fileID).
+		Where(reach).
+		Count(&count).Error; err != nil {
+		return nil, 0, errors.Internal("failed to verify file", err)
+	}
+	if count == 0 {
+		return nil, 0, errors.NotFound("file not found")
+	}
+
 	rid := fileID
 	return s.List(ctx, ListParams{
 		ResourceType: "file",

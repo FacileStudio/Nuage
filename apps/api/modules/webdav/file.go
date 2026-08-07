@@ -1,7 +1,6 @@
 package webdav
 
 import (
-	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
@@ -24,10 +23,10 @@ type VirtualDir struct {
 	pos      int
 }
 
-func (d *VirtualDir) Read([]byte) (int, error)                  { return 0, os.ErrInvalid }
-func (d *VirtualDir) Write([]byte) (int, error)                 { return 0, os.ErrInvalid }
-func (d *VirtualDir) Seek(int64, int) (int64, error)            { return 0, os.ErrInvalid }
-func (d *VirtualDir) Close() error                              { return nil }
+func (d *VirtualDir) Read([]byte) (int, error)       { return 0, os.ErrInvalid }
+func (d *VirtualDir) Write([]byte) (int, error)      { return 0, os.ErrInvalid }
+func (d *VirtualDir) Seek(int64, int) (int64, error) { return 0, os.ErrInvalid }
+func (d *VirtualDir) Close() error                   { return nil }
 func (d *VirtualDir) Stat() (os.FileInfo, error) {
 	return &DirInfo{name: d.dirName, modTime: d.modTime}, nil
 }
@@ -104,8 +103,9 @@ type VirtualFile struct {
 	file       *schemas.File
 	name       string
 	parentPath string
-	reader     *bytes.Reader
-	buf        *bytes.Buffer
+	reader     io.ReadSeeker
+	closer     io.Closer
+	tmp        *os.File
 	writable   bool
 	creating   bool
 	closed     bool
@@ -122,7 +122,14 @@ func (f *VirtualFile) Write(p []byte) (int, error) {
 	if !f.writable {
 		return 0, os.ErrPermission
 	}
-	return f.buf.Write(p)
+	if f.tmp == nil {
+		tmp, err := os.CreateTemp("", "nuage-webdav-*")
+		if err != nil {
+			return 0, err
+		}
+		f.tmp = tmp
+	}
+	return f.tmp.Write(p)
 }
 
 func (f *VirtualFile) Seek(offset int64, whence int) (int64, error) {
@@ -144,8 +151,10 @@ func (f *VirtualFile) Stat() (os.FileInfo, error) {
 		}, nil
 	}
 	size := int64(0)
-	if f.buf != nil {
-		size = int64(f.buf.Len())
+	if f.tmp != nil {
+		if info, err := f.tmp.Stat(); err == nil {
+			size = info.Size()
+		}
 	}
 	return &nuageFileInfo{name: f.name, size: size, modTime: time.Now()}, nil
 }
@@ -156,17 +165,34 @@ func (f *VirtualFile) Close() error {
 	}
 	f.closed = true
 
-	if !f.writable || f.buf == nil || f.buf.Len() == 0 {
+	if f.closer != nil {
+		return f.closer.Close()
+	}
+
+	if !f.writable || f.tmp == nil {
 		return nil
 	}
+	defer func() {
+		f.tmp.Close()
+		os.Remove(f.tmp.Name())
+	}()
 
-	data := f.buf.Bytes()
+	info, err := f.tmp.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() == 0 {
+		return nil
+	}
+	if _, err := f.tmp.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
 
 	if f.creating {
-		return f.fs.createFile(f.ctx, f.name, f.parentPath, data)
+		return f.fs.createFile(f.ctx, f.name, f.parentPath, f.tmp, info.Size())
 	}
 	if f.file != nil {
-		return f.fs.overwriteFile(f.ctx, f.file, data)
+		return f.fs.overwriteFile(f.ctx, f.file, f.tmp, info.Size())
 	}
 	return nil
 }
@@ -199,12 +225,12 @@ type nuageFileInfo struct {
 	mimeType string
 }
 
-func (fi *nuageFileInfo) Name() string      { return fi.name }
-func (fi *nuageFileInfo) Size() int64       { return fi.size }
-func (fi *nuageFileInfo) Mode() os.FileMode { return 0644 }
+func (fi *nuageFileInfo) Name() string       { return fi.name }
+func (fi *nuageFileInfo) Size() int64        { return fi.size }
+func (fi *nuageFileInfo) Mode() os.FileMode  { return 0644 }
 func (fi *nuageFileInfo) ModTime() time.Time { return fi.modTime.UTC() }
-func (fi *nuageFileInfo) IsDir() bool       { return false }
-func (fi *nuageFileInfo) Sys() any          { return nil }
+func (fi *nuageFileInfo) IsDir() bool        { return false }
+func (fi *nuageFileInfo) Sys() any           { return nil }
 
 func (fi *nuageFileInfo) ContentType(_ context.Context) (string, error) {
 	if fi.mimeType != "" {
@@ -218,22 +244,22 @@ type DirInfo struct {
 	modTime time.Time
 }
 
-func (di *DirInfo) Name() string      { return di.name }
-func (di *DirInfo) Size() int64       { return 0 }
-func (di *DirInfo) Mode() os.FileMode { return os.ModeDir | 0755 }
+func (di *DirInfo) Name() string       { return di.name }
+func (di *DirInfo) Size() int64        { return 0 }
+func (di *DirInfo) Mode() os.FileMode  { return os.ModeDir | 0755 }
 func (di *DirInfo) ModTime() time.Time { return di.modTime.UTC() }
-func (di *DirInfo) IsDir() bool       { return true }
-func (di *DirInfo) Sys() any          { return nil }
+func (di *DirInfo) IsDir() bool        { return true }
+func (di *DirInfo) Sys() any           { return nil }
 
 type DevNullFile struct {
 	name string
 }
 
-func (d *DevNullFile) Read([]byte) (int, error)       { return 0, io.EOF }
-func (d *DevNullFile) Write(p []byte) (int, error)    { return len(p), nil }
-func (d *DevNullFile) Seek(int64, int) (int64, error) { return 0, nil }
+func (d *DevNullFile) Read([]byte) (int, error)           { return 0, io.EOF }
+func (d *DevNullFile) Write(p []byte) (int, error)        { return len(p), nil }
+func (d *DevNullFile) Seek(int64, int) (int64, error)     { return 0, nil }
 func (d *DevNullFile) Readdir(int) ([]os.FileInfo, error) { return nil, os.ErrInvalid }
-func (d *DevNullFile) Close() error                   { return nil }
+func (d *DevNullFile) Close() error                       { return nil }
 func (d *DevNullFile) Stat() (os.FileInfo, error) {
 	return &nuageFileInfo{name: d.name, size: 0, modTime: time.Now()}, nil
 }
@@ -250,6 +276,34 @@ func (d *DevNullFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, erro
 		}
 	}
 	return []webdav.Propstat{pstat}, nil
+}
+
+func spoolToTemp(r io.Reader) (*os.File, error) {
+	tmp, err := os.CreateTemp("", "nuage-webdav-*")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.Copy(tmp, r); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil, err
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil, err
+	}
+	return tmp, nil
+}
+
+type removeOnClose struct {
+	*os.File
+}
+
+func (r *removeOnClose) Close() error {
+	err := r.File.Close()
+	os.Remove(r.File.Name())
+	return err
 }
 
 var ErrNotImplemented = errors.New("not implemented")

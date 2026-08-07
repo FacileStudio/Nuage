@@ -17,15 +17,15 @@ Cloud file storage for the Facile Suite. Self-hosted, Docker-deployed, with a Go
 ### Docker (full stack)
 
 ```sh
-cp .env.example .env
-docker compose up --build          # all services on localhost:3000
+cp .env.example .env               # then set POSTGRES_PASSWORD, MINIO_SECRET_KEY, PRESIGN_SECRET
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build   # all services on localhost:3000
 ```
 
 ### Local Development
 
 ```sh
-# 1. Start backing services
-docker compose up db minio -d
+# 1. Start backing services (ports published on 127.0.0.1 via docker-compose.dev.yml)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up nuage-db nuage-minio -d
 
 # 2. API (port 4000)
 cd apps/api
@@ -40,7 +40,7 @@ bun run dev
 
 ### API Tests
 
-Tests require a running PostgreSQL and MinIO (the `docker compose up db minio -d` from above).
+Tests require a running PostgreSQL and MinIO (the `docker compose -f docker-compose.yml -f docker-compose.dev.yml up nuage-db nuage-minio -d` from above).
 
 ```sh
 cd apps/api
@@ -60,7 +60,7 @@ bun run check                      # svelte-check + TypeScript
 ```
 Nuage/
   docker-compose.yml               # full stack: db, minio, api, client
-  docker-compose.override.yml      # exposes ports for local dev
+  docker-compose.dev.yml           # publishes ports on 127.0.0.1 for local dev (opt-in via -f)
   .env.example                     # production env template
   apps/
     api/
@@ -130,6 +130,9 @@ The SvelteKit client is the only public endpoint. It reverse-proxies `/api/*` re
 
 - The API Dockerfile context is the repo root (not `apps/api/`) because it copies from `apps/api/`. The client Dockerfile context is `apps/client/`.
 - Tests are integration tests that need real Postgres and MinIO running. There is no mock layer.
-- The client has `BODY_SIZE_LIMIT=Infinity` to support large file uploads via chunked transfer.
-- Rate limiting is set at 100 requests/minute per IP on the API.
+- The client sets `BODY_SIZE_LIMIT=2000000000` (2 GB) to support large file uploads via chunked transfer.
+- Rate limiting is 100 requests/minute per IP, skipped for `/files/upload/*` and `/webdav/*` (a single large upload issues hundreds of sequential chunk requests), plus a stricter 10/minute on `/auth/login` and `/auth/register`. The client IP is taken from the *rightmost* `X-Forwarded-For` entry, since the leftmost is caller-controlled.
+- `PRESIGN_SECRET` is required: the API refuses to boot without it, because presigned download links are unauthenticated and forgeable if the signing key is guessable.
+- Sync clients feed the previous response's `server_time` back as `since`. That cursor is intentionally dated slightly in the past, so a small window of changes is redelivered — clients must apply changes idempotently by `id`.
+- Permanent deletions are recorded in a `tombstones` table (90-day retention) so clients whose cursor predates the purge still learn the file is gone instead of re-uploading it.
 - Production routing uses Traefik labels in docker-compose.yml (Dokploy deployment on `nuage.facile.studio`). The `/api` prefix is stripped by Traefik before hitting the Go API.
