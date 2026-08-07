@@ -195,13 +195,27 @@ func (service *Service) deleteSession(ctx context.Context, authorization string)
 	return nil
 }
 
-func (service *Service) upsertOIDCUser(context context.Context, email string, profile oidcavatar.Profile, oauth2Token *oauth2.Token) (userID string, token string, err error) {
+func (service *Service) upsertOIDCUser(context context.Context, subject string, email string, emailTrusted bool, profile oidcavatar.Profile, oauth2Token *oauth2.Token) (userID string, token string, err error) {
 	var record schemas.User
-	err = service.orm.WithContext(context).Where("email = ?", email).First(&record).Error
-	if err != nil && !stderrors.Is(err, gorm.ErrRecordNotFound) {
-		return "", "", errors.Internal("failed to look up user", err)
+	found := false
+	if subject != "" {
+		lookupErr := service.orm.WithContext(context).Where("oidc_subject = ?", subject).First(&record).Error
+		if lookupErr == nil {
+			found = true
+		} else if !stderrors.Is(lookupErr, gorm.ErrRecordNotFound) {
+			return "", "", errors.Internal("failed to look up user", lookupErr)
+		}
 	}
-	isNew := stderrors.Is(err, gorm.ErrRecordNotFound)
+	if !found && emailTrusted {
+		lookupErr := service.orm.WithContext(context).Where("email = ?", email).First(&record).Error
+		if lookupErr == nil {
+			found = true
+		} else if !stderrors.Is(lookupErr, gorm.ErrRecordNotFound) {
+			return "", "", errors.Internal("failed to look up user", lookupErr)
+		}
+	}
+
+	isNew := !found
 
 	if isNew {
 		color, colorErr := usercolor.NextAvailable(context, service.orm)
@@ -266,6 +280,15 @@ func (service *Service) upsertOIDCUser(context context.Context, email string, pr
 		record.OIDCRefreshToken = oauth2Token.RefreshToken
 		record.OIDCTokenExpiry = oauth2Token.Expiry
 		service.orm.WithContext(context).Select("oidc_access_token", "oidc_refresh_token", "oidc_token_expiry").Save(&record)
+	}
+
+	if subject != "" && (record.OIDCSubject == nil || *record.OIDCSubject != subject) {
+		record.OIDCSubject = &subject
+		service.orm.WithContext(context).Select("oidc_subject").Save(&record)
+	}
+	if email != "" && record.Email != email {
+		record.Email = email
+		service.orm.WithContext(context).Select("email").Save(&record)
 	}
 
 	token, err = authcrypto.NewToken()

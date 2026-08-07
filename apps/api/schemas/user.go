@@ -9,6 +9,7 @@ type User struct {
 	AvatarURL        string    `gorm:"column:avatar_url"`
 	AvatarSource     string    `gorm:"column:avatar_source"`
 	OIDCPictureURL   string    `gorm:"column:oidc_picture_url"`
+	OIDCSubject      *string   `gorm:"column:oidc_subject;uniqueIndex"`
 	Color            string    `gorm:"column:color"`
 	PasswordHash     string    `gorm:"column:password_hash"`
 	IsAdmin          bool      `gorm:"column:is_admin;default:false"`
