@@ -392,12 +392,12 @@ export const backend = {
 				}
 				throw new Error(payload?.error?.message || `Upload failed with status ${r.status}`);
 			}
-			return (await r.json()) as { avatar_url: string };
+			return (await r.json()) as MeResponse;
 		});
 	},
 
 	deleteAvatar(token: string) {
-		return apiFetch<{}>('/users/me/avatar', { method: 'DELETE' }, token);
+		return apiFetch<MeResponse>('/users/me/avatar', { method: 'DELETE' }, token);
 	},
 
 	getApiToken(token: string) {

@@ -12,7 +12,11 @@
 	let profileMessage = $state('');
 
 	let avatarUploading = $state(false);
+	let avatarError = $state('');
+	// avatar_url arrives ready to use, whether it points at a file this instance serves or
+	// straight at the SSO photo. Never prefix it with the API base URL.
 	let avatarUrl = $derived(app.user?.avatar_url ?? '');
+	let avatarFromSSO = $derived(app.user?.avatar_source === 'oidc');
 
 	let apiTokens = $state<ApiToken[]>([]);
 	let newTokenName = $state('');
@@ -74,26 +78,30 @@
 		const input = e.target as HTMLInputElement;
 		if (!input.files?.length) return;
 		avatarUploading = true;
+		avatarError = '';
 		try {
 			const formData = new FormData();
 			formData.set('avatar', input.files[0]);
+			// The response is the whole profile: avatar_url is derived server-side, so
+			// picking it apart here would be a second place for the rule to drift.
 			const res = await backend.uploadAvatar(app.token, formData);
-			if (app.user) {
-				app.setUser({ ...app.user, avatar_url: res.avatar_url });
-			}
-		} catch {}
+			app.setUser(res.user);
+		} catch (e: any) {
+			avatarError = e.message || 'Failed to upload the picture';
+		}
 		avatarUploading = false;
 		input.value = '';
 	}
 
 	async function removeAvatar() {
 		avatarUploading = true;
+		avatarError = '';
 		try {
-			await backend.deleteAvatar(app.token);
-			if (app.user) {
-				app.setUser({ ...app.user, avatar_url: '' });
-			}
-		} catch {}
+			const res = await backend.deleteAvatar(app.token);
+			app.setUser(res.user);
+		} catch (e: any) {
+			avatarError = e.message || 'Failed to remove the picture';
+		}
 		avatarUploading = false;
 	}
 
@@ -219,29 +227,40 @@
 								{getInitials(profileName || profileEmail)}
 							</div>
 						{/if}
+						<!-- Uploading is the fallback, not a second option: when SSO supplies a photo
+						     it is the one shown everywhere, so offering a file picker here would take
+						     an upload the user would never see. Say where the photo lives instead. -->
 						<div class="flex flex-col gap-2">
-							<div class="flex gap-2">
-								<label class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50">
-									{#if avatarUploading}
-										<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
-									{:else}
-										<iconify-icon icon="solar:camera-linear" width="16"></iconify-icon>
+							{#if avatarFromSSO}
+								<p class="text-sm">Your picture comes from single sign-on.</p>
+								<p class="text-xs text-muted-foreground">
+									Change it in your account settings on the login portal and it updates here
+									within a few minutes.
+								</p>
+							{:else}
+								<div class="flex gap-2">
+									<label class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50">
+										{#if avatarUploading}
+											<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
+										{:else}
+											<iconify-icon icon="solar:camera-linear" width="16"></iconify-icon>
+										{/if}
+										Change
+										<input type="file" accept="image/*" class="hidden" onchange={handleAvatarUpload} disabled={avatarUploading} />
+									</label>
+									{#if avatarUrl}
+										<button
+											class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+											onclick={removeAvatar}
+											disabled={avatarUploading}
+										>
+											Remove
+										</button>
 									{/if}
-									Change
-									<input type="file" accept="image/*" class="hidden" onchange={handleAvatarUpload} disabled={avatarUploading} />
-								</label>
-								{#if avatarUrl}
-									<button
-										class="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-										onclick={removeAvatar}
-										disabled={avatarUploading}
-									>
-										Remove
-									</button>
-								{/if}
-							</div>
-							{#if app.user?.avatar_source === 'oidc'}
-								<p class="text-xs text-muted-foreground">Synced from SSO</p>
+								</div>
+							{/if}
+							{#if avatarError}
+								<p class="text-xs text-destructive">{avatarError}</p>
 							{/if}
 						</div>
 					</div>

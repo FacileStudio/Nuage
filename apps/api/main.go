@@ -45,6 +45,14 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	apiPrefix = "/api"
+	// avatarRoutePrefix is where uploaded avatars are served from. schemas.AvatarFilePrefix
+	// is the same location spelled as a stored value, and main_test.go asserts the two
+	// still agree — a derived avatar pointing at a route that moved is a silent 404.
+	avatarRoutePrefix = "/avatars/"
+)
+
 func main() {
 	if healthcheck.Handle(os.Args) {
 		return
@@ -146,7 +154,7 @@ func run() int {
 	defer notifier.Stop()
 	actLogger := activity.NewLogger(db)
 
-	authService := auth.NewService(db, notifier, appEnv.StorageDir, appLogger)
+	authService := auth.NewService(db, notifier, appLogger)
 	userService := users.NewService(db, appEnv.StorageDir)
 	quotaService := quota.NewService(db)
 	if appEnv.PresignSecret == "" {
@@ -178,12 +186,12 @@ func run() int {
 		return storageClient.EnsureBucket(ctx)
 	})
 
-	avatarFS := http.StripPrefix("/api/avatars/", http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
+	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 
-	router.Route("/api", func(r chi.Router) {
+	router.Route(apiPrefix, func(r chi.Router) {
 		docs.RegisterRoutes(r)
 
-		r.Get("/avatars/*", func(w http.ResponseWriter, request *http.Request) {
+		r.Get(avatarRoutePrefix+"*", func(w http.ResponseWriter, request *http.Request) {
 			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
 			avatarFS.ServeHTTP(w, request)
 		})

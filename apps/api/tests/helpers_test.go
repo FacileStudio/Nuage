@@ -107,7 +107,7 @@ func setupTestServer(t *testing.T) *testServer {
 
 	notifier := nook.NewNotifier(db)
 	actLogger := activity.NewLogger(db)
-	authService := auth.NewService(db, notifier, t.TempDir(), slog.Default())
+	authService := auth.NewService(db, notifier, slog.Default())
 	userService := users.NewService(db, t.TempDir())
 	quotaService := quota.NewService(db)
 	presignSecret := presign.DeriveSecret("test-secret", "nuage-presign-v1")

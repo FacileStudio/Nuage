@@ -331,7 +331,7 @@ func mapMember(m schemas.SpaceMember) MemberResponse {
 			ID:        m.User.ID,
 			Email:     m.User.Email,
 			Name:      m.User.Name,
-			AvatarURL: m.User.AvatarURL,
+			AvatarURL: m.User.Avatar(),
 			Color:     m.User.Color,
 		}
 	}

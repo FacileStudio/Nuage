@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"log/slog"
-	"path/filepath"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
@@ -25,13 +24,12 @@ import (
 type Service struct {
 	orm        *gorm.DB
 	notifier   *nook.Notifier
-	storageDir string
 	logger     *slog.Logger
 	controller *Controller
 }
 
-func NewService(orm *gorm.DB, notifier *nook.Notifier, storageDir string, logger *slog.Logger) *Service {
-	service := &Service{orm: orm, notifier: notifier, storageDir: storageDir, logger: logger}
+func NewService(orm *gorm.DB, notifier *nook.Notifier, logger *slog.Logger) *Service {
+	service := &Service{orm: orm, notifier: notifier, logger: logger}
 	service.controller = newController(service)
 	return service
 }
@@ -236,16 +234,9 @@ func (service *Service) upsertOIDCUser(context context.Context, subject string, 
 				User: &nook.UserData{ID: record.ID, Email: record.Email},
 			})
 		}
-		if profile.Picture != "" {
-			relPath, fetchErr := oidcavatar.FetchAvatar(profile.Picture, service.storageDir, record.ID, service.logger)
-			if fetchErr != nil {
-				service.logger.Warn("failed to fetch OIDC avatar for new user", slog.Int64("user_id", record.ID), slog.Any("error", fetchErr))
-			} else {
-				record.AvatarURL = "/api/" + strings.ReplaceAll(relPath, string(filepath.Separator), "/")
-				record.AvatarSource = "oidc"
-				record.OIDCPictureURL = profile.Picture
-				service.orm.WithContext(context).Save(&record)
-			}
+		if photo := oidcavatar.PhotoURL(profile.Picture); photo != "" {
+			record.OIDCPictureURL = photo
+			service.orm.WithContext(context).Save(&record)
 		}
 	} else {
 		changed := false
@@ -253,21 +244,8 @@ func (service *Service) upsertOIDCUser(context context.Context, subject string, 
 			record.Name = displayName
 			changed = true
 		}
-		needsAvatar := profile.Picture != "" && (profile.Picture != record.OIDCPictureURL || (record.AvatarSource != "upload" && record.AvatarURL == ""))
-		if needsAvatar && record.AvatarSource != "upload" {
-			if record.AvatarSource == "oidc" && record.AvatarURL != "" {
-				oldRel := strings.TrimPrefix(record.AvatarURL, "/api/")
-				oidcavatar.RemoveFile(service.storageDir, oldRel)
-			}
-			relPath, fetchErr := oidcavatar.FetchAvatar(profile.Picture, service.storageDir, record.ID, service.logger)
-			if fetchErr != nil {
-				service.logger.Warn("failed to fetch OIDC avatar", slog.Int64("user_id", record.ID), slog.Any("error", fetchErr))
-			} else {
-				record.AvatarURL = "/api/" + strings.ReplaceAll(relPath, string(filepath.Separator), "/")
-				record.AvatarSource = "oidc"
-				changed = true
-			}
-			record.OIDCPictureURL = profile.Picture
+		if photo := oidcavatar.PhotoURL(profile.Picture); photo != record.OIDCPictureURL {
+			record.OIDCPictureURL = photo
 			changed = true
 		}
 		if changed {
@@ -359,21 +337,8 @@ func (service *Service) SyncOIDCProfile(ctx context.Context, userID int64, provi
 		record.Name = displayName
 		changed = true
 	}
-	needsAvatar := profile.Picture != "" && (profile.Picture != record.OIDCPictureURL || (record.AvatarSource != "upload" && record.AvatarURL == ""))
-	if needsAvatar && record.AvatarSource != "upload" {
-		if record.AvatarSource == "oidc" && record.AvatarURL != "" {
-			oldRel := strings.TrimPrefix(record.AvatarURL, "/api/")
-			oidcavatar.RemoveFile(service.storageDir, oldRel)
-		}
-		relPath, fetchErr := oidcavatar.FetchAvatar(profile.Picture, service.storageDir, record.ID, service.logger)
-		if fetchErr != nil {
-			service.logger.Warn("failed to fetch OIDC avatar during sync", slog.Int64("user_id", record.ID), slog.Any("error", fetchErr))
-		} else {
-			record.AvatarURL = "/api/" + strings.ReplaceAll(relPath, string(filepath.Separator), "/")
-			record.AvatarSource = "oidc"
-			changed = true
-		}
-		record.OIDCPictureURL = profile.Picture
+	if photo := oidcavatar.PhotoURL(profile.Picture); photo != record.OIDCPictureURL {
+		record.OIDCPictureURL = photo
 		changed = true
 	}
 

@@ -49,7 +49,55 @@ func migrateSchema(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
+	if err := backfillAvatarUploadPath(db); err != nil {
+		return err
+	}
 	return ensureAdmin(db)
+}
+
+// backfillAvatarUploadPath moves the uploaded avatars onto the column that now owns them,
+// and clears the stored copies of the SSO photo that nothing reads any more.
+//
+// The filename decides, not avatar_source. That column was added after the upload feature,
+// so the oldest uploaded avatars have it empty — on Sablier's production database two of
+// the four rows were exactly that, and keying on avatar_source = 'upload' would silently
+// have dropped their picture. persistAvatarFile has always named uploads "user-<id>-<nanos>"
+// and the old OIDC download named its copies "oidc-<id>-<nanos>", so anything that is not
+// an oidc- copy is somebody's upload and is kept.
+//
+// The prefix strip is anchored. Nuage serves avatars from /api/avatars/, not the /files/
+// the rest of the suite uses, and an unanchored replace() would mangle any filename that
+// happened to contain the prefix.
+//
+// avatar_url and avatar_source stay in the table, unread, until a later release drops
+// them. Expanding first means a rollback is redeploying the old binary rather than
+// restoring a backup.
+func backfillAvatarUploadPath(db *gorm.DB) error {
+	if db.Migrator().HasColumn(&User{}, "avatar_url") {
+		if err := db.Exec(
+			`UPDATE users SET avatar_upload_path = regexp_replace(avatar_url, '^/api/avatars/', '')
+			 WHERE coalesce(avatar_url, '') <> ''
+			   AND avatar_url LIKE '/api/avatars/%'
+			   AND avatar_url NOT LIKE '/api/avatars/oidc-%'
+			   AND coalesce(avatar_upload_path, '') = ''`).Error; err != nil {
+			return err
+		}
+	}
+
+	// The old code stored profile.Picture verbatim, so every user without a photo in
+	// Authentik carries a data: URI of their own initials here. Under the new rule this
+	// column means "there is an SSO photo", so leaving the placeholder would suppress the
+	// upload fallback for those users forever.
+	if err := db.Exec(
+		`UPDATE users SET oidc_picture_url = ''
+		 WHERE coalesce(oidc_picture_url, '') <> ''
+		   AND lower(oidc_picture_url) NOT LIKE 'https://%'`).Error; err != nil {
+		return err
+	}
+
+	// A NULL in a freshly added column would fail to scan into the plain string the model
+	// declares.
+	return db.Exec(`UPDATE users SET avatar_upload_path = '' WHERE avatar_upload_path IS NULL`).Error
 }
 
 // ensureAdmin promotes the earliest account when no administrator exists, so a

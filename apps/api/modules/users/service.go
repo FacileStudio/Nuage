@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
@@ -165,24 +164,27 @@ func (service *Service) storeAvatar(context context.Context, userID string, read
 		return nil, errors.Internal("failed to read user", err)
 	}
 
-	relativePath, absolutePath, err := service.persistAvatarFile(id, reader, contentType)
+	// Uploading is the fallback for people the IdP has no photo for, so a photo in Porte
+	// makes this endpoint unavailable rather than merely outranked. Accepting the file and
+	// then never showing it is the worse failure: the user sees a success and no change.
+	if record.OIDCPictureURL != "" {
+		return nil, errors.Invalid("your photo is managed in single sign-on — change it there")
+	}
+
+	filename, absolutePath, err := service.persistAvatarFile(id, reader, contentType)
 	if err != nil {
 		return nil, err
 	}
 
-	newAvatarURL := "/api/" + strings.ReplaceAll(relativePath, string(filepath.Separator), "/")
-	oldAvatarURL := record.AvatarURL
-	record.AvatarURL = newAvatarURL
-	record.AvatarSource = "upload"
+	oldFilename := record.AvatarUploadPath
+	record.AvatarUploadPath = filename
 
 	if err := service.orm.WithContext(context).Save(&record).Error; err != nil {
 		_ = os.Remove(absolutePath)
 		return nil, errors.Internal("failed to save avatar", err)
 	}
 
-	if oldAvatarURL != "" {
-		service.removeAvatarFile(oldAvatarURL)
-	}
+	service.removeAvatarFile(oldFilename)
 
 	if err := service.ensureUserColor(context, &record); err != nil {
 		return nil, err
@@ -205,16 +207,15 @@ func (service *Service) clearAvatar(context context.Context, userID string) (*Us
 		return nil, errors.Internal("failed to read user", err)
 	}
 
-	oldAvatarURL := record.AvatarURL
-	record.AvatarURL = ""
-	record.AvatarSource = ""
+	// Only the upload is the user's to clear. The Porte photo is not deleted from here — it
+	// is not ours, and the next profile sync would bring it straight back.
+	oldFilename := record.AvatarUploadPath
+	record.AvatarUploadPath = ""
 	if err := service.orm.WithContext(context).Save(&record).Error; err != nil {
 		return nil, errors.Internal("failed to clear avatar", err)
 	}
 
-	if oldAvatarURL != "" {
-		service.removeAvatarFile(oldAvatarURL)
-	}
+	service.removeAvatarFile(oldFilename)
 
 	if err := service.ensureUserColor(context, &record); err != nil {
 		return nil, err
@@ -230,8 +231,7 @@ func (service *Service) persistAvatarFile(userID int64, reader io.Reader, conten
 	}
 
 	filename := fmt.Sprintf("user-%d-%d%s", userID, time.Now().UnixNano(), extension)
-	relativePath := filepath.Join("avatars", filename)
-	absolutePath := filepath.Join(service.storageDir, relativePath)
+	absolutePath := service.avatarFilePath(filename)
 
 	if err := os.MkdirAll(filepath.Dir(absolutePath), 0o755); err != nil {
 		return "", "", errors.Internal("failed to prepare avatar storage", err)
@@ -249,16 +249,21 @@ func (service *Service) persistAvatarFile(userID int64, reader io.Reader, conten
 		return "", "", errors.Internal("failed to finalize avatar file", err)
 	}
 
-	return relativePath, absolutePath, nil
+	return filename, absolutePath, nil
 }
 
-func (service *Service) removeAvatarFile(avatarURL string) {
-	oldPath := strings.TrimPrefix(avatarURL, "/api/")
-	oldPath = strings.TrimPrefix(oldPath, "/files/")
-	oldAbsolutePath := filepath.Join(service.storageDir, filepath.Clean(oldPath))
-	if strings.HasPrefix(oldAbsolutePath, filepath.Clean(filepath.Join(service.storageDir, "avatars"))) {
-		_ = os.Remove(oldAbsolutePath)
+// avatarFilePath resolves a stored avatar filename inside the avatars directory. Base()
+// is what keeps a crafted stored value from escaping it — the column holds a bare
+// filename, never a path.
+func (service *Service) avatarFilePath(filename string) string {
+	return filepath.Join(service.storageDir, "avatars", filepath.Base(filename))
+}
+
+func (service *Service) removeAvatarFile(filename string) {
+	if filename == "" {
+		return
 	}
+	_ = os.Remove(service.avatarFilePath(filename))
 }
 
 func (service *Service) ensureUserColor(context context.Context, record *schemas.User) error {
@@ -284,8 +289,8 @@ func mapUser(record schemas.User) *User {
 		ID:           strconv.FormatInt(record.ID, 10),
 		Email:        record.Email,
 		Name:         record.Name,
-		AvatarURL:    record.AvatarURL,
-		AvatarSource: record.AvatarSource,
+		AvatarURL:    record.Avatar(),
+		AvatarSource: record.AvatarOrigin(),
 		Color:        record.Color,
 		CreatedAt:    record.CreatedAt.UTC().Format(time.RFC3339),
 	}
