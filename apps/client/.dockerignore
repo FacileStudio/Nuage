@@ -1,7 +1,0 @@
-# Build context for apps/client/Dockerfile is apps/client/.
-node_modules
-.svelte-kit
-build
-.env
-.env.*
-Dockerfile
