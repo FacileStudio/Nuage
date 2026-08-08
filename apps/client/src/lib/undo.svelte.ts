@@ -1,30 +1,47 @@
+import { icons, toast } from '@facile/muse';
+
 export type UndoAction = {
 	label: string;
 	execute: () => Promise<void>;
 };
 
-let current = $state<UndoAction | null>(null);
-let timer: ReturnType<typeof setTimeout> | null = null;
-
+/**
+ * The undo window is the toast's lifetime — muse freezes a toast's countdown while the
+ * pointer is on it, so the offer cannot expire on the way to its own button, which is the
+ * one thing the hand-rolled banner this replaced got wrong.
+ */
 const UNDO_WINDOW_MS = 6000;
 
+let current: UndoAction | null = null;
+let toastId: string | null = null;
+
 export function pushUndo(action: UndoAction) {
-	if (timer) clearTimeout(timer);
+	/* Cleared first: dismissing runs the previous toast's `onDismiss` synchronously, and it
+	   would otherwise null out the action we are about to install. */
+	const previous = toastId;
+	toastId = null;
+	if (previous) toast.dismiss(previous);
+
 	current = action;
-	timer = setTimeout(() => {
-		current = null;
-		timer = null;
-	}, UNDO_WINDOW_MS);
+	toastId = toast.neutral(action.label, {
+		icon: icons.remove,
+		duration: UNDO_WINDOW_MS,
+		action: { label: 'Undo', onClick: () => void undoLast() },
+		onDismiss: () => {
+			current = null;
+			toastId = null;
+		}
+	});
 }
 
 export async function undoLast() {
-	if (!current) return;
 	const action = current;
+	if (!action) return;
 	dismissUndo();
 	try {
 		await action.execute();
-	} catch (err) {
-		console.error('Undo failed:', err);
+	} catch {
+		toast.danger('Could not undo that.');
 	}
 }
 
@@ -33,13 +50,8 @@ export function hasPending() {
 }
 
 export function dismissUndo() {
-	if (timer) clearTimeout(timer);
+	const id = toastId;
 	current = null;
-	timer = null;
-}
-
-export function getUndo() {
-	return {
-		get current() { return current; }
-	};
+	toastId = null;
+	if (id) toast.dismiss(id);
 }

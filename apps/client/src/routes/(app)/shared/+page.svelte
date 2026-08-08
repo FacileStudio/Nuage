@@ -1,15 +1,18 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
+	import { Badge, Button, ConfirmModal, EmptyState, Spinner, Table, toast } from '@facile/muse';
 	import { backend, type Share } from '$lib/backend';
 	import { getSpaceStore } from '$lib/space.svelte';
+	import { formatDate } from '$lib/format';
+	import { fileIcon, icons, nuage } from '$lib/icons';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 
-	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
+	const app = getContext<{ token: string }>('app');
 	const spaceStore = getSpaceStore();
 
 	let shares = $state<Share[]>([]);
 	let loading = $state(true);
-	let revoking = $state<number | null>(null);
-	let copiedId = $state<number | null>(null);
+	let revoking = $state<Share | null>(null);
 
 	$effect(() => {
 		const _spaceId = spaceStore.id;
@@ -19,167 +22,138 @@
 	async function loadShares() {
 		loading = true;
 		try {
-			const sid = spaceStore.id;
-			const res = await backend.listMyShares(app.token, { space_id: sid });
+			const res = await backend.listMyShares(app.token, { space_id: spaceStore.id });
 			shares = res.shares ?? [];
 		} catch {
 			shares = [];
+			toast.danger('Could not load your share links.');
 		}
 		loading = false;
 	}
 
-	async function revokeShare(id: number) {
-		revoking = id;
+	async function revokeShare() {
+		const target = revoking;
+		if (!target) return;
 		try {
-			await backend.deleteShare(app.token, id);
-			shares = shares.filter((s) => s.id !== id);
-		} catch {}
-		revoking = null;
+			await backend.deleteShare(app.token, target.id);
+			shares = shares.filter((s) => s.id !== target.id);
+			revoking = null;
+			toast.success('Link revoked.');
+		} catch {
+			toast.danger('Could not revoke that link.');
+		}
 	}
 
 	async function copyLink(share: Share) {
-		const url = `${window.location.origin}/s/${share.token}`;
-		await navigator.clipboard.writeText(url);
-		copiedId = share.id;
-		setTimeout(() => {
-			if (copiedId === share.id) copiedId = null;
-		}, 2000);
+		try {
+			await navigator.clipboard.writeText(`${window.location.origin}/s/${share.token}`);
+			toast.success('Link copied.');
+		} catch {
+			toast.danger('Could not reach the clipboard.');
+		}
 	}
 
-	function shareUrl(share: Share): string {
-		return `${window.location.origin}/s/${share.token}`;
-	}
+	const itemName = (share: Share) => share.file?.name ?? share.folder?.name ?? 'Untitled';
 
-	function itemName(share: Share): string {
-		return share.file?.name ?? share.folder?.name ?? 'Untitled';
-	}
+	const shareIcon = (share: Share) =>
+		share.file ? fileIcon(share.file.name, share.file.mime_type) : icons.folder;
 
-	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-	}
-
-	function formatExpiration(iso: string | null): string {
-		if (!iso) return 'No expiration';
-		return `Expires ${formatDate(iso)}`;
-	}
-
-	function isExpired(iso: string | null): boolean {
-		if (!iso) return false;
-		return new Date(iso).getTime() < Date.now();
-	}
-
-	function fileIcon(mime: string): string {
-		if (mime.startsWith('image/')) return 'solar:gallery-linear';
-		if (mime.startsWith('video/')) return 'solar:videocamera-record-linear';
-		if (mime.startsWith('audio/')) return 'solar:music-note-2-linear';
-		if (mime === 'application/pdf') return 'solar:document-linear';
-		if (mime.includes('zip') || mime.includes('archive') || mime.includes('compressed')) return 'solar:zip-file-linear';
-		return 'solar:file-linear';
-	}
-
-	function fileIconColor(mime: string): string {
-		if (mime.startsWith('image/')) return 'text-emerald-600';
-		if (mime.startsWith('video/')) return 'text-purple-600';
-		if (mime.startsWith('audio/')) return 'text-pink-600';
-		if (mime === 'application/pdf') return 'text-red-600';
-		if (mime.includes('zip') || mime.includes('archive')) return 'text-amber-600';
-		return 'text-blue-600';
-	}
+	const isExpired = (iso: string | null) => iso !== null && new Date(iso).getTime() < Date.now();
 </script>
 
 <svelte:head>
 	<title>Shared links — Nuage</title>
 </svelte:head>
 
-<div class="flex h-full flex-col">
-	<div class="border-b border-border px-4 py-4 md:px-8 md:py-5">
-		<h1 class="text-lg font-semibold">Shared links</h1>
-		<p class="mt-1 text-sm text-muted-foreground">Manage your public share links</p>
-	</div>
+<div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
+	<PageHeader
+		title="Shared links"
+		description="Every public link you have handed out. Anyone holding one can open it without an account."
+	/>
 
-	<div class="flex-1 overflow-auto px-4 py-4 md:px-8 md:py-6">
-		{#if loading}
-			<div class="flex h-64 items-center justify-center">
-				<div class="h-6 w-6 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
-			</div>
-		{:else if shares.length === 0}
-			<div class="flex h-64 flex-col items-center justify-center text-center">
-				<iconify-icon icon="solar:share-linear" width="48" class="text-muted-foreground/40"></iconify-icon>
-				<p class="mt-4 text-sm font-medium text-muted-foreground">No shared links yet</p>
-				<p class="mt-1 text-xs text-muted-foreground/70">Right-click a file and select Share to create a public link</p>
-			</div>
-		{:else}
-			<div class="overflow-x-auto">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-							<th class="pb-3 pr-4">Name</th>
-							<th class="hidden pb-3 pr-4 md:table-cell">Link</th>
-							<th class="hidden pb-3 pr-4 sm:table-cell">Expiration</th>
-							<th class="hidden pb-3 pr-4 lg:table-cell">Created</th>
-							<th class="pb-3 w-44 text-right">Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each shares as share}
-							<tr class="border-b border-border/50 transition-colors hover:bg-muted/50">
-								<td class="py-2.5 pr-4">
-									<div class="flex items-center gap-3">
-										{#if share.file}
-											<iconify-icon icon={fileIcon(share.file.mime_type)} width="20" class="{fileIconColor(share.file.mime_type)} shrink-0"></iconify-icon>
-										{:else}
-											<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
-										{/if}
-										<span class="truncate font-medium">{itemName(share)}</span>
-									</div>
-								</td>
-								<td class="hidden py-2.5 pr-4 md:table-cell">
-									<span class="inline-block max-w-[200px] truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
-										/s/{share.token}
-									</span>
-								</td>
-								<td class="hidden py-2.5 pr-4 sm:table-cell">
-									{#if isExpired(share.expires_at)}
-										<span class="text-xs font-medium text-destructive">Expired</span>
-									{:else}
-										<span class="text-xs text-muted-foreground">{formatExpiration(share.expires_at)}</span>
-									{/if}
-								</td>
-								<td class="hidden py-2.5 pr-4 text-xs text-muted-foreground lg:table-cell">{formatDate(share.created_at)}</td>
-								<td class="py-2.5">
-									<div class="flex items-center justify-end gap-1">
-										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
-											onclick={() => copyLink(share)}
-										>
-											{#if copiedId === share.id}
-												<iconify-icon icon="solar:check-read-linear" width="14" class="text-emerald-600"></iconify-icon>
-												<span class="text-emerald-600">Copied!</span>
-											{:else}
-												<iconify-icon icon="solar:copy-linear" width="14"></iconify-icon>
-												Copy
-											{/if}
-										</button>
-										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-											onclick={() => revokeShare(share.id)}
-											disabled={revoking !== null}
-											aria-label="Revoke share link"
-										>
-											{#if revoking === share.id}
-												<div class="h-3 w-3 animate-spin rounded-full border-2 border-destructive border-t-transparent"></div>
-											{:else}
-												<iconify-icon icon="solar:link-broken-linear" width="14"></iconify-icon>
-											{/if}
-											Revoke
-										</button>
-									</div>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</div>
+	{#if loading}
+		<div class="flex h-64 items-center justify-center"><Spinner /></div>
+	{:else if shares.length === 0}
+		<EmptyState
+			icon={nuage.share}
+			title="No shared links yet"
+			description="Open a file's menu in Files and choose Share to publish a link."
+		>
+			<Button href="/files" icon={icons.folder}>Go to Files</Button>
+		</EmptyState>
+	{:else}
+		<Table>
+			<thead>
+				<tr>
+					<th scope="col">Name</th>
+					<th scope="col" class="hidden md:table-cell">Link</th>
+					<th scope="col" class="hidden sm:table-cell">Expiry</th>
+					<th scope="col" class="hidden lg:table-cell">Created</th>
+					<th scope="col" class="text-right"><span class="sr-only">Actions</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each shares as share (share.id)}
+					<tr>
+						<td>
+							<div class="flex min-w-0 items-center gap-3">
+								<iconify-icon
+									icon={shareIcon(share)}
+									width="18"
+									height="18"
+									class="block shrink-0 text-fc-fg-muted"
+								></iconify-icon>
+								<span class="truncate font-medium">{itemName(share)}</span>
+							</div>
+						</td>
+						<!-- A share token is a machine string, so it wears the mono face (CHARTE §3). -->
+						<td class="hidden md:table-cell">
+							<span class="block max-w-[200px] truncate font-fc-mono text-fc-xs text-fc-fg-muted">
+								/s/{share.token}
+							</span>
+						</td>
+						<td class="hidden sm:table-cell">
+							{#if isExpired(share.expires_at)}
+								<Badge tone="danger">Expired</Badge>
+							{:else if share.expires_at}
+								<span class="text-fc-xs text-fc-fg-muted">{formatDate(share.expires_at)}</span>
+							{:else}
+								<span class="text-fc-xs text-fc-fg-muted">Never</span>
+							{/if}
+						</td>
+						<td class="hidden text-fc-fg-muted lg:table-cell">{formatDate(share.created_at)}</td>
+						<td>
+							<div class="flex items-center justify-end gap-1">
+								<Button variant="ghost" size="sm" icon={icons.copy} onclick={() => copyLink(share)}>
+									Copy
+								</Button>
+								<Button
+									variant="ghost-danger"
+									size="sm"
+									icon={nuage.shareOff}
+									onclick={() => (revoking = share)}
+								>
+									Revoke
+								</Button>
+							</div>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</Table>
+	{/if}
 </div>
+
+<!-- Revoking used to fire straight off the click. It is destructive and it is not undoable,
+     so it goes through a confirmation that says what actually breaks (CHARTE §14). -->
+<ConfirmModal
+	open={revoking !== null}
+	title="Revoke this link?"
+	description={revoking
+		? `Anyone who still has the link to “${itemName(revoking)}” gets a dead page from now on. The file itself is untouched, and revoking cannot be undone — you would have to share it again.`
+		: ''}
+	confirmLabel="Revoke"
+	tone="danger"
+	onConfirm={revokeShare}
+	onCancel={() => (revoking = null)}
+/>

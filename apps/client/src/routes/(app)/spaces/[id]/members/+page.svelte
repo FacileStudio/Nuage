@@ -1,23 +1,41 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { getContext, onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { backend, type Space, type SpaceMember, type UserProfile } from '$lib/backend';
+	import {
+		Badge,
+		Button,
+		Card,
+		ConfirmModal,
+		Drawer,
+		EmptyState,
+		Field,
+		Input,
+		Select,
+		Spinner,
+		toast
+	} from '@facile/muse';
+	import { backend, type Space, type SpaceMember } from '$lib/backend';
+	import { icons, nuage } from '$lib/icons';
+	import { roleTone } from '$lib/roles';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+	import MemberAvatar from '$lib/components/MemberAvatar.svelte';
 
-	const app = getContext<{ token: string; user: UserProfile | null }>('app');
+	const app = getContext<{ token: string }>('app');
 
 	let space = $state<Space | null>(null);
 	let members = $state<SpaceMember[]>([]);
 	let loading = $state(true);
+
+	let addOpen = $state(false);
 	let addUserId = $state('');
 	let addRole = $state('member');
 	let addError = $state('');
 	let adding = $state(false);
+	let removing = $state<SpaceMember | null>(null);
 
 	let spaceId = $derived(Number(page.params.id));
 
-	onMount(async () => {
-		await loadData();
-	});
+	onMount(loadData);
 
 	async function loadData() {
 		loading = true;
@@ -35,10 +53,22 @@
 		loading = false;
 	}
 
+	async function refreshMembers() {
+		const res = await backend.listSpaceMembers(app.token, spaceId);
+		members = res.members ?? [];
+	}
+
+	function openAdd() {
+		addUserId = '';
+		addRole = 'member';
+		addError = '';
+		addOpen = true;
+	}
+
 	async function addMember() {
-		const uid = parseInt(addUserId, 10);
-		if (isNaN(uid)) {
-			addError = 'Enter a valid user ID';
+		const uid = Number.parseInt(addUserId, 10);
+		if (!Number.isInteger(uid) || uid <= 0) {
+			addError = 'That is not a user ID.';
 			return;
 		}
 
@@ -46,171 +76,162 @@
 		addError = '';
 		try {
 			await backend.addSpaceMember(app.token, spaceId, { user_id: uid, role: addRole });
-			addUserId = '';
-			addRole = 'member';
-			const res = await backend.listSpaceMembers(app.token, spaceId);
-			members = res.members ?? [];
-		} catch (e: any) {
-			addError = e.message || 'Failed to add member';
+			await refreshMembers();
+			addOpen = false;
+			toast.success('Member added.');
+		} catch (e) {
+			addError = e instanceof Error && e.message ? e.message : 'Could not add that member.';
 		}
 		adding = false;
 	}
 
-	async function updateRole(memberId: number, role: string) {
+	async function updateRole(member: SpaceMember, role: string) {
 		try {
-			await backend.updateSpaceMember(app.token, spaceId, memberId, { role });
-			const res = await backend.listSpaceMembers(app.token, spaceId);
-			members = res.members ?? [];
-		} catch {}
-	}
-
-	async function removeMember(memberId: number) {
-		try {
-			await backend.removeSpaceMember(app.token, spaceId, memberId);
-			members = members.filter(m => m.id !== memberId);
-		} catch {}
-	}
-
-	function roleBadgeClass(role: string): string {
-		switch (role) {
-			case 'owner': return 'bg-amber-500/10 text-amber-600';
-			case 'admin': return 'bg-blue-500/10 text-blue-600';
-			default: return 'bg-muted text-muted-foreground';
+			await backend.updateSpaceMember(app.token, spaceId, member.id, { role });
+			await refreshMembers();
+			toast.success(`${memberName(member)} is now ${role}.`);
+		} catch {
+			/* Re-read rather than trust the select: the option the user picked did not stick. */
+			await refreshMembers();
+			toast.danger('Could not change that role.');
 		}
 	}
 
-	let isOwnerOrAdmin = $derived(space?.role === 'owner' || space?.role === 'admin');
-	let isOwner = $derived(space?.role === 'owner');
+	async function removeMember() {
+		const target = removing;
+		if (!target) return;
+		try {
+			await backend.removeSpaceMember(app.token, spaceId, target.id);
+			members = members.filter((m) => m.id !== target.id);
+			removing = null;
+			toast.success(`Removed ${memberName(target)}.`);
+		} catch {
+			toast.danger('Could not remove that member.');
+		}
+	}
+
+	const isOwnerOrAdmin = $derived(space?.role === 'owner' || space?.role === 'admin');
+	const isOwner = $derived(space?.role === 'owner');
+	const memberName = (member: SpaceMember) => member.user?.name || member.user?.email || 'Unknown';
 </script>
 
 <svelte:head>
 	<title>Members — {space?.name ?? 'Space'} — Nuage</title>
 </svelte:head>
 
-<div class="flex h-full flex-col">
-	<div class="border-b border-border px-4 py-4 md:px-8 md:py-5">
-		<div class="flex items-center gap-3">
-			<a href="/spaces/{spaceId}" class="text-muted-foreground transition-colors hover:text-foreground" aria-label="Back to space">
-				<iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
-			</a>
-			<div>
-				<h1 class="text-lg font-semibold">Members</h1>
-				{#if space}
-					<p class="mt-0.5 text-sm text-muted-foreground">{space.name}</p>
-				{/if}
-			</div>
-		</div>
-	</div>
+<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-8">
+	<Button
+		variant="ghost"
+		size="sm"
+		href="/spaces/{spaceId}"
+		icon={icons.chevronLeft}
+		class="-ml-3 self-start"
+	>
+		{space?.name ?? 'Space'}
+	</Button>
 
-	<div class="flex-1 overflow-auto px-4 py-6 md:px-8">
-		{#if loading}
-			<div class="flex items-center justify-center py-20">
-				<div class="h-6 w-6 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
-			</div>
-		{:else if !space}
-			<div class="flex flex-col items-center justify-center py-20 text-center">
-				<p class="text-sm text-muted-foreground">Space not found or access denied.</p>
-			</div>
-		{:else}
-			<div class="max-w-2xl space-y-8">
+	{#if loading}
+		<div class="flex h-64 items-center justify-center"><Spinner /></div>
+	{:else if !space}
+		<EmptyState
+			icon={icons.warning}
+			title="Space not found"
+			description="It may have been deleted, or you may no longer be a member."
+		>
+			<Button href="/spaces" icon={icons.usersGroup}>Back to spaces</Button>
+		</EmptyState>
+	{:else}
+		<PageHeader
+			title="Members"
+			description="Everyone here can read and write every file in the space."
+		>
+			{#snippet actions()}
 				{#if isOwnerOrAdmin}
-					<div class="space-y-3">
-						<h2 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Add member</h2>
-						<div class="flex items-end gap-2">
-							<div class="flex-1">
-								<label for="user-id" class="mb-1.5 block text-sm font-medium">User ID</label>
-								<input
-									id="user-id"
-									type="text"
-									bind:value={addUserId}
-									placeholder="Enter user ID"
-									class="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								/>
-							</div>
-							<div class="w-32">
-								<label for="add-role" class="mb-1.5 block text-sm font-medium">Role</label>
-								<select
-									id="add-role"
-									bind:value={addRole}
-									class="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								>
-									<option value="member">Member</option>
-									<option value="admin">Admin</option>
-								</select>
-							</div>
-							<button
-								class="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-								onclick={addMember}
-								disabled={adding}
-							>
-								{adding ? 'Adding...' : 'Add'}
-							</button>
-						</div>
-						{#if addError}
-							<p class="text-sm text-destructive">{addError}</p>
+					<Button icon={nuage.memberAdd} onclick={openAdd}>Add member</Button>
+				{/if}
+			{/snippet}
+		</PageHeader>
+
+		<Card class="flex flex-col p-0">
+			{#each members as member (member.id)}
+				<div
+					class="flex flex-wrap items-center gap-3 border-t border-fc-border p-4 first:border-t-0"
+				>
+					<MemberAvatar
+						name={memberName(member)}
+						src={member.user?.avatar_url}
+						color={member.user?.color}
+					/>
+					<div class="flex min-w-0 flex-1 flex-col">
+						<p class="truncate text-fc-sm font-medium text-fc-fg">{memberName(member)}</p>
+						{#if member.user?.name && member.user.email}
+							<p class="truncate text-fc-xs text-fc-fg-muted">{member.user.email}</p>
 						{/if}
 					</div>
-				{/if}
 
-				<div class="space-y-3">
-					<h2 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-						{members.length} member{members.length !== 1 ? 's' : ''}
-					</h2>
-
-					{#each members as member}
-						<div class="flex items-center justify-between rounded-lg border border-border p-3">
-							<div class="flex items-center gap-3">
-								{#if member.user?.avatar_url}
-									<img src={member.user.avatar_url} alt="" class="h-9 w-9 rounded-full border border-border object-cover" />
-								{:else}
-									<div
-										class="flex h-9 w-9 items-center justify-center rounded-full border border-border text-xs font-semibold text-white"
-										style="background-color: {member.user?.color || '#6b7280'}"
-									>
-										{(member.user?.name || member.user?.email || '?').slice(0, 2).toUpperCase()}
-									</div>
-								{/if}
-								<div>
-									<p class="text-sm font-medium">{member.user?.name || member.user?.email}</p>
-									{#if member.user?.name}
-										<p class="text-xs text-muted-foreground">{member.user.email}</p>
-									{/if}
-								</div>
-							</div>
-							<div class="flex items-center gap-2">
-								{#if member.role === 'owner'}
-									<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {roleBadgeClass('owner')}">
-										owner
-									</span>
-								{:else if isOwnerOrAdmin}
-									<select
-										value={member.role}
-										onchange={(e) => updateRole(member.id, (e.target as HTMLSelectElement).value)}
-										class="h-8 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-									>
-										<option value="member">Member</option>
-										<option value="admin">Admin</option>
-										{#if isOwner}
-											<option value="owner">Owner</option>
-										{/if}
-									</select>
-									<button
-										class="inline-flex h-8 items-center rounded-md px-2 text-xs text-destructive transition-colors hover:bg-destructive/10"
-										onclick={() => removeMember(member.id)}
-										aria-label="Remove member"
-									>
-										<iconify-icon icon="solar:trash-bin-2-linear" width="14"></iconify-icon>
-									</button>
-								{:else}
-									<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {roleBadgeClass(member.role)}">
-										{member.role}
-									</span>
-								{/if}
-							</div>
+					<!-- The owner's role is not a control. Demoting the last owner orphans the space,
+					     and the API refuses it anyway, so the UI should not offer the move. -->
+					{#if member.role === 'owner' || !isOwnerOrAdmin}
+						<Badge tone={roleTone(member.role)}>{member.role}</Badge>
+					{:else}
+						<div class="flex items-center gap-1">
+							<Select
+								value={member.role}
+								aria-label="Role for {memberName(member)}"
+								class="h-9 w-32 text-fc-sm"
+								onchange={(e) => updateRole(member, (e.currentTarget as HTMLSelectElement).value)}
+							>
+								<option value="member">Member</option>
+								<option value="admin">Admin</option>
+								{#if isOwner}<option value="owner">Owner</option>{/if}
+							</Select>
+							<Button
+								variant="ghost-danger"
+								size="sm"
+								icon={icons.remove}
+								aria-label="Remove {memberName(member)}"
+								onclick={() => (removing = member)}
+							>
+								Remove
+							</Button>
 						</div>
-					{/each}
+					{/if}
 				</div>
-			</div>
-		{/if}
-	</div>
+			{/each}
+		</Card>
+	{/if}
 </div>
+
+<Drawer bind:open={addOpen} title="Add a member" showClose>
+	<Field
+		label="User ID"
+		error={addError || undefined}
+		helper="The numeric id from the user's record. Inviting by email is not wired up yet — the API only accepts an id."
+	>
+		<Input bind:value={addUserId} inputmode="numeric" placeholder="42" />
+	</Field>
+	<Field label="Role" class="mt-4">
+		<Select bind:value={addRole}>
+			<option value="member">Member — read and write files</option>
+			<option value="admin">Admin — also manages members</option>
+		</Select>
+	</Field>
+
+	{#snippet footer()}
+		<Button size="lg" class="w-full" icon={nuage.memberAdd} disabled={adding} onclick={addMember}>
+			{adding ? 'Adding…' : 'Add member'}
+		</Button>
+	{/snippet}
+</Drawer>
+
+<ConfirmModal
+	open={removing !== null}
+	title="Remove this member?"
+	description={removing
+		? `${memberName(removing)} loses access to every file in this space immediately. Files they uploaded stay in the space.`
+		: ''}
+	confirmLabel="Remove"
+	tone="danger"
+	onConfirm={removeMember}
+	onCancel={() => (removing = null)}
+/>

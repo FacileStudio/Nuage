@@ -2,12 +2,12 @@
 	import { onMount, setContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { backend, type UserProfile, type QuotaResponse } from '$lib/backend';
-	import { undoLast, hasPending } from '$lib/undo.svelte';
+	import { MobileNav, SideBar } from '@facile/muse';
+	import { backend, type QuotaResponse, type Space, type UserProfile } from '$lib/backend';
+	import { hasPending, undoLast } from '$lib/undo.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
-	import UndoToast from '$lib/components/UndoToast.svelte';
-	import MobileNav from '$lib/components/MobileNav.svelte';
-	import SpaceSwitcher from '$lib/components/SpaceSwitcher.svelte';
+	import { icons, nuage } from '$lib/icons';
+	import QuotaMeter from '$lib/components/QuotaMeter.svelte';
 
 	let { children } = $props();
 
@@ -17,6 +17,8 @@
 	let user = $state<UserProfile | null>(null);
 	let loaded = $state(false);
 	let quota = $state<QuotaResponse | null>(null);
+	let spaces = $state<Space[]>([]);
+	let collapsed = $state(false);
 
 	function setUser(nextUser: UserProfile) {
 		user = nextUser;
@@ -32,6 +34,31 @@
 	}
 
 	const spaceStore = getSpaceStore();
+
+	/*
+	 * The space list lives here rather than in the switcher, because muse's `SideBar` renders
+	 * the switcher itself — the rail owns the collapse transition that a fixed-width control
+	 * inside it cannot survive on its own (CHARTE §10).
+	 */
+	async function loadSpaces() {
+		try {
+			const res = await backend.listSpaces(token);
+			spaces = res.spaces ?? [];
+		} catch {
+			spaces = [];
+			return;
+		}
+
+		const savedId = spaceStore.getSavedId();
+		if (savedId === null) return;
+		const match = spaces.find((s) => s.id === savedId);
+		if (match) spaceStore.set(match);
+		else spaceStore.clear();
+	}
+
+	function selectSpace(id: string | null) {
+		spaceStore.set(id === null ? null : (spaces.find((s) => String(s.id) === id) ?? null));
+	}
 
 	setContext('app', {
 		get token() { return token; },
@@ -64,6 +91,7 @@
 				user = result.user;
 				loaded = true;
 				refreshQuota();
+				loadSpaces();
 				backend.syncProfile(stored).then(({ synced }) => {
 					if (synced) backend.me(stored).then((r) => { user = r.user; });
 				}).catch(() => {});
@@ -75,134 +103,71 @@
 		return () => document.removeEventListener('keydown', handleUndoKeydown);
 	});
 
-	function getInitials(value: string) {
-		const parts = value.trim().split(/\s+/).filter(Boolean);
-		if (parts.length === 0) return '?';
-		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-		return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+	function isActive(href: string) {
+		return page.url.pathname === href || page.url.pathname.startsWith(href + '/');
 	}
 
-	function userLabel(u: UserProfile | null) {
-		return u?.name?.trim() || u?.email || '';
-	}
+	/*
+	 * Settings is deliberately absent: it hangs off the user card via `userHref`, not off a
+	 * permanent nav row that spends prime vertical space on the page people open least
+	 * (CHARTE §14).
+	 */
+	const navPages = $derived([
+		{ href: '/files', label: 'Files', icon: icons.folder },
+		{ href: '/shared', label: 'Shared links', icon: nuage.share },
+		{ href: '/trash', label: 'Trash', icon: icons.remove },
+		{ href: '/activity', label: 'Activity', icon: icons.history },
+		{ href: '/spaces', label: 'Spaces', icon: icons.usersGroup }
+	].map((item) => ({ ...item, active: isActive(item.href) })));
 
-	function logout() {
-		localStorage.removeItem(TOKEN_KEY);
-		goto('/login');
-	}
+	/* MobileNav's ceiling is six targets plus the avatar and its labels are tooltips, so the
+	   bar takes the short spelling of the same destinations. */
+	const mobilePages = $derived(navPages.map((item) => ({ ...item, label: item.label.split(' ')[0] })));
 
-	function formatSize(bytes: number): string {
-		if (bytes === 0) return '0 B';
-		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(1024));
-		return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
-	}
-
-	let quotaPercentage = $derived(quota ? Math.min(quota.percentage, 100) : 0);
-	let quotaBarColor = $derived(
-		quotaPercentage >= 90 ? 'bg-red-500' :
-		quotaPercentage >= 80 ? 'bg-amber-500' :
-		'bg-primary'
+	const onSettings = $derived(isActive('/settings'));
+	const identity = $derived(
+		user ? { name: user.name?.trim() || user.email, avatar: user.avatar_url || undefined } : undefined
 	);
-	let hasLimit = $derived(quota != null && quota.storage_limit > 0);
-
-	const navLinks: { href: string; label: string; icon: string; disabled: boolean }[] = [
-		{ href: '/files', label: 'Files', icon: 'solar:folder-linear', disabled: false },
-		{ href: '/shared', label: 'Shared links', icon: 'solar:share-linear', disabled: false },
-		{ href: '/trash', label: 'Trash', icon: 'solar:trash-bin-2-linear', disabled: false },
-		{ href: '/activity', label: 'Activity', icon: 'solar:history-linear', disabled: false },
-		{ href: '/spaces', label: 'Spaces', icon: 'solar:users-group-rounded-linear', disabled: false },
-		{ href: '/settings', label: 'Settings', icon: 'solar:settings-linear', disabled: false }
-	];
+	const switcherSpaces = $derived(spaces.map((s) => ({ id: String(s.id), name: s.name })));
+	const activeSpaceId = $derived(spaceStore.id === null ? null : String(spaceStore.id));
 </script>
 
 {#if loaded}
-	<div class="flex h-[100dvh] w-full overflow-hidden">
-		<aside class="sticky top-0 hidden h-[100dvh] w-60 flex-col border-r bg-background md:flex">
-			<div class="flex items-center gap-3 px-5 pt-8 pb-4">
-				<iconify-icon icon="solar:cloud-bold-duotone" width="28" class="text-foreground"></iconify-icon>
-				<span class="text-2xl font-bold font-heading tracking-tight">Nuage</span>
-			</div>
-
-			<SpaceSwitcher {token} />
-
-			<nav class="flex flex-1 flex-col gap-1 px-3">
-				{#each navLinks as link}
-					{@const active = page.url.pathname === link.href || page.url.pathname.startsWith(link.href + '/')}
-					{#if link.disabled}
-						<span
-							class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground/50 cursor-not-allowed"
-						>
-							<iconify-icon icon={link.icon} width="16"></iconify-icon>
-							{link.label}
-						</span>
-					{:else}
-						<a
-							href={link.href}
-							class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors {active
-								? 'bg-foreground text-background font-medium'
-								: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
-						>
-							<iconify-icon icon={link.icon} width="16"></iconify-icon>
-							{link.label}
-						</a>
-					{/if}
-				{/each}
-			</nav>
-
-			<div class="h-px bg-border"></div>
-
+	<!-- One scroll container for the app, and it is the `<main>` below — the shell itself never
+	     scrolls, so a flick past either end has nothing to chain into (CHARTE §7). -->
+	<div class="flex h-dvh w-full gap-3 overflow-hidden p-3">
+		<!--
+		  The rail animates its own width from the tokens; this column matches it on the same
+		  duration and curve so the quota card underneath tracks the tween instead of snapping
+		  when it lands.
+		-->
+		<div
+			class="hidden h-full min-h-0 shrink-0 flex-col gap-3 transition-[width] duration-300 ease-[var(--ease-fc)] md:flex"
+			style="width: var({collapsed ? '--width-fc-nav-collapsed' : '--width-fc-nav-expanded'})"
+		>
+			<SideBar
+				class="min-h-0 w-full flex-1"
+				icon={nuage.brand}
+				title="Nuage"
+				bind:collapsed
+				pages={navPages}
+				spaces={switcherSpaces}
+				{activeSpaceId}
+				onSpaceSelect={selectSpace}
+				manageSpacesHref="/spaces"
+				user={identity}
+				userHref="/settings"
+				userActive={onSettings}
+			/>
 			{#if quota}
-				<div class="px-4 pt-3">
-					{#if hasLimit}
-						<div class="flex items-center justify-between text-[11px] text-muted-foreground">
-							<span>{formatSize(quota.storage_used)} / {formatSize(quota.storage_limit)}</span>
-							<span>{Math.round(quotaPercentage)}%</span>
-						</div>
-						<div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-							<div
-								class="h-full rounded-full transition-all duration-300 {quotaBarColor}"
-								style="width: {quotaPercentage}%"
-							></div>
-						</div>
-					{:else}
-						<div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-							<iconify-icon icon="solar:cloud-bold-duotone" width="14"></iconify-icon>
-							<span>{formatSize(quota.storage_used)} used</span>
-						</div>
-					{/if}
-				</div>
+				<QuotaMeter {quota} {collapsed} />
 			{/if}
+		</div>
 
-			<div class="flex flex-col gap-2 p-4">
-				<div class="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/40 p-2.5">
-					{#if user?.avatar_url}
-						<img src={user.avatar_url} alt="Avatar" class="h-9 w-9 rounded-full border border-border object-cover shrink-0" />
-					{:else}
-						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-foreground text-xs font-semibold text-background">
-							{getInitials(userLabel(user))}
-						</div>
-					{/if}
-					<div class="min-w-0 flex-1">
-						<p class="truncate text-sm font-medium">{user?.name || 'Set your profile'}</p>
-						<p class="truncate text-xs text-muted-foreground">{user?.email ?? ''}</p>
-					</div>
-				</div>
-				<button
-					onclick={logout}
-					class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-destructive hover:bg-destructive/10"
-				>
-					<iconify-icon icon="solar:logout-2-linear" width="16"></iconify-icon>
-					Logout
-				</button>
-			</div>
-		</aside>
-
-		<main class="flex-1 overflow-auto pb-24 md:pb-0">
+		<main class="min-w-0 flex-1 overflow-auto overscroll-contain rounded-fc-lg pb-24 md:pb-0">
 			{@render children()}
 		</main>
-		<MobileNav {user} />
 	</div>
 
-	<UndoToast />
+	<MobileNav items={mobilePages} user={identity} profileHref="/settings" profileActive={onSettings} />
 {/if}
