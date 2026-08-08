@@ -1,18 +1,21 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { backend, type UserProfile } from '$lib/backend';
+	import { Button, Card, Field, Input, Textarea, toast } from '@facile/muse';
+	import { backend } from '$lib/backend';
+	import { icons } from '$lib/icons';
 
-	const app = getContext<{ token: string; user: UserProfile | null }>('app');
+	const app = getContext<{ token: string }>('app');
 
 	let name = $state('');
 	let description = $state('');
 	let saving = $state(false);
 	let error = $state('');
 
-	async function handleSubmit() {
+	async function handleSubmit(e: SubmitEvent) {
+		e.preventDefault();
 		if (!name.trim()) {
-			error = 'Name is required';
+			error = 'Give the space a name.';
 			return;
 		}
 
@@ -23,72 +26,46 @@
 				name: name.trim(),
 				description: description.trim()
 			});
+			toast.success(`“${space.name}” is ready.`);
 			goto(`/spaces/${space.id}`);
-		} catch (e: any) {
-			error = e.message || 'Failed to create space';
+		} catch (e) {
+			error = e instanceof Error && e.message ? e.message : 'Could not create that space.';
 		}
 		saving = false;
 	}
 </script>
 
 <svelte:head>
-	<title>New Space — Nuage</title>
+	<title>New space — Nuage</title>
 </svelte:head>
 
-<div class="flex h-full flex-col">
-	<div class="border-b border-border px-4 py-4 md:px-8 md:py-5">
-		<div class="flex items-center gap-3">
-			<a href="/spaces" class="text-muted-foreground transition-colors hover:text-foreground" aria-label="Back to spaces">
-				<iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
-			</a>
-			<h1 class="text-lg font-semibold">New Space</h1>
+<div class="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-6 md:px-8">
+	<div class="flex flex-col gap-4">
+		<Button variant="ghost" size="sm" href="/spaces" icon={icons.chevronLeft} class="-ml-3 self-start">
+			Spaces
+		</Button>
+		<div class="flex flex-col gap-1">
+			<h1 class="text-fc-2xl font-semibold text-fc-fg">New space</h1>
+			<p class="text-fc-sm text-fc-fg-muted">
+				You start as its owner. Invite people once it exists.
+			</p>
 		</div>
 	</div>
 
-	<div class="flex-1 overflow-auto px-4 py-6 md:px-8">
-		<div class="max-w-xl space-y-6">
-			<div class="space-y-4">
-				<div>
-					<label for="space-name" class="mb-1.5 block text-sm font-medium">Name</label>
-					<input
-						id="space-name"
-						type="text"
-						bind:value={name}
-						placeholder="e.g. Design Team"
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					/>
-				</div>
-				<div>
-					<label for="space-description" class="mb-1.5 block text-sm font-medium">Description</label>
-					<textarea
-						id="space-description"
-						bind:value={description}
-						placeholder="What is this space for?"
-						rows="3"
-						class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-					></textarea>
-				</div>
+	<Card>
+		<form class="flex flex-col gap-4" onsubmit={handleSubmit}>
+			<Field label="Name" error={error || undefined}>
+				<Input bind:value={name} placeholder="Design team" autocomplete="off" />
+			</Field>
+			<Field label="Description" helper="Optional — what belongs in here.">
+				<Textarea bind:value={description} placeholder="Brand assets, mockups, exports." rows={3} />
+			</Field>
+			<div class="flex flex-wrap gap-2">
+				<Button type="submit" icon={icons.plus} disabled={saving}>
+					{saving ? 'Creating…' : 'Create space'}
+				</Button>
+				<Button variant="ghost" href="/spaces">Cancel</Button>
 			</div>
-
-			{#if error}
-				<p class="text-sm text-destructive">{error}</p>
-			{/if}
-
-			<div class="flex items-center gap-3">
-				<button
-					class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-					onclick={handleSubmit}
-					disabled={saving}
-				>
-					{saving ? 'Creating...' : 'Create space'}
-				</button>
-				<a
-					href="/spaces"
-					class="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm font-medium transition-colors hover:bg-accent"
-				>
-					Cancel
-				</a>
-			</div>
-		</div>
-	</div>
+		</form>
+	</Card>
 </div>

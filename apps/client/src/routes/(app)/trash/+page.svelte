@@ -1,17 +1,19 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
+	import { Button, ConfirmModal, EmptyState, Spinner, Table, toast } from '@facile/muse';
 	import { backend, type TrashItem } from '$lib/backend';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
+	import { formatDate, formatSize } from '$lib/format';
+	import { fileIcon, icons, nuage } from '$lib/icons';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 
-	const app = getContext<{ token: string; user: { id: string; email: string; name: string } | null }>('app');
+	const app = getContext<{ token: string }>('app');
 	const spaceStore = getSpaceStore();
 
 	let items = $state<TrashItem[]>([]);
 	let loading = $state(true);
-	let actionLoading = $state<string | null>(null);
-	let showEmptyConfirm = $state(false);
-	let showDeleteConfirm = $state(false);
+	let busy = $state(false);
+	let emptying = $state(false);
 	let deleteTarget = $state<TrashItem | null>(null);
 
 	$effect(() => {
@@ -22,189 +24,167 @@
 	async function loadTrash() {
 		loading = true;
 		try {
-			const sid = spaceStore.id;
-			const res = await backend.listTrash(app.token, { space_id: sid });
+			const res = await backend.listTrash(app.token, { space_id: spaceStore.id });
 			items = res.items ?? [];
 		} catch {
 			items = [];
+			toast.danger('Could not load the trash.');
 		}
 		loading = false;
 	}
 
-	async function restoreItem(type: 'file' | 'folder', id: number) {
-		actionLoading = `restore-${type}-${id}`;
+	async function restoreItem(item: TrashItem) {
+		busy = true;
 		try {
-			await backend.restoreItem(app.token, type, id);
+			await backend.restoreItem(app.token, item.type, item.id);
 			await loadTrash();
-		} catch {}
-		actionLoading = null;
-	}
-
-	function confirmDelete(item: TrashItem) {
-		deleteTarget = item;
-		showDeleteConfirm = true;
+			toast.success(`Restored “${item.name}”.`);
+		} catch {
+			toast.danger(`Could not restore “${item.name}”.`);
+		}
+		busy = false;
 	}
 
 	async function doDelete() {
-		if (!deleteTarget) return;
-		actionLoading = `delete-${deleteTarget.type}-${deleteTarget.id}`;
+		const target = deleteTarget;
+		if (!target) return;
+		busy = true;
 		try {
-			await backend.permanentDelete(app.token, deleteTarget.type, deleteTarget.id);
-		} catch {}
-		showDeleteConfirm = false;
-		deleteTarget = null;
-		await loadTrash();
-		actionLoading = null;
+			await backend.permanentDelete(app.token, target.type, target.id);
+			deleteTarget = null;
+			await loadTrash();
+			toast.success(`Deleted “${target.name}” for good.`);
+		} catch {
+			toast.danger(`Could not delete “${target.name}”.`);
+		}
+		busy = false;
 	}
 
 	async function doEmptyTrash() {
-		actionLoading = 'empty-all';
+		busy = true;
 		try {
 			await backend.emptyTrash(app.token);
-		} catch {}
-		showEmptyConfirm = false;
-		await loadTrash();
-		actionLoading = null;
+			emptying = false;
+			await loadTrash();
+			toast.success('Trash emptied.');
+		} catch {
+			toast.danger('Could not empty the trash.');
+		}
+		busy = false;
 	}
 
-	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-	}
-
-	function formatSize(bytes: number): string {
-		if (bytes === 0) return '0 B';
-		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(1024));
-		return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
-	}
-
-	function fileIcon(mime: string): string {
-		if (mime.startsWith('image/')) return 'solar:gallery-linear';
-		if (mime.startsWith('video/')) return 'solar:videocamera-record-linear';
-		if (mime.startsWith('audio/')) return 'solar:music-note-2-linear';
-		if (mime === 'application/pdf') return 'solar:document-linear';
-		if (mime.includes('zip') || mime.includes('archive') || mime.includes('compressed')) return 'solar:zip-file-linear';
-		return 'solar:file-linear';
-	}
-
-	function fileIconColor(mime: string): string {
-		if (mime.startsWith('image/')) return 'text-emerald-600';
-		if (mime.startsWith('video/')) return 'text-purple-600';
-		if (mime.startsWith('audio/')) return 'text-pink-600';
-		if (mime === 'application/pdf') return 'text-red-600';
-		if (mime.includes('zip') || mime.includes('archive')) return 'text-amber-600';
-		return 'text-blue-600';
-	}
-
-	let isEmpty = $derived(items.length === 0);
+	const itemIcon = (item: TrashItem) =>
+		item.type === 'folder' ? icons.folder : fileIcon(item.name, item.mime_type ?? '');
 </script>
 
 <svelte:head>
 	<title>Trash — Nuage</title>
 </svelte:head>
 
-<div class="flex h-full flex-col">
-	<div class="flex items-center justify-between border-b border-border px-4 py-4 md:px-8 md:py-5">
-		<div>
-			<h1 class="text-lg font-semibold">Trash</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Items will be permanently deleted after 30 days</p>
-		</div>
-		{#if !loading && !isEmpty}
-			<button
-				class="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-				onclick={() => (showEmptyConfirm = true)}
-				disabled={actionLoading !== null}
-			>
-				<iconify-icon icon="solar:trash-bin-2-linear" width="16"></iconify-icon>
-				Empty trash
-			</button>
-		{/if}
-	</div>
+<div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
+	<!--
+	  The old copy promised deletion "after 30 days". Nothing purges the trash — the only
+	  scheduled job on the API is the 90-day pruner for sync *tombstones*, which is a different
+	  table — and quota is refunded on permanent delete only. So the promise was false in both
+	  halves: nothing expired, and the space was never coming back on its own.
+	-->
+	<PageHeader
+		title="Trash"
+		description="Deleted items stay here until you remove them, and they still count against your storage."
+	>
+		{#snippet actions()}
+			{#if !loading && items.length > 0}
+				<Button variant="danger" icon={icons.remove} disabled={busy} onclick={() => (emptying = true)}>
+					Empty trash
+				</Button>
+			{/if}
+		{/snippet}
+	</PageHeader>
 
-	<div class="flex-1 overflow-auto px-4 py-4 md:px-8 md:py-6">
-		{#if loading}
-			<div class="flex h-64 items-center justify-center">
-				<div class="h-6 w-6 animate-spin rounded-full border-2 border-foreground border-t-transparent"></div>
-			</div>
-		{:else if isEmpty}
-			<div class="flex h-64 flex-col items-center justify-center text-center">
-				<iconify-icon icon="solar:trash-bin-2-linear" width="48" class="text-muted-foreground/40"></iconify-icon>
-				<p class="mt-4 text-sm font-medium text-muted-foreground">Trash is empty</p>
-				<p class="mt-1 text-xs text-muted-foreground/70">Deleted files and folders will appear here</p>
-			</div>
-		{:else}
-			<div class="overflow-x-auto">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-							<th class="pb-3 pr-4">Name</th>
-							<th class="hidden pb-3 pr-4 sm:table-cell">Size</th>
-							<th class="hidden pb-3 pr-4 md:table-cell">Deleted</th>
-							<th class="pb-3 w-32 text-right">Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each items as item}
-							<tr class="border-b border-border/50 transition-colors hover:bg-muted/50">
-								<td class="py-2.5 pr-4">
-									<div class="flex items-center gap-3">
-										{#if item.type === 'folder'}
-											<iconify-icon icon="solar:folder-linear" width="20" class="text-amber-500 shrink-0"></iconify-icon>
-										{:else}
-											<iconify-icon icon={fileIcon(item.mime_type ?? '')} width="20" class="{fileIconColor(item.mime_type ?? '')} shrink-0"></iconify-icon>
-										{/if}
-										<span class="truncate font-medium">{item.name}</span>
-									</div>
-								</td>
-								<td class="hidden py-2.5 pr-4 text-muted-foreground sm:table-cell">
-									{item.type === 'file' && item.size != null ? formatSize(item.size) : '—'}
-								</td>
-								<td class="hidden py-2.5 pr-4 text-muted-foreground md:table-cell">{formatDate(item.deleted_at)}</td>
-								<td class="py-2.5">
-									<div class="flex items-center justify-end gap-1">
-										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
-											onclick={() => restoreItem(item.type, item.id)}
-											disabled={actionLoading !== null}
-											aria-label="Restore {item.type}"
-										>
-											<iconify-icon icon="solar:restart-linear" width="14"></iconify-icon>
-											Restore
-										</button>
-										<button
-											class="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-600/10 disabled:opacity-50"
-											onclick={() => confirmDelete(item)}
-											disabled={actionLoading !== null}
-											aria-label="Permanently delete {item.type}"
-										>
-											<iconify-icon icon="solar:trash-bin-2-linear" width="14"></iconify-icon>
-											Delete
-										</button>
-									</div>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</div>
+	{#if loading}
+		<div class="flex h-64 items-center justify-center"><Spinner /></div>
+	{:else if items.length === 0}
+		<EmptyState
+			icon={icons.remove}
+			title="Trash is empty"
+			description="Deleted files and folders land here, so a wrong click is never the end of the story."
+		/>
+	{:else}
+		<Table>
+			<thead>
+				<tr>
+					<th scope="col">Name</th>
+					<th scope="col" class="hidden sm:table-cell">Size</th>
+					<th scope="col" class="hidden md:table-cell">Deleted</th>
+					<th scope="col" class="text-right"><span class="sr-only">Actions</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each items as item (`${item.type}-${item.id}`)}
+					<tr>
+						<td>
+							<div class="flex min-w-0 items-center gap-3">
+								<iconify-icon
+									icon={itemIcon(item)}
+									width="18"
+									height="18"
+									class="block shrink-0 text-fc-fg-muted"
+								></iconify-icon>
+								<span class="truncate font-medium">{item.name}</span>
+							</div>
+						</td>
+						<td class="hidden text-fc-fg-muted sm:table-cell">
+							{item.type === 'file' && item.size != null ? formatSize(item.size) : '—'}
+						</td>
+						<td class="hidden text-fc-fg-muted md:table-cell">{formatDate(item.deleted_at)}</td>
+						<td>
+							<div class="flex items-center justify-end gap-1">
+								<Button
+									variant="ghost"
+									size="sm"
+									icon={nuage.restore}
+									disabled={busy}
+									onclick={() => restoreItem(item)}
+								>
+									Restore
+								</Button>
+								<!-- ghost-danger, not danger: a column of permanently red buttons turns a
+								     list into a hazard sign (CHARTE §2). -->
+								<Button
+									variant="ghost-danger"
+									size="sm"
+									icon={icons.remove}
+									disabled={busy}
+									onclick={() => (deleteTarget = item)}
+								>
+									Delete
+								</Button>
+							</div>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</Table>
+	{/if}
 </div>
 
-<ConfirmDialog
-	bind:open={showEmptyConfirm}
-	title="Empty trash?"
-	message="All {items.length} {items.length === 1 ? 'item' : 'items'} will be permanently deleted. This cannot be undone."
+<ConfirmModal
+	bind:open={emptying}
+	title="Empty the trash?"
+	description="All {items.length} {items.length === 1 ? 'item' : 'items'} go for good, and the files come off the server. There is no undo."
 	confirmLabel="Empty trash"
-	loading={actionLoading === 'empty-all'}
-	onconfirm={doEmptyTrash}
+	tone="danger"
+	onConfirm={doEmptyTrash}
 />
 
-<ConfirmDialog
-	bind:open={showDeleteConfirm}
-	title="Permanently delete?"
-	message="{deleteTarget?.name ?? 'This item'} will be permanently deleted. This cannot be undone."
+<ConfirmModal
+	open={deleteTarget !== null}
+	title="Delete permanently?"
+	description={deleteTarget
+		? `“${deleteTarget.name}” comes off the server for good. There is no undo, and any share link pointing at it stops working.`
+		: ''}
 	confirmLabel="Delete forever"
-	loading={deleteTarget != null && actionLoading === `delete-${deleteTarget.type}-${deleteTarget.id}`}
-	onconfirm={doDelete}
+	tone="danger"
+	onConfirm={doDelete}
+	onCancel={() => (deleteTarget = null)}
 />

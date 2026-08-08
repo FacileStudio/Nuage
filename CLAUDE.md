@@ -95,6 +95,10 @@ Nuage/
     client/
       src/
         lib/backend.ts             # typed API client (fetch wrapper)
+        lib/icons.ts               # muse icons + Nuage's own glyphs, fileIcon()
+        lib/format.ts              # formatSize / formatDate / relativeTime
+        lib/files/                 # file-browser logic: selection, uploads, dnd, tree
+        lib/components/files/      # file-browser views: grid, table, preview, share
         routes/
           +page.svelte             # landing / register page
           login/                   # login page
@@ -103,8 +107,8 @@ Nuage/
             trash/                 # trash view
             shared/                # shared files view
             activity/              # activity feed
-            settings/              # settings, tokens, Nook webhooks
-          api/[...path]/           # reverse proxy to Go API
+            spaces/                # team spaces, members, space settings
+            settings/[[section]]/  # settings; the section is a real route
           s/[token]/               # public share viewer
           docs/                    # API docs page
       static/                      # favicon, logo, fonts, PDF worker
@@ -128,6 +132,15 @@ credentials.
 - GORM models live in `apps/api/schemas/` with auto-migration in `schemas/migrate.go`.
 - The client uses Svelte 5 runes (`$state`, `$props`, `$derived`, `$effect`) with TypeScript enabled.
 - All API calls from the client go through `src/lib/backend.ts`.
+- **The UI is built from `@facile/muse`, and its `CHARTE.md` is the contract.** Reach for a muse
+  component before writing markup: `Button`, `Card`, `Table`, `Modal`, `ConfirmModal`, `Drawer`,
+  `EmptyState`, `SettingsSection`/`SettingsRow`, `SecretField`, `Toaster`. Style with `fc-*`
+  token utilities only — no raw hex, and no stock Tailwind palette classes (`text-amber-600`,
+  `bg-emerald-100`); colour is reserved for the status tones and the role pills.
+- Feedback goes through muse's `toast`, never an inline status string. A destructive action
+  routes through `ConfirmModal` whose description says what actually breaks.
+- Icons come from `src/lib/icons.ts` — `icons` re-exported from muse plus Nuage's own `nuage`
+  map. Do not inline a `solar:*` string at a call site.
 - Configuration is read through `tronc/env`: `Config` embeds `troncenv.Core`, so `DATABASE_URL`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` are required and the API exits 1 without them. `CORS_ALLOWED_ORIGINS` is the canonical origin list, with `ALLOWED_ORIGINS` and the other drifted names still read as fallbacks. `PRESIGN_SECRET` is required — the API exits 1 without it.
 
 ## Gotchas
@@ -139,5 +152,15 @@ credentials.
 - `PRESIGN_SECRET` is required: the API refuses to boot without it, because presigned download links are unauthenticated and forgeable if the signing key is guessable.
 - Sync clients feed the previous response's `server_time` back as `since`. That cursor is intentionally dated slightly in the past, so a small window of changes is redelivered — clients must apply changes idempotently by `id`.
 - Permanent deletions are recorded in a `tombstones` table (90-day retention) so clients whose cursor predates the purge still learn the file is gone instead of re-uploading it.
+- **Nothing expires the trash.** The only scheduled job is the tombstone pruner, which is a
+  different table; trashed files sit there until someone empties the trash, and their bytes keep
+  counting against quota because the refund happens on permanent delete. The UI used to promise
+  "deleted after 30 days" — do not put that claim back without writing the job.
+- `/login` and `/` are the **suite reference implementations** of the shared auth/landing
+  convention (see `~/.jardin/memory/conventions/facile-auth-screen.md`): raw elements, zero
+  component imports, four class constants that are byte-identical across 16 repos. They are
+  deliberately **not** built from muse — porting them breaks a cross-repo invariant. They still
+  match the theme, because `app.css` aliases their `background`/`border-input` names onto muse
+  tokens.
 - Every space-scoped endpoint calls `spaceaccess.Require` before using a caller-supplied `space_id` as a query or write predicate.
 - Production routing uses Traefik labels in docker-compose.yml (Dokploy deployment on `nuage.facile.studio`). There is **no** strip-prefix middleware: `/api` is owned by the Go router, so a local `curl` against port 4000 must include it.
