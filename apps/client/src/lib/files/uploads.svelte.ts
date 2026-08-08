@@ -80,6 +80,15 @@ export class UploadQueue {
 		this.items = [];
 	}
 
+	/**
+	 * Drops one row. Failed uploads are deliberately kept on screen after a run — they are the
+	 * only report of what did not make it — so there has to be a way to acknowledge one, or the
+	 * strip stays until the next upload replaces it.
+	 */
+	remove(id: string): void {
+		this.items = this.items.filter((item) => item.id !== id);
+	}
+
 	get failed(): UploadItem[] {
 		return this.items.filter((i) => i.status === 'error');
 	}

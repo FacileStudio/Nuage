@@ -158,11 +158,15 @@
 		else window.open(backend.downloadUrl(app.token, file.id), '_blank');
 	}
 
+	/* Only reachable in select mode — the row and tile hand a plain click to `onOpen`, and the
+	   checkbox does not exist outside it. So a click toggles and shift extends; there is no
+	   "replace the selection" case to handle. */
 	function onSelect(entry: BrowserEntry, index: number, e: MouseEvent) {
-		const additive = isMac ? e.metaKey : e.ctrlKey;
-		if (e.shiftKey) selection.extendTo(entry.type, entry.id, index, additive);
-		else if (additive || selection.mode) selection.toggle(entry.type, entry.id, index);
-		else selection.replaceWith(entry.type, entry.id, index);
+		if (e.shiftKey) {
+			selection.extendTo(entry.type, entry.id, index, isMac ? e.metaKey : e.ctrlKey);
+		} else {
+			selection.toggle(entry.type, entry.id, index);
+		}
 	}
 
 	function openMenu(e: MouseEvent, entry: BrowserEntry | null) {
@@ -496,7 +500,7 @@
 		</div>
 
 		{#if uploads.items.length > 0}
-			<UploadProgress items={uploads.items} />
+			<UploadProgress items={uploads.items} onCancel={(id) => uploads.remove(id)} />
 		{/if}
 	</div>
 

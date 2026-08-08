@@ -509,6 +509,15 @@ export const backend = {
 		return apiFetch<{ synced: boolean }>('/auth/sync-profile', { method: 'POST' }, token);
 	},
 
+	/**
+	 * Every user on the instance, name-sorted. Any authenticated caller may read it — this is
+	 * a single-tenant self-hosted tool where the directory is the point, and it is what makes
+	 * picking a space member possible without an invite-by-email endpoint.
+	 */
+	listUsers(token: string) {
+		return apiFetch<{ users: UserProfile[] }>('/users', {}, token);
+	},
+
 	listSpaces(token: string) {
 		return apiFetch<{ spaces: Space[] }>('/spaces', {}, token);
 	},
