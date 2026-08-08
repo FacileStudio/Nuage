@@ -2,6 +2,7 @@
 	import { getContext, onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
+		Alert,
 		Badge,
 		Button,
 		Card,
@@ -14,7 +15,7 @@
 		Spinner,
 		toast
 	} from '@facile/muse';
-	import { backend, type Space, type SpaceMember } from '$lib/backend';
+	import { backend, type Space, type SpaceMember, type UserProfile } from '$lib/backend';
 	import { icons, nuage } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -27,11 +28,15 @@
 	let loading = $state(true);
 
 	let addOpen = $state(false);
-	let addUserId = $state('');
 	let addRole = $state('member');
 	let addError = $state('');
 	let adding = $state(false);
 	let removing = $state<SpaceMember | null>(null);
+
+	let directory = $state<UserProfile[]>([]);
+	let directoryLoaded = $state(false);
+	let pickQuery = $state('');
+	let picked = $state<UserProfile | null>(null);
 
 	let spaceId = $derived(Number(page.params.id));
 
@@ -59,16 +64,36 @@
 	}
 
 	function openAdd() {
-		addUserId = '';
 		addRole = 'member';
 		addError = '';
+		pickQuery = '';
+		picked = null;
 		addOpen = true;
+		void loadDirectory();
+	}
+
+	/*
+	 * The instance directory, fetched once per visit. This replaces a text field that asked a
+	 * human to type a numeric user id — the API only accepts `user_id`, but `GET /users` has
+	 * always been there to turn one into the other, so the id never needed to be the user's
+	 * problem. No new exposure either: that endpoint is readable by any authenticated caller.
+	 */
+	async function loadDirectory() {
+		if (directoryLoaded) return;
+		try {
+			const res = await backend.listUsers(app.token);
+			directory = res.users ?? [];
+			directoryLoaded = true;
+		} catch {
+			addError = 'Could not load the user directory.';
+		}
 	}
 
 	async function addMember() {
-		const uid = Number.parseInt(addUserId, 10);
-		if (!Number.isInteger(uid) || uid <= 0) {
-			addError = 'That is not a user ID.';
+		if (!picked) return;
+		const uid = Number(picked.id);
+		if (!Number.isFinite(uid)) {
+			addError = 'That account has an id this API will not accept.';
 			return;
 		}
 
@@ -78,12 +103,22 @@
 			await backend.addSpaceMember(app.token, spaceId, { user_id: uid, role: addRole });
 			await refreshMembers();
 			addOpen = false;
-			toast.success('Member added.');
+			toast.success(`Added ${picked.name || picked.email}.`);
 		} catch (e) {
 			addError = e instanceof Error && e.message ? e.message : 'Could not add that member.';
 		}
 		adding = false;
 	}
+
+	/* Already-members are filtered out rather than shown and rejected by the server. */
+	const candidates = $derived.by(() => {
+		const taken = new Set(members.map((m) => String(m.user_id)));
+		const q = pickQuery.trim().toLowerCase();
+		return directory
+			.filter((u) => !taken.has(String(u.id)))
+			.filter((u) => !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
+			.slice(0, 50);
+	});
 
 	async function updateRole(member: SpaceMember, role: string) {
 		try {
@@ -203,23 +238,80 @@
 </div>
 
 <Drawer bind:open={addOpen} title="Add a member" showClose>
-	<Field
-		label="User ID"
-		error={addError || undefined}
-		helper="The numeric id from the user's record. Inviting by email is not wired up yet — the API only accepts an id."
-	>
-		<Input bind:value={addUserId} inputmode="numeric" placeholder="42" />
-	</Field>
-	<Field label="Role" class="mt-4">
-		<Select bind:value={addRole}>
-			<option value="member">Member — read and write files</option>
-			<option value="admin">Admin — also manages members</option>
-		</Select>
-	</Field>
+	<div class="flex flex-col gap-4">
+		{#if addError}
+			<Alert tone="danger">{addError}</Alert>
+		{/if}
+
+		<Field label="Who" helper="Anyone with an account on this Nuage.">
+			<Input bind:value={pickQuery} placeholder="Search by name or email" autocomplete="off" />
+		</Field>
+
+		{#if !directoryLoaded}
+			<div class="flex h-24 items-center justify-center"><Spinner /></div>
+		{:else if candidates.length === 0}
+			<p class="py-6 text-center text-fc-sm text-fc-fg-muted">
+				{pickQuery.trim() ? 'Nobody matches that.' : 'Everyone with an account is already a member.'}
+			</p>
+		{:else}
+			<!-- A radiogroup, not a list of independently tabbable buttons: picking one person
+			     out of many is a single choice, and it should be one tab stop. -->
+			<div
+				class="flex max-h-64 flex-col overflow-y-auto rounded-fc-md bg-fc-surface"
+				role="radiogroup"
+				aria-label="Choose a person to add"
+			>
+				{#each candidates as candidate (candidate.id)}
+					{@const selected = picked?.id === candidate.id}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={selected}
+						tabindex={selected || (!picked && candidate.id === candidates[0].id) ? 0 : -1}
+						onclick={() => (picked = candidate)}
+						class="flex items-center gap-3 border-t border-fc-border p-3 text-left transition-colors first:border-t-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {selected
+							? 'bg-fc-accent text-fc-accent-fg'
+							: 'hover:bg-fc-component'}"
+					>
+						<MemberAvatar
+							name={candidate.name || candidate.email}
+							src={candidate.avatar_url}
+							color={selected ? undefined : candidate.color}
+						/>
+						<span class="flex min-w-0 flex-1 flex-col">
+							<span class="truncate text-fc-sm font-medium">{candidate.name || candidate.email}</span>
+							{#if candidate.name && candidate.email}
+								<span class="truncate text-fc-xs {selected ? 'opacity-70' : 'text-fc-fg-muted'}">
+									{candidate.email}
+								</span>
+							{/if}
+						</span>
+						{#if selected}
+							<iconify-icon icon={nuage.tick} width="16" height="16" class="block shrink-0"
+							></iconify-icon>
+						{/if}
+					</button>
+				{/each}
+			</div>
+		{/if}
+
+		<Field label="Role">
+			<Select bind:value={addRole}>
+				<option value="member">Member — read and write files</option>
+				<option value="admin">Admin — also manages members</option>
+			</Select>
+		</Field>
+	</div>
 
 	{#snippet footer()}
-		<Button size="lg" class="w-full" icon={nuage.memberAdd} disabled={adding} onclick={addMember}>
-			{adding ? 'Adding…' : 'Add member'}
+		<Button
+			size="lg"
+			class="w-full"
+			icon={nuage.memberAdd}
+			disabled={adding || !picked}
+			onclick={addMember}
+		>
+			{adding ? 'Adding…' : picked ? `Add ${picked.name || picked.email}` : 'Pick someone first'}
 		</Button>
 	{/snippet}
 </Drawer>

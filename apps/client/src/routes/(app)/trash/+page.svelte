@@ -75,6 +75,18 @@
 
 	const itemIcon = (item: TrashItem) =>
 		item.type === 'folder' ? icons.folder : fileIcon(item.name, item.mime_type ?? '');
+
+	/*
+	 * Since nothing expires the trash and quota is only refunded on permanent delete, the one
+	 * number that matters here is how much space emptying it would give back. Saying "still
+	 * counts against your storage" without saying how much leaves the user to guess.
+	 *
+	 * Folder rows carry no size — the API only reports bytes for files — so this is a floor,
+	 * not a total, and it is worded as one.
+	 */
+	const reclaimable = $derived(
+		items.reduce((sum, item) => sum + (item.type === 'file' ? (item.size ?? 0) : 0), 0)
+	);
 </script>
 
 <svelte:head>
@@ -90,7 +102,9 @@
 	-->
 	<PageHeader
 		title="Trash"
-		description="Deleted items stay here until you remove them, and they still count against your storage."
+		description={reclaimable > 0
+			? `Deleted items stay here until you remove them. Emptying the trash would give back at least ${formatSize(reclaimable)}.`
+			: 'Deleted items stay here until you remove them, and they still count against your storage.'}
 	>
 		{#snippet actions()}
 			{#if !loading && items.length > 0}

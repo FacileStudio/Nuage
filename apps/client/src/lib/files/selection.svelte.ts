@@ -78,11 +78,6 @@ export class Selection {
 		this.keys = this.#range(this.#anchor, index, additive ? this.keys : []);
 	}
 
-	replaceWith(type: ItemType, id: number, index: number): void {
-		this.keys = [itemKey(type, id)];
-		this.#anchor = index;
-	}
-
 	selectAll(): void {
 		this.keys = this.#entries().map((e) => itemKey(e.type, e.id));
 	}

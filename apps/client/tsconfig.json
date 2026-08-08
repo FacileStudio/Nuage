@@ -10,7 +10,14 @@
 		"skipLibCheck": true,
 		"sourceMap": true,
 		"strict": true,
-		"moduleResolution": "bundler"
+		"moduleResolution": "bundler",
+		// SvelteKit generates `types: ["node"]`, but @types/node is not installed and nothing
+		// here needs it — the client is browser-only and vite.config.ts touches no Node global.
+		// Left as-is it was a permanent "Cannot find type definition file for 'node'" warning
+		// on every check, which is how a real warning ends up ignored. Emptying the list is the
+		// fix that does not add a dependency; if a Node global ever appears here, install
+		// @types/node and put it back.
+		"types": []
 	},
 	"exclude": [
 		"node_modules/**",
