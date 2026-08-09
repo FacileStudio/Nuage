@@ -30,6 +30,8 @@
 		}
 		const raw = page.url.searchParams.get('tab');
 		if (raw === 'register') tab = 'register';
+		const oidcError = page.url.searchParams.get('error');
+		if (oidcError) message = oidcError;
 
 		try {
 			const cfg = await backend.getAuthConfig();
