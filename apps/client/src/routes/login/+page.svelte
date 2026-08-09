@@ -104,6 +104,12 @@
 			{#if !configLoaded}
 				<div class="h-40"></div>
 			{:else}
+				{#if message}
+					<p class="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+						{message}
+					</p>
+				{/if}
+
 				{#if !ssoOnly}
 					<div class="mb-6 flex rounded-lg border border-border bg-muted p-1 gap-1" role="tablist">
 						<button
@@ -154,12 +160,6 @@
 								class={inputClass}
 							/>
 						</div>
-
-						{#if message}
-							<p class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-								{message}
-							</p>
-						{/if}
 
 						<button type="submit" disabled={busy} class={primaryButtonClass}>
 							{busy
