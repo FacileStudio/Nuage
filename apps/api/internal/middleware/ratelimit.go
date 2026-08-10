@@ -1,33 +1,12 @@
 package middleware
 
 import (
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/httprate"
 )
-
-// RealIP resolves the client address from the rightmost X-Forwarded-For entry,
-// which is the peer observed by the reverse proxy in front of the API. Taking
-// the leftmost entry instead would let a caller spoof the header and defeat
-// every per-IP limit.
-func RealIP(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if forwarded := request.Header.Get("X-Forwarded-For"); forwarded != "" {
-			parts := strings.Split(forwarded, ",")
-			for i := len(parts) - 1; i >= 0; i-- {
-				candidate := strings.TrimSpace(parts[i])
-				if net.ParseIP(candidate) != nil {
-					request.RemoteAddr = net.JoinHostPort(candidate, "0")
-					break
-				}
-			}
-		}
-		next.ServeHTTP(w, request)
-	})
-}
 
 // RateLimitExcept applies a per-IP request limit to everything except the given
 // path prefixes. Bulk transfer endpoints are excluded because a single large

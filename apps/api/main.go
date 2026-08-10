@@ -233,12 +233,19 @@ func run() int {
 	activityService := activitymod.NewService(db)
 
 	router := httpx.NewRouter(httpx.Config{
-		Logger: appLogger,
+		// Behind Traefik and Cloudflare, RemoteAddr is only the
+		// visitor if both are trusted: Traefik replaces the forwarded
+		// chain rather than extending it, so the visitor survives in
+		// Cf-Connecting-Ip alone. TRUSTED_PROXIES=private,cloudflare
+		// fills all three.
+		TrustedProxies: appEnv.TrustedProxies,
+		CDNProxies:     appEnv.CDNProxies,
+		CDNHeader:      appEnv.CDNHeader,
+		Logger:         appLogger,
 		CORS: troncmiddleware.CORSConfig{
 			AllowedOrigins: appEnv.CORSAllowedOrigins,
 		},
 	})
-	router.Use(middleware.RealIP)
 	router.Use(middleware.SecurityHeaders)
 	router.Use(middleware.RateLimitExcept(100, time.Minute, "/api/files/upload", "/webdav"))
 	router.Use(middleware.RateLimitPaths(10, time.Minute, "/api/auth/login", "/api/auth/register"))
