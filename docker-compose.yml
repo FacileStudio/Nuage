@@ -66,6 +66,7 @@ services:
       traefik.http.services.nuage-svc.loadbalancer.server.port: "4000"
     environment:
       APP_ENV: ${APP_ENV:-production}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-nuage}:${POSTGRES_PASSWORD:-nuage-internal-db}@nuage-db:5432/${POSTGRES_DB:-nuage}?sslmode=disable
       PORT: "4000"
       LOG_LEVEL: ${LOG_LEVEL:-info}
