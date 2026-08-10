@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte"
@@ -32,6 +32,7 @@ type Auth interface {
 	Issue(ctx context.Context, userID int64, label string) (string, porte.Session, error)
 	Sessions() *session.Manager
 	SetPassword(ctx context.Context, userID int64, email, password string) error
+	VerifyPassword(ctx context.Context, email, password string) (int64, error)
 	RevokeBrowserSessions(ctx context.Context, userID int64) error
 }
 
@@ -96,10 +97,11 @@ func (service *Service) verifyPassword(context context.Context, userID string, c
 		return errors.Internal("failed to read user", err)
 	}
 
-	if record.PasswordHash == "" {
-		return errors.Invalid("this account has no password set")
-	}
-	if !authcrypto.VerifyPassword(candidate, record.PasswordHash) {
+	// porte reads porte_identities, not users.password_hash. That column
+	// still holds the hash the migration copied out of it, so comparing
+	// against it here would keep answering yes to the *old* password after
+	// a change — the same silent divergence, read from the other side.
+	if _, err := service.tokens.VerifyPassword(context, record.Email, candidate); err != nil {
 		return errors.Unauthorized("current password is incorrect")
 	}
 	return nil
@@ -115,15 +117,40 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 	if name != nil {
 		updates["name"] = *name
 	}
-	if email != nil {
-		updates["email"] = *email
-	}
-	if password != nil {
-		hash, err := authcrypto.HashPassword(*password)
-		if err != nil {
-			return nil, errors.Invalid("invalid password")
+
+	// The password is porte's, not a column on this row. Writing
+	// users.password_hash would look like it worked and change nothing:
+	// porte reads the identity table, so the old password would keep
+	// signing in and the new one would never work.
+	//
+	// The address is half of porte's key for a local identity, so changing
+	// it without moving that key breaks the login on the next profile edit.
+	// Re-key first, then set the password on the address the account will
+	// actually have.
+	if email != nil || password != nil {
+		var current schemas.User
+		if err := service.orm.WithContext(context).Select("email").First(&current, id).Error; err != nil {
+			return nil, errors.Internal("failed to read the account", err)
 		}
-		updates["password_hash"] = hash
+		address := current.Email
+		if email != nil {
+			address = *email
+			updates["email"] = address
+			if !strings.EqualFold(address, current.Email) {
+				if err := service.orm.WithContext(context).Exec(
+					`UPDATE porte_identities SET subject = ? WHERE provider = 'local' AND subject = ?`,
+					strings.ToLower(strings.TrimSpace(address)),
+					strings.ToLower(strings.TrimSpace(current.Email)),
+				).Error; err != nil {
+					return nil, errors.Internal("failed to move the password to the new address", err)
+				}
+			}
+		}
+		if password != nil {
+			if err := service.tokens.SetPassword(context, id, address, *password); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if color != nil {
 		updates["color"] = *color

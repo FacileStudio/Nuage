@@ -141,5 +141,11 @@ func (service *Service) AuthenticateToken(w http.ResponseWriter, r *http.Request
 	return service.AuthenticateRequest(w, bearer)
 }
 
+// VerifyPassword checks a password without issuing anything, for the settings
+// screen confirming the current one before setting the next.
+func (service *Service) VerifyPassword(ctx context.Context, email, password string) (int64, error) {
+	return service.passwords.Verify(ctx, email, password)
+}
+
 // Sessions exposes the manager for the modules that list or revoke tokens.
 func (service *Service) Sessions() *session.Manager { return service.sessions }
