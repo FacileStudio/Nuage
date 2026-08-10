@@ -74,6 +74,19 @@ cd apps/client && bun install && bun run dev
 The client serves `http://localhost:5173` and the Vite dev server proxies `/api` and
 `/webdav` to the API on `http://localhost:4000`.
 
+## Command line
+
+[`nuage`](https://github.com/FacileStudio/nuage-cli) drives Nuage from a terminal. It
+installs through [facile](https://github.com/FacileStudio/facile), the suite installer,
+which fetches a prebuilt binary and puts `~/.local/bin` on your PATH:
+
+```sh
+curl -fsSL https://get.facile.studio | bash
+facile install nuage
+```
+
+`facile login nuage` signs in through Facile SSO in your browser.
+
 ## Configuration
 
 | Variable | What it does |
