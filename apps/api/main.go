@@ -35,12 +35,17 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/FacileStudio/Journal/sdk/journal"
+	"github.com/FacileStudio/porte/local"
+	"github.com/FacileStudio/porte/oidc"
+	portepg "github.com/FacileStudio/porte/pg"
+	"github.com/FacileStudio/porte/session"
 	"github.com/FacileStudio/tronc/health"
 	"github.com/FacileStudio/tronc/healthcheck"
 	"github.com/FacileStudio/tronc/httpx"
 	"github.com/FacileStudio/tronc/logger"
 	troncmiddleware "github.com/FacileStudio/tronc/middleware"
 	"github.com/FacileStudio/tronc/spa"
+
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 )
@@ -52,6 +57,57 @@ const (
 	// still agree — a derived avatar pointing at a route that moved is a silent 404.
 	avatarRoutePrefix = "/avatars/"
 )
+
+// buildAuth constructs porte: one session manager, shared by the OIDC kit and
+// the local login, over the identity tables.
+//
+// One manager and not two: they would each keep their own idea of the clock
+// and of whether the cookie is Secure, and porte refuses a kit whose config
+// disagrees with its manager's for exactly that reason. Discovery runs here,
+// so an unreachable or half-configured issuer fails at boot rather than on
+// somebody's first login.
+//
+// The notifier rides into the UserStore rather than the auth service, because
+// creating an account is the thing that emits user.created and the UserStore
+// is now the only place an account is created.
+func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *local.Kit, *oidc.Kit, error) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	store := portepg.New(sqlDB)
+	users := auth.NewUserStore(db, notifier)
+	cfg := appEnv.Porte()
+
+	sessions, err := session.New(cfg, session.Deps{Sessions: store.Sessions(), Logger: appLogger})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	kit, err := oidc.New(ctx, cfg, oidc.Deps{
+		Users:      users,
+		Identities: store.Identities(),
+		Sessions:   sessions,
+		Codes:      store.LoginCodes(),
+		Logger:     appLogger,
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Nuage's floor has always been eight characters. porte defaults to
+	// twelve, and raising it here would reject a password this app accepted
+	// yesterday — a product decision, not a migration.
+	passwords, err := local.New(local.Config{AllowRegistration: !appEnv.SSOOnly, MinPasswordLength: 8}, local.Deps{
+		Users:      users,
+		Identities: store.Identities(),
+		Sessions:   sessions,
+		Logger:     appLogger,
+		Count:      users.CountUsers,
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return sessions, passwords, kit, nil
+}
 
 func main() {
 	if healthcheck.Handle(os.Args) {
@@ -111,7 +167,7 @@ func run() int {
 		return 1
 	}
 
-	if err := schemas.Migrate(db); err != nil {
+	if err := schemas.MigrateWithIssuer(db, appEnv.IssuerForMigration()); err != nil {
 		appLogger.Error("failed to run migrations", slog.Any("error", err))
 		return 1
 	}
@@ -154,8 +210,13 @@ func run() int {
 	defer notifier.Stop()
 	actLogger := activity.NewLogger(db)
 
-	authService := auth.NewService(db, notifier, appLogger)
-	userService := users.NewService(db, appEnv.StorageDir)
+	sessions, passwords, kit, err := buildAuth(context.Background(), db, notifier, appEnv, appLogger)
+	if err != nil {
+		appLogger.Error("failed to build authentication", slog.Any("error", err))
+		return 1
+	}
+	authService := auth.NewService(db, sessions, passwords, appLogger)
+	userService := users.NewService(db, appEnv.StorageDir, authService)
 	quotaService := quota.NewService(db)
 	if appEnv.PresignSecret == "" {
 		appLogger.Error("failed to load config", slog.Any("error", errors.New("PRESIGN_SECRET is required: unauthenticated download links are signed with it")))
@@ -196,6 +257,8 @@ func run() int {
 			avatarFS.ServeHTTP(w, request)
 		})
 
+		sessions.Mount(r)
+		kit.Mount(r)
 		auth.RegisterRoutes(r, authService, appEnv)
 		users.RegisterRoutes(r, userService, authService)
 		files.RegisterRoutes(r, fileService, authService)

@@ -13,12 +13,27 @@ import (
 // migration across concurrently starting instances.
 const migrationLockID = 4919
 
+// Migrate brings the schema up to date and then hands authentication to porte.
 func Migrate(db *gorm.DB) error {
+	return MigrateWithIssuer(db, "")
+}
+
+// MigrateWithIssuer is Migrate with the OIDC issuer, which the identity
+// backfill needs: porte matches an account on (provider, subject) and the
+// provider is the issuer, so backfilling with a placeholder would leave every
+// existing SSO user unmatched and quietly fall through to the email path.
+//
+// AdoptPorte runs inside the same advisory lock as the rest of the schema, so
+// two instances starting together do not both try to move the credentials.
+func MigrateWithIssuer(db *gorm.DB, issuer string) error {
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", migrationLockID).Error; err != nil {
 			return err
 		}
-		return migrateSchema(tx)
+		if err := migrateSchema(tx); err != nil {
+			return err
+		}
+		return AdoptPorte(tx, issuer)
 	}); err != nil {
 		return err
 	}
@@ -31,8 +46,6 @@ func migrateSchema(db *gorm.DB) error {
 	}
 	if err := db.AutoMigrate(
 		&User{},
-		&Session{},
-		&ApiToken{},
 		&Space{},
 		&SpaceMember{},
 		&File{},

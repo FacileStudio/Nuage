@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"context"
+	"net/http"
 	"strings"
 
 	"github.com/FacileStudio/tronc/errors"
@@ -15,7 +15,8 @@ func newController(service *Service) *Controller {
 	return &Controller{service: service}
 }
 
-func (controller *Controller) register(context context.Context, req *RegisterRequest) (*AuthResponse, error) {
+func (controller *Controller) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) (*AuthResponse, error) {
+	context := r.Context()
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	if !isValidEmail(email) {
 		return nil, errors.Invalid("invalid email")
@@ -24,28 +25,25 @@ func (controller *Controller) register(context context.Context, req *RegisterReq
 		return nil, errors.Invalid("password must be at least 12 characters")
 	}
 
-	userID, token, err := controller.service.registerUser(context, email, req.Password)
+	userID, token, err := controller.service.Register(context, w, r, email, req.Password)
 	if err != nil {
 		return nil, err
 	}
 	return &AuthResponse{UserID: userID, Token: token}, nil
 }
 
-func (controller *Controller) login(context context.Context, req *LoginRequest) (*AuthResponse, error) {
+func (controller *Controller) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) (*AuthResponse, error) {
+	context := r.Context()
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	if email == "" || req.Password == "" {
 		return nil, errors.Invalid("email and password required")
 	}
 
-	userID, token, err := controller.service.loginUser(context, email, req.Password)
+	userID, token, err := controller.service.Login(context, w, r, email, req.Password)
 	if err != nil {
 		return nil, err
 	}
 	return &AuthResponse{UserID: userID, Token: token}, nil
-}
-
-func (controller *Controller) authenticate(context context.Context, authorization string) (string, *Data, error) {
-	return controller.service.authenticateRequest(context, authorization)
 }
 
 func isValidEmail(email string) bool {
