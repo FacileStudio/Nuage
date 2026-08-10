@@ -13,6 +13,8 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcrypto"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/porte"
+	"github.com/FacileStudio/porte/session"
 	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
@@ -21,11 +23,20 @@ import (
 type Service struct {
 	orm        *gorm.DB
 	storageDir string
+	tokens     Auth
 	controller *Controller
 }
 
-func NewService(orm *gorm.DB, storageDir string) *Service {
-	service := &Service{orm: orm, storageDir: storageDir}
+// Auth is the auth service, narrowed to what this module needs of it.
+type Auth interface {
+	Issue(ctx context.Context, userID int64, label string) (string, porte.Session, error)
+	Sessions() *session.Manager
+	SetPassword(ctx context.Context, userID int64, email, password string) error
+	RevokeBrowserSessions(ctx context.Context, userID int64) error
+}
+
+func NewService(orm *gorm.DB, storageDir string, tokens Auth) *Service {
+	service := &Service{orm: orm, storageDir: storageDir, tokens: tokens}
 	service.controller = newController(service)
 	return service
 }
@@ -139,11 +150,13 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 		return nil, err
 	}
 
+	// Changing a password signs the other browsers out. It deliberately
+	// spares named API tokens: before porte they lived in their own table
+	// and a DELETE on sessions never touched them, so taking them now would
+	// break somebody's script on the day they rotate their password.
 	if password != nil {
-		if err := service.orm.WithContext(context).
-			Where("user_id = ?", id).
-			Delete(&schemas.Session{}).Error; err != nil {
-			return nil, errors.Internal("failed to revoke existing sessions", err)
+		if err := service.tokens.RevokeBrowserSessions(context, id); err != nil {
+			return nil, err
 		}
 	}
 
@@ -296,54 +309,61 @@ func mapUser(record schemas.User) *User {
 	}
 }
 
-func (service *Service) createApiToken(context context.Context, userID string, name string) (string, *schemas.ApiToken, error) {
+// A named API token is a porte session with a label on it and no expiry, so
+// there is no second credential table and no second branch in the auth path.
+// porte hands out ids, which is what the delete route already addressed them
+// by.
+func (service *Service) createApiToken(ctx context.Context, userID string, name string) (string, *porte.Session, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return "", nil, errors.Internal("failed to parse user id", err)
 	}
-
-	rawToken, err := authcrypto.NewToken()
+	rawToken, issued, err := service.tokens.Issue(ctx, id, name)
 	if err != nil {
-		return "", nil, errors.Internal("failed to generate token", err)
+		return "", nil, err
 	}
-
-	hasher := authcrypto.HashToken(rawToken)
-	record := &schemas.ApiToken{
-		Token:  hasher,
-		UserID: id,
-		Name:   name,
-	}
-	if err := service.orm.WithContext(context).Create(record).Error; err != nil {
-		return "", nil, errors.Internal("failed to store api token", err)
-	}
-
-	return rawToken, record, nil
+	return rawToken, &issued, nil
 }
 
-func (service *Service) getApiTokens(context context.Context, userID string) ([]schemas.ApiToken, error) {
+// getApiTokens lists the labelled sessions only. The unlabelled ones are
+// browser logins, and showing somebody their own laptop as an API token — with
+// a revoke button next to it — is not the same feature.
+func (service *Service) getApiTokens(ctx context.Context, userID string) ([]porte.Session, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return nil, errors.Internal("failed to parse user id", err)
 	}
-
-	var records []schemas.ApiToken
-	if err := service.orm.WithContext(context).Where("user_id = ?", id).Order("created_at desc").Find(&records).Error; err != nil {
+	held, err := service.tokens.Sessions().List(ctx, id)
+	if err != nil {
 		return nil, errors.Internal("failed to read api tokens", err)
 	}
-	return records, nil
+	named := make([]porte.Session, 0, len(held))
+	for _, candidate := range held {
+		if candidate.Label != "" {
+			named = append(named, candidate)
+		}
+	}
+	return named, nil
 }
 
-func (service *Service) deleteApiToken(context context.Context, userID string, tokenID int64) error {
+// deleteApiToken revokes one, and refuses to revoke a browser login through
+// the API-token route: porte's Revoke already scopes to the caller's own id,
+// and the label check keeps this endpoint to the thing it names.
+func (service *Service) deleteApiToken(ctx context.Context, userID string, tokenID int64) error {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return errors.Internal("failed to parse user id", err)
 	}
-
-	result := service.orm.WithContext(context).Where("id = ? AND user_id = ?", tokenID, id).Delete(&schemas.ApiToken{})
-	if result.RowsAffected == 0 {
-		return errors.NotFound("token not found")
+	held, err := service.tokens.Sessions().List(ctx, id)
+	if err != nil {
+		return errors.Internal("failed to read api tokens", err)
 	}
-	return nil
+	for _, candidate := range held {
+		if candidate.ID == tokenID && candidate.Label != "" {
+			return service.tokens.Sessions().Revoke(ctx, id, tokenID)
+		}
+	}
+	return errors.NotFound("token not found")
 }
 
 func avatarExtension(contentType string) (string, bool) {

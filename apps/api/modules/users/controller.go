@@ -179,7 +179,7 @@ func (controller *Controller) getApiToken(context context.Context) (*ApiTokenLis
 	for _, r := range records {
 		tokens = append(tokens, ApiTokenResponse{
 			ID:        r.ID,
-			Name:      r.Name,
+			Name:      r.Label,
 			CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
@@ -202,7 +202,7 @@ func (controller *Controller) createApiToken(context context.Context, req *Creat
 	return &ApiTokenResponse{
 		ID:        record.ID,
 		Token:     rawToken,
-		Name:      record.Name,
+		Name:      record.Label,
 		CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339),
 	}, nil
 }

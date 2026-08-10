@@ -31,6 +31,10 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
 	nuagewebdav "github.com/FacileStudio/Nuage/apps/api/modules/webdav"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/porte/local"
+	"github.com/FacileStudio/porte/oidc"
+	portepg "github.com/FacileStudio/porte/pg"
+	"github.com/FacileStudio/porte/session"
 	troncmiddleware "github.com/FacileStudio/tronc/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -107,8 +111,13 @@ func setupTestServer(t *testing.T) *testServer {
 
 	notifier := nook.NewNotifier(db)
 	actLogger := activity.NewLogger(db)
-	authService := auth.NewService(db, notifier, slog.Default())
-	userService := users.NewService(db, t.TempDir())
+	appEnv := env.Config{SSOOnly: false}
+	sessions, passwords, kit, err := buildTestAuth(db, notifier, appEnv)
+	if err != nil {
+		t.Fatalf("build auth: %v", err)
+	}
+	authService := auth.NewService(db, sessions, passwords, slog.Default())
+	userService := users.NewService(db, t.TempDir(), authService)
 	quotaService := quota.NewService(db)
 	presignSecret := presign.DeriveSecret("test-secret", "nuage-presign-v1")
 	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService, presignSecret)
@@ -120,10 +129,11 @@ func setupTestServer(t *testing.T) *testServer {
 	spacesService := spaces.NewService(db)
 	activityService := activitymod.NewService(db)
 
-	appEnv := env.Config{SSOOnly: false}
 	router := chi.NewRouter()
 	router.Use(troncmiddleware.CORS(troncmiddleware.CORSConfig{AllowedOrigins: []string{"*"}}))
 
+	sessions.Mount(router)
+	kit.Mount(router)
 	auth.RegisterRoutes(router, authService, appEnv)
 	users.RegisterRoutes(router, userService, authService)
 	files.RegisterRoutes(router, fileService, authService)
@@ -234,4 +244,37 @@ func reuploadFile(ts *testServer, token string, fileID int64, content string) *h
 func parseJSON(resp *http.Response, dest any) {
 	defer resp.Body.Close()
 	json.NewDecoder(resp.Body).Decode(dest)
+}
+
+// buildTestAuth mirrors main.go's buildAuth over the test database. OIDC is
+// unconfigured here, so oidc.New returns a kit that serves /auth/config and
+// authenticates sessions and nothing else — which is what these tests exercise.
+func buildTestAuth(db *gorm.DB, notifier *nook.Notifier, appEnv env.Config) (*session.Manager, *local.Kit, *oidc.Kit, error) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	store := portepg.New(sqlDB)
+	users := auth.NewUserStore(db, notifier)
+	cfg := appEnv.Porte()
+
+	sessions, err := session.New(cfg, session.Deps{Sessions: store.Sessions(), Logger: slog.Default()})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	kit, err := oidc.New(context.Background(), cfg, oidc.Deps{
+		Users: users, Identities: store.Identities(), Sessions: sessions,
+		Codes: store.LoginCodes(), Logger: slog.Default(),
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	passwords, err := local.New(local.Config{AllowRegistration: true, MinPasswordLength: 8}, local.Deps{
+		Users: users, Identities: store.Identities(), Sessions: sessions,
+		Logger: slog.Default(), Count: users.CountUsers,
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return sessions, passwords, kit, nil
 }

@@ -61,8 +61,14 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, storageClient *storage.Clien
 	})
 }
 
+// authenticator is the auth service, narrowed to the one thing WebDAV needs.
+//
+// A WebDAV client re-sends its credentials on every request, so this must not
+// be a login: AuthenticateToken verifies the credential and issues nothing,
+// which is what keeps a Finder window from writing a session row per PROPFIND.
 type authenticator interface {
-	Authenticate(ctx context.Context, authorization string) (string, any, error)
+	AuthenticateToken(w http.ResponseWriter, r *http.Request, token string) (int64, error)
+	IdentityForUser(ctx context.Context, userID int64) (id string, email string, isAdmin bool, err error)
 }
 
 func requireBasicAuth(authService authenticator) func(http.Handler) http.Handler {
@@ -78,7 +84,10 @@ func requireBasicAuth(authService authenticator) func(http.Handler) http.Handler
 				return
 			}
 
-			userID, rawData, err := authService.Authenticate(r.Context(), "Bearer "+password)
+			// The username is ignored and always has been: what this
+			// endpoint wants in the password field is an API token, and
+			// porte verifies it as the bearer credential it is.
+			id, err := authService.AuthenticateToken(w, r, password)
 			if err != nil {
 				w.Header().Set("DAV", "1, 2")
 				w.Header().Set("WWW-Authenticate", `Basic realm="Nuage WebDAV"`)
@@ -86,16 +95,17 @@ func requireBasicAuth(authService authenticator) func(http.Handler) http.Handler
 				return
 			}
 
-			data, ok := rawData.(interface{ GetEmail() string })
-			if !ok || data == nil {
+			userID, email, isAdmin, err := authService.IdentityForUser(r.Context(), id)
+			if err != nil {
 				w.Header().Set("WWW-Authenticate", `Basic realm="Nuage WebDAV"`)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
 			ctx := authcontext.WithIdentity(r.Context(), authcontext.Identity{
-				UserID: userID,
-				Email:  data.GetEmail(),
+				UserID:  userID,
+				Email:   email,
+				IsAdmin: isAdmin,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
