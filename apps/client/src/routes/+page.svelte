@@ -60,7 +60,7 @@
 					href={ssoOnly ? '/login' : '/login?tab=register'}
 					class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
 				>
-					{ssoOnly ? 'Continue with SSO' : 'Get started'}
+					{ssoOnly ? 'Sign in with Facile' : 'Get started'}
 				</a>
 			</div>
 		</div>
@@ -80,7 +80,7 @@
 					href={ssoOnly ? '/login' : '/login?tab=register'}
 					class="inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
 				>
-					{ssoOnly ? 'Continue with SSO' : 'Start storing'}
+					{ssoOnly ? 'Sign in with Facile' : 'Start storing'}
 					<svg class="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
 				</a>
 				<a
@@ -135,13 +135,13 @@
 				{ssoOnly ? 'Ready to sign in?' : 'Ready to start?'}
 			</h2>
 			<p class="mt-4 text-muted-foreground">
-				{ssoOnly ? 'Use your organization SSO to access Nuage.' : 'Free to use. Self-hosted. No credit card required.'}
+				{ssoOnly ? 'Use your Facile SSO to access Nuage.' : 'Free to use. Self-hosted. No credit card required.'}
 			</p>
 			<a
 				href={ssoOnly ? '/login' : '/login?tab=register'}
 				class="mt-8 inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
 			>
-				{ssoOnly ? 'Continue with SSO' : 'Create an account'}
+				{ssoOnly ? 'Sign in with Facile' : 'Create an account'}
 			</a>
 		</section>
 	</main>
