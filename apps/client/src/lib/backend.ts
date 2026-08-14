@@ -1,5 +1,16 @@
 const backendBaseUrl = '/api';
 
+/*
+ * porte carries a session on two transports: an Authorization header, which local
+ * login still gets from localStorage, and an HttpOnly cookie, which is all an SSO
+ * login leaves behind. The cookie is ambient, so porte refuses a mutating request
+ * that carries one without this header — a browser will not attach a custom header
+ * cross-site without a preflight the API never answers. Only its presence is
+ * checked, so the value is a constant.
+ */
+const csrfHeader = 'X-Facile-CSRF';
+
+
 export type AuthConfig = {
 	sso_only: boolean;
 	oidc_enabled: boolean;
@@ -173,15 +184,46 @@ type ApiErrorPayload = {
 	error?: { message?: string };
 };
 
+/**
+ * ApiError is a failed response that still remembers its status, which is what
+ * separates "you are not signed in" from "the server fell over".
+ */
+export class ApiError extends Error {
+	readonly status: number;
+
+	constructor(message: string, status: number) {
+		super(message);
+		this.name = 'ApiError';
+		this.status = status;
+	}
+}
+
+/**
+ * isAuthError reports whether the API refused the credential, as opposed to
+ * failing for any other reason.
+ *
+ * The distinction is the whole point: a route guard that treats a 500 or a
+ * dropped connection as "logged out" throws the session away on a blip, and the
+ * user lands on the login page holding a session that was fine.
+ */
+export function isAuthError(error: unknown): boolean {
+	return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
 async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
 	const headers = new Headers(options.headers);
 	if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
 		headers.set('Content-Type', 'application/json');
 	}
+	headers.set(csrfHeader, '1');
 	if (token) {
 		headers.set('Authorization', `Bearer ${token}`);
 	}
-	const response = await fetch(`${backendBaseUrl}${path}`, { ...options, headers });
+	const response = await fetch(`${backendBaseUrl}${path}`, {
+		credentials: 'same-origin',
+		...options,
+		headers
+	});
 	if (!response.ok) {
 		let payload: ApiErrorPayload | undefined;
 		try {
@@ -189,7 +231,10 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, token?: stri
 		} catch {
 			payload = undefined;
 		}
-		throw new Error(payload?.error?.message || `Request failed with status ${response.status}`);
+		throw new ApiError(
+			payload?.error?.message || `Request failed with status ${response.status}`,
+			response.status
+		);
 	}
 	const text = await response.text();
 	if (!text) return {} as T;
@@ -217,8 +262,22 @@ export const backend = {
 		});
 	},
 
-	me(token: string) {
+	/**
+	 * The authenticated profile, and the only honest answer to "is this browser
+	 * signed in": the credential may be a bearer token from a local login or the
+	 * cookie an SSO callback left behind, and only the server can see both.
+	 */
+	me(token?: string) {
 		return apiFetch<MeResponse>('/users/me', {}, token);
+	},
+
+	/**
+	 * Ends the session server-side. Dropping the bearer token from localStorage is
+	 * not enough on its own — an SSO login never put one there, and the cookie
+	 * would sign the user straight back in on the next page load.
+	 */
+	logout(token?: string) {
+		return apiFetch<{ logged_out: boolean }>('/auth/logout', { method: 'POST' }, token);
 	},
 
 	listFiles(token: string, params?: { folder_id?: number; search?: string; linked_to?: string; origin_app?: string; space_id?: number | null }) {
@@ -234,10 +293,12 @@ export const backend = {
 
 	uploadFile(token: string, formData: FormData) {
 		const headers = new Headers();
-		headers.set('Authorization', `Bearer ${token}`);
+		headers.set(csrfHeader, '1');
+		if (token) headers.set('Authorization', `Bearer ${token}`);
 		return fetch(`${backendBaseUrl}/files`, {
 			method: 'POST',
 			body: formData,
+			credentials: 'same-origin',
 			headers
 		}).then(async (r) => {
 			if (!r.ok) {
@@ -257,8 +318,14 @@ export const backend = {
 		return apiFetch<NuageFile>(`/files/${id}`, {}, token);
 	},
 
-	downloadUrl(token: string, id: number): string {
-		return `${backendBaseUrl}/files/${id}/download?token=${encodeURIComponent(token)}`;
+	/**
+	 * A URL the browser fetches on its own — an <img src>, a window.open, an
+	 * anchor's download. It carries no credential of its own because it cannot:
+	 * none of those attach an Authorization header, and porte reads only the
+	 * cookie and that header. The session cookie is what authenticates it.
+	 */
+	downloadUrl(id: number): string {
+		return `${backendBaseUrl}/files/${id}/download`;
 	},
 
 	deleteFile(token: string, id: number) {
@@ -377,10 +444,12 @@ export const backend = {
 
 	uploadAvatar(token: string, formData: FormData) {
 		const headers = new Headers();
-		headers.set('Authorization', `Bearer ${token}`);
+		headers.set(csrfHeader, '1');
+		if (token) headers.set('Authorization', `Bearer ${token}`);
 		return fetch(`${backendBaseUrl}/users/me/avatar`, {
 			method: 'POST',
 			body: formData,
+			credentials: 'same-origin',
 			headers
 		}).then(async (r) => {
 			if (!r.ok) {
@@ -423,7 +492,8 @@ export const backend = {
 		return new Promise((resolve, reject) => {
 			const xhr = new XMLHttpRequest();
 			xhr.open('POST', `${backendBaseUrl}/files`);
-			xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+			xhr.setRequestHeader(csrfHeader, '1');
+			if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 			if (onProgress) {
 				xhr.upload.addEventListener('progress', (e) => {
 					if (e.lengthComputable) onProgress(e.loaded, e.total);
@@ -458,7 +528,8 @@ export const backend = {
 		return new Promise<ChunkResponse>((resolve, reject) => {
 			const xhr = new XMLHttpRequest();
 			xhr.open('PUT', `${backendBaseUrl}/files/upload/${sessionId}/part/${partNumber}`);
-			xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+			xhr.setRequestHeader(csrfHeader, '1');
+			if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 			xhr.setRequestHeader('Content-Type', 'application/octet-stream');
 			xhr.addEventListener('load', () => {
 				if (xhr.status >= 200 && xhr.status < 300) {

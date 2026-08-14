@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { MobileNav, SideBar } from '@facile/muse';
-	import { backend, type QuotaResponse, type Space, type UserProfile } from '$lib/backend';
+	import { backend, isAuthError, type QuotaResponse, type Space, type UserProfile } from '$lib/backend';
 	import { hasPending, undoLast } from '$lib/undo.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { icons, nuage } from '$lib/icons';
@@ -16,6 +16,7 @@
 	let token = $state('');
 	let user = $state<UserProfile | null>(null);
 	let loaded = $state(false);
+	let failure = $state('');
 	let quota = $state<QuotaResponse | null>(null);
 	let spaces = $state<Space[]>([]);
 	let collapsed = $state(false);
@@ -79,12 +80,22 @@
 		}
 	}
 
+	/*
+	 * The gate is the API's answer, not what is in localStorage. An SSO callback
+	 * signs the browser in with an HttpOnly cookie and no bearer token, so a
+	 * localStorage check bounces a perfectly authenticated user back to /login
+	 * without ever asking the server. The stored token is still passed, because a
+	 * local password login is the case that has one.
+	 *
+	 * Only a refusal logs anyone out. A 500 or a dead connection says nothing
+	 * about the session, and throwing it away over one strands the user on the
+	 * login page holding a credential that was fine.
+	 */
 	onMount(() => {
 		document.addEventListener('keydown', handleUndoKeydown);
 
 		(async () => {
 			const stored = localStorage.getItem(TOKEN_KEY) ?? '';
-			if (!stored) { goto('/login'); return; }
 			try {
 				const result = await backend.me(stored);
 				token = stored;
@@ -95,8 +106,9 @@
 				backend.syncProfile(stored).then(({ synced }) => {
 					if (synced) backend.me(stored).then((r) => { user = r.user; });
 				}).catch(() => {});
-			} catch {
-				goto('/login');
+			} catch (error) {
+				if (isAuthError(error)) { goto('/login'); return; }
+				failure = error instanceof Error && error.message ? error.message : 'Could not reach Nuage.';
 			}
 		})();
 
@@ -170,4 +182,13 @@
 	</div>
 
 	<MobileNav items={mobilePages} user={identity} profileHref="/settings" profileActive={onSettings} />
+{:else if failure}
+	<div class="flex h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
+		<p class="text-sm text-muted-foreground">{failure}</p>
+		<button
+			type="button"
+			class="inline-flex h-9 items-center justify-center rounded-md border border-border px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+			onclick={() => location.reload()}
+		>Retry</button>
+	</div>
 {/if}
