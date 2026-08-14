@@ -155,7 +155,7 @@
 		}
 		const file = entry.raw as NuageFile;
 		if (isPreviewable(file.mime_type)) previewFile = file;
-		else window.open(backend.downloadUrl(app.token, file.id), '_blank');
+		else window.open(backend.downloadUrl(file.id), '_blank');
 	}
 
 	/* Only reachable in select mode — the row and tile hand a plain click to `onOpen`, and the
@@ -371,7 +371,7 @@
 				icon: icons.download,
 				onSelect: () => {
 					const a = document.createElement('a');
-					a.href = backend.downloadUrl(app.token, entry.id);
+					a.href = backend.downloadUrl(entry.id);
 					a.download = entry.name;
 					a.click();
 				}
@@ -394,7 +394,7 @@
 		return items;
 	});
 
-	const thumbnailUrl = (entry: BrowserEntry) => backend.downloadUrl(app.token, entry.id);
+	const thumbnailUrl = (entry: BrowserEntry) => backend.downloadUrl(entry.id);
 	const renamingKey = $derived(renaming ? itemKey(renaming.type, renaming.id) : null);
 </script>
 
@@ -583,7 +583,7 @@
 {#if previewFile}
 	<FilePreview
 		file={previewFile}
-		url={backend.downloadUrl(app.token, previewFile.id)}
+		url={backend.downloadUrl(previewFile.id)}
 		onClose={() => (previewFile = null)}
 	/>
 {/if}

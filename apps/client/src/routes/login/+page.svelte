@@ -23,8 +23,23 @@
 	let oidcEnabled = $state(false);
 	let configLoaded = $state(false);
 
+	/*
+	 * Already signed in? Ask the API, because the credential may be the cookie an
+	 * SSO callback left behind rather than a bearer token in localStorage. This
+	 * page is where porte's failed-login redirect lands too, so the probe runs
+	 * before anything is rendered and after the error is read.
+	 */
+	async function signedIn(): Promise<boolean> {
+		try {
+			await backend.me(localStorage.getItem(TOKEN_KEY) ?? '');
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	onMount(async () => {
-		if (localStorage.getItem(TOKEN_KEY)) {
+		if (await signedIn()) {
 			goto('/files');
 			return;
 		}

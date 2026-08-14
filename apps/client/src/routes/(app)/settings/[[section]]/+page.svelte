@@ -207,7 +207,17 @@
 		testingNook = false;
 	}
 
-	function logout() {
+	/*
+	 * The cookie is the half that matters. An SSO login never wrote a bearer token
+	 * to localStorage, so clearing it alone leaves the session standing and the
+	 * next page load signs the user straight back in — a logout button that does
+	 * nothing. The redirect happens either way: a logout that fails server-side
+	 * must still get them off the app.
+	 */
+	async function logout() {
+		try {
+			await backend.logout(app.token);
+		} catch {}
 		localStorage.removeItem('nuage.token');
 		goto('/login');
 	}

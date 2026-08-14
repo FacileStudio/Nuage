@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
 	import { backend } from '$lib/backend';
 
 	const TOKEN_KEY = 'nuage.token';
@@ -9,25 +8,24 @@
 	let redirecting = $state(true);
 	let ssoOnly = $state(false);
 
-	/**
-	 * Reads the session token handed back by the SSO callback. It arrives in the
-	 * URL fragment, which browsers never send to a server, so it cannot leak
-	 * through Referer headers or reverse-proxy access logs.
+	/*
+	 * This is where the SSO callback lands: OIDC_SUCCESS_URL is the app's origin,
+	 * and porte hands back a session cookie and a 302, nothing in the URL. So the
+	 * only way to tell an arriving SSO user from a stranger is to ask the API —
+	 * a localStorage check sees an empty key and leaves them staring at the
+	 * marketing page they just authenticated their way past.
 	 */
-	function readSsoToken(): string | null {
-		const fragment = location.hash.startsWith('#') ? location.hash.slice(1) : location.hash;
-		return new URLSearchParams(fragment).get('token');
+	async function signedIn(): Promise<boolean> {
+		try {
+			await backend.me(localStorage.getItem(TOKEN_KEY) ?? '');
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	onMount(async () => {
-		const token = readSsoToken();
-		if (token) {
-			localStorage.setItem(TOKEN_KEY, token);
-			history.replaceState(null, '', page.url.pathname);
-			goto('/files');
-			return;
-		}
-		if (localStorage.getItem(TOKEN_KEY)) {
+		if (await signedIn()) {
 			goto('/files');
 			return;
 		}
