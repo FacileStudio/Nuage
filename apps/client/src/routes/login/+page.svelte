@@ -11,9 +11,6 @@
 	const labelClass = 'text-sm font-medium leading-none';
 	const primaryButtonClass =
 		'inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50';
-	const outlineButtonClass =
-		'inline-flex h-10 w-full items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
-
 	let tab = $state<'login' | 'register'>('login');
 	let email = $state('');
 	let password = $state('');
@@ -111,7 +108,7 @@
 					{!ssoOnly && tab === 'register'
 						? 'Sign up to start storing files.'
 						: ssoOnly
-							? 'Sign in with your organization account to access Nuage.'
+							? 'Sign in with your Facile account to access Nuage.'
 							: 'Log in to your Nuage account.'}
 				</p>
 			</div>
@@ -123,6 +120,21 @@
 					<p class="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
 						{message}
 					</p>
+				{/if}
+
+				{#if oidcEnabled}
+					<a href="/api/auth/oidc" data-sveltekit-reload class={primaryButtonClass}>
+						<iconify-icon icon="solar:key-minimalistic-square-bold-duotone" width="18" class="mr-2"
+						></iconify-icon>
+						Sign in with Facile
+					</a>
+					{#if !ssoOnly}
+						<div class="my-6 flex items-center gap-3">
+							<span class="h-px flex-1 bg-border"></span>
+							<span class="text-xs uppercase tracking-wide text-muted-foreground">or</span>
+							<span class="h-px flex-1 bg-border"></span>
+						</div>
+					{/if}
 				{/if}
 
 				{#if !ssoOnly}
@@ -182,20 +194,6 @@
 								: tab === 'register' ? 'Create account' : 'Log in'}
 						</button>
 					</form>
-				{/if}
-
-				{#if oidcEnabled}
-					{#if !ssoOnly}
-						<div class="my-5 flex items-center gap-3">
-							<div class="h-px flex-1 bg-border"></div>
-							<span class="text-xs text-muted-foreground">or</span>
-							<div class="h-px flex-1 bg-border"></div>
-						</div>
-					{/if}
-
-					<a href="{backend.baseUrl}/auth/oidc" class="block">
-						<button type="button" class={outlineButtonClass}>Continue with SSO</button>
-					</a>
 				{/if}
 
 				{#if ssoOnly && !oidcEnabled}
