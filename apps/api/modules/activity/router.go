@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// RegisterRoutes wires the activity endpoints onto the router.
 func RegisterRoutes(router chi.Router, service *Service, authService *auth.Service) {
 	handler := newHandler(service)
 

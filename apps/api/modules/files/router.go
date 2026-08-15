@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// RegisterRoutes wires the file and folder endpoints, plus the chunked upload
+// and presigned-download routes, onto the router.
 func RegisterRoutes(router chi.Router, service *Service, authService *auth.Service) {
 	handler := newHandler(service)
 

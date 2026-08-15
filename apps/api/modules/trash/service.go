@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service implements soft delete, restore and permanent deletion.
 type Service struct {
 	orm      *gorm.DB
 	storage  *storage.Client
@@ -25,6 +26,7 @@ type Service struct {
 	quota    *quota.Service
 }
 
+// NewService builds a trash Service over the given dependencies.
 func NewService(orm *gorm.DB, storageClient *storage.Client, actLogger *activity.Logger, quotaService *quota.Service) *Service {
 	return &Service{orm: orm, storage: storageClient, activity: actLogger, quota: quotaService}
 }

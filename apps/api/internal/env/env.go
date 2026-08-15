@@ -8,6 +8,7 @@ import (
 	troncenv "github.com/FacileStudio/tronc/env"
 )
 
+// OIDCConfig holds the settings used to federate with the identity provider.
 type OIDCConfig struct {
 	Issuer       string
 	ClientID     string
@@ -16,6 +17,7 @@ type OIDCConfig struct {
 	SuccessURL   string
 }
 
+// MinIOConfig holds the S3-compatible storage connection settings.
 type MinIOConfig struct {
 	Endpoint  string
 	AccessKey string
@@ -24,6 +26,7 @@ type MinIOConfig struct {
 	UseSSL    bool
 }
 
+// Config is the application configuration loaded from environment variables.
 type Config struct {
 	troncenv.Core
 	StorageDir    string
@@ -33,6 +36,8 @@ type Config struct {
 	PresignSecret string
 }
 
+// Load reads the configuration from the environment, failing when a required
+// value (MinIO endpoint and credentials, PRESIGN_SECRET) is absent or invalid.
 func Load() (Config, error) {
 	core, err := troncenv.LoadCore()
 	if err != nil {

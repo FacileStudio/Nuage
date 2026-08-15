@@ -11,6 +11,7 @@ import (
 	"github.com/FacileStudio/tronc/httpjson"
 )
 
+// Handler is the HTTP handler for the settings module.
 type Handler struct {
 	service *Service
 }

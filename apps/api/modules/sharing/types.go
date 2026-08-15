@@ -1,5 +1,6 @@
 package sharing
 
+// CreateShareRequest is the body used to create a public share.
 type CreateShareRequest struct {
 	FileID     *int64  `json:"file_id"`
 	FolderID   *int64  `json:"folder_id"`
@@ -8,6 +9,7 @@ type CreateShareRequest struct {
 	SpaceID    *int64  `json:"space_id"`
 }
 
+// ShareResponse is a share owned by the caller, with its resource if present.
 type ShareResponse struct {
 	ID         int64         `json:"id"`
 	Token      string        `json:"token"`
@@ -21,10 +23,12 @@ type ShareResponse struct {
 	Folder     *PublicFolder `json:"folder,omitempty"`
 }
 
+// ShareListResponse is a list of the caller's shares.
 type ShareListResponse struct {
 	Shares []ShareResponse `json:"shares"`
 }
 
+// PublicShareResponse is a share as seen by an anonymous visitor.
 type PublicShareResponse struct {
 	Token      string        `json:"token"`
 	Permission string        `json:"permission"`
@@ -32,6 +36,7 @@ type PublicShareResponse struct {
 	Folder     *PublicFolder `json:"folder,omitempty"`
 }
 
+// PublicFile is a shared file as seen by an anonymous visitor.
 type PublicFile struct {
 	ID       int64  `json:"id"`
 	FacileID string `json:"facile_id"`
@@ -40,6 +45,7 @@ type PublicFile struct {
 	Size     int64  `json:"size"`
 }
 
+// PublicFolder is a shared folder as seen by an anonymous visitor.
 type PublicFolder struct {
 	ID       int64  `json:"id"`
 	FacileID string `json:"facile_id"`
@@ -47,6 +53,7 @@ type PublicFolder struct {
 	Size     int64  `json:"size"`
 }
 
+// SharedFolderContentsResponse is the contents of a shared folder.
 type SharedFolderContentsResponse struct {
 	Permission string         `json:"permission"`
 	Files      []PublicFile   `json:"files"`

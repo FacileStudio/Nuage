@@ -33,6 +33,8 @@ func withStatementTimeout(databaseURL string) (string, error) {
 	return parsed.String(), nil
 }
 
+// Open connects to the Postgres database described by databaseURL, applying a
+// per-connection statement timeout and a tuned connection pool.
 func Open(databaseURL string) (*gorm.DB, error) {
 	dsn, err := withStatementTimeout(databaseURL)
 	if err != nil {

@@ -82,9 +82,20 @@ func migrateSchema(db *gorm.DB) error {
 // the rest of the suite uses, and an unanchored replace() would mangle any filename that
 // happened to contain the prefix.
 //
-// avatar_url and avatar_source stay in the table, unread, until a later release drops
-// them. Expanding first means a rollback is redeploying the old binary rather than
-// restoring a backup.
+// backfillAvatarUploadPath back-fills avatar_upload_path and cleans
+// oidc_picture_url on rows created by older releases.
+//
+// avatar_url and avatar_source stay in the table, unread, until a later
+// release drops them. Expanding first means a rollback is redeploying the
+// old binary rather than restoring a backup.
+//
+// The old code stored profile.Picture verbatim, so every user without a
+// photo in Authentik carries a data: URI of their own initials here. Under
+// the new rule this column means "there is an SSO photo", so leaving the
+// placeholder would suppress the upload fallback for those users forever.
+//
+// A NULL in a freshly added column would fail to scan into the plain string
+// the model declares.
 func backfillAvatarUploadPath(db *gorm.DB) error {
 	if db.Migrator().HasColumn(&User{}, "avatar_url") {
 		if err := db.Exec(
@@ -97,10 +108,6 @@ func backfillAvatarUploadPath(db *gorm.DB) error {
 		}
 	}
 
-	// The old code stored profile.Picture verbatim, so every user without a photo in
-	// Authentik carries a data: URI of their own initials here. Under the new rule this
-	// column means "there is an SSO photo", so leaving the placeholder would suppress the
-	// upload fallback for those users forever.
 	if err := db.Exec(
 		`UPDATE users SET oidc_picture_url = ''
 		 WHERE coalesce(oidc_picture_url, '') <> ''
@@ -108,8 +115,6 @@ func backfillAvatarUploadPath(db *gorm.DB) error {
 		return err
 	}
 
-	// A NULL in a freshly added column would fail to scan into the plain string the model
-	// declares.
 	return db.Exec(`UPDATE users SET avatar_upload_path = '' WHERE avatar_upload_path IS NULL`).Error
 }
 

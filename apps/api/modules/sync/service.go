@@ -16,10 +16,12 @@ import (
 // carry an updated_at below the cursor and never be observed again.
 const cursorLag = 2 * time.Second
 
+// Service computes sync state and incremental changes for clients.
 type Service struct {
 	orm *gorm.DB
 }
 
+// NewService builds a sync Service over the given database connection.
 func NewService(orm *gorm.DB) *Service {
 	return &Service{orm: orm}
 }

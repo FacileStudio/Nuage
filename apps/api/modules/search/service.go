@@ -10,10 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service runs file and folder search queries.
 type Service struct {
 	orm *gorm.DB
 }
 
+// NewService builds a search Service over the given database connection.
 func NewService(orm *gorm.DB) *Service {
 	return &Service{orm: orm}
 }

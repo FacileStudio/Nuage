@@ -2,6 +2,8 @@ package middleware
 
 import "net/http"
 
+// SecurityHeaders wraps a handler, setting a baseline of hardening response
+// headers on every request.
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()

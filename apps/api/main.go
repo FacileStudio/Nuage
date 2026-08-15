@@ -70,6 +70,10 @@ const (
 // The notifier rides into the UserStore rather than the auth service, because
 // creating an account is the thing that emits user.created and the UserStore
 // is now the only place an account is created.
+//
+// Nuage's floor has always been eight characters. porte defaults to
+// twelve, and raising it here would reject a password this app accepted
+// yesterday — a product decision, not a migration.
 func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *local.Kit, *oidc.Kit, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -93,9 +97,6 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	// Nuage's floor has always been eight characters. porte defaults to
-	// twelve, and raising it here would reject a password this app accepted
-	// yesterday — a product decision, not a migration.
 	passwords, err := local.New(local.Config{AllowRegistration: !appEnv.SSOOnly, MinPasswordLength: 8}, local.Deps{
 		Users:      users,
 		Identities: store.Identities(),
@@ -138,6 +139,19 @@ func startTombstonePruner(ctx context.Context, db *gorm.DB, appLogger *slog.Logg
 	}()
 }
 
+// run wires the config, database, storage, auth and every module's routes
+// into a server and blocks until it exits, returning the process exit code.
+//
+// Behind Traefik and Cloudflare, RemoteAddr is only the visitor if both
+// are trusted: Traefik replaces the forwarded chain rather than extending
+// it, so the visitor survives in Cf-Connecting-Ip alone. TRUSTED_PROXIES=
+// private,cloudflare fills all three.
+//
+// Whole-request read and write deadlines are deliberately absent on the
+// HTTP server: a multi-gigabyte upload or download legitimately outlives
+// any fixed budget, and exceeding it truncates the transfer after the
+// response header has already promised a Content-Length. Slow-header and
+// idle attacks are bounded below instead.
 func run() int {
 	appEnv, err := env.Load()
 	appLogger := logger.New(logger.Config{})
@@ -233,11 +247,6 @@ func run() int {
 	activityService := activitymod.NewService(db)
 
 	router := httpx.NewRouter(httpx.Config{
-		// Behind Traefik and Cloudflare, RemoteAddr is only the
-		// visitor if both are trusted: Traefik replaces the forwarded
-		// chain rather than extending it, so the visitor survives in
-		// Cf-Connecting-Ip alone. TRUSTED_PROXIES=private,cloudflare
-		// fills all three.
 		TrustedProxies: appEnv.TrustedProxies,
 		CDNProxies:     appEnv.CDNProxies,
 		CDNHeader:      appEnv.CDNHeader,
@@ -289,13 +298,8 @@ func run() int {
 
 	addr := ":" + strconv.Itoa(appEnv.Port)
 	server := &http.Server{
-		Addr:    addr,
-		Handler: router,
-		// Whole-request read and write deadlines are deliberately absent: a
-		// multi-gigabyte upload or download legitimately outlives any fixed
-		// budget, and exceeding it truncates the transfer after the response
-		// header has already promised a Content-Length. Slow-header and idle
-		// attacks are bounded below instead.
+		Addr:              addr,
+		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,

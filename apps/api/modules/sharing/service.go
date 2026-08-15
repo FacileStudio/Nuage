@@ -16,12 +16,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service implements public share creation and lookup.
 type Service struct {
 	orm      *gorm.DB
 	notifier *nook.Notifier
 	activity *activity.Logger
 }
 
+// NewService builds a sharing Service over the given dependencies.
 func NewService(orm *gorm.DB, notifier *nook.Notifier, actLogger *activity.Logger) *Service {
 	return &Service{orm: orm, notifier: notifier, activity: actLogger}
 }

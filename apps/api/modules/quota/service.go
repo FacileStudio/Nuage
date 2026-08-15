@@ -13,10 +13,12 @@ import (
 
 const defaultQuotaBytes int64 = 50 * 1024 * 1024 * 1024
 
+// Service tracks and enforces per-user storage quotas.
 type Service struct {
 	orm *gorm.DB
 }
 
+// NewService builds a quota Service over the given database connection.
 func NewService(orm *gorm.DB) *Service {
 	return &Service{orm: orm}
 }

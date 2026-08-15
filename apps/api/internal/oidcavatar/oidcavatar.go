@@ -10,6 +10,7 @@ package oidcavatar
 
 import "strings"
 
+// Profile is the set of identity claims returned by the provider at login.
 type Profile struct {
 	Name              string
 	PreferredUsername string

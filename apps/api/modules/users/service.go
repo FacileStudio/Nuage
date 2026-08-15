@@ -20,6 +20,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service implements user management, profiles, avatars and API tokens.
 type Service struct {
 	orm        *gorm.DB
 	storageDir string
@@ -36,6 +37,8 @@ type Auth interface {
 	RevokeBrowserSessions(ctx context.Context, userID int64) error
 }
 
+// NewService builds a users Service over the given database connection,
+// storage directory and token-issuing auth dependency.
 func NewService(orm *gorm.DB, storageDir string, tokens Auth) *Service {
 	service := &Service{orm: orm, storageDir: storageDir, tokens: tokens}
 	service.controller = newController(service)
@@ -83,6 +86,11 @@ func (service *Service) listUsers(context context.Context) ([]User, error) {
 // verifyPassword confirms the caller knows the account's current password, so a
 // stolen session token alone cannot be escalated into a permanent takeover by
 // changing the login credentials.
+//
+// porte reads porte_identities, not users.password_hash. That column
+// still holds the hash the migration copied out of it, so comparing
+// against it here would keep answering yes to the *old* password after
+// a change — the same silent divergence, read from the other side.
 func (service *Service) verifyPassword(context context.Context, userID string, candidate string) error {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
@@ -97,16 +105,29 @@ func (service *Service) verifyPassword(context context.Context, userID string, c
 		return errors.Internal("failed to read user", err)
 	}
 
-	// porte reads porte_identities, not users.password_hash. That column
-	// still holds the hash the migration copied out of it, so comparing
-	// against it here would keep answering yes to the *old* password after
-	// a change — the same silent divergence, read from the other side.
 	if _, err := service.tokens.VerifyPassword(context, record.Email, candidate); err != nil {
 		return errors.Unauthorized("current password is incorrect")
 	}
 	return nil
 }
 
+// updateUser applies a partial profile update for a user, re-keying porte's
+// local identity when the email changes.
+//
+// The password is porte's, not a column on this row. Writing
+// users.password_hash would look like it worked and change nothing:
+// porte reads the identity table, so the old password would keep
+// signing in and the new one would never work.
+//
+// The address is half of porte's key for a local identity, so changing
+// it without moving that key breaks the login on the next profile edit.
+// Re-key first, then set the password on the address the account will
+// actually have.
+//
+// Changing a password signs the other browsers out. It deliberately
+// spares named API tokens: before porte they lived in their own table
+// and a DELETE on sessions never touched them, so taking them now would
+// break somebody's script on the day they rotate their password.
 func (service *Service) updateUser(context context.Context, userID string, name *string, email *string, password *string, color *string) (*User, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
@@ -118,15 +139,6 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 		updates["name"] = *name
 	}
 
-	// The password is porte's, not a column on this row. Writing
-	// users.password_hash would look like it worked and change nothing:
-	// porte reads the identity table, so the old password would keep
-	// signing in and the new one would never work.
-	//
-	// The address is half of porte's key for a local identity, so changing
-	// it without moving that key breaks the login on the next profile edit.
-	// Re-key first, then set the password on the address the account will
-	// actually have.
 	if email != nil || password != nil {
 		var current schemas.User
 		if err := service.orm.WithContext(context).Select("email").First(&current, id).Error; err != nil {
@@ -177,10 +189,6 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 		return nil, err
 	}
 
-	// Changing a password signs the other browsers out. It deliberately
-	// spares named API tokens: before porte they lived in their own table
-	// and a DELETE on sessions never touched them, so taking them now would
-	// break somebody's script on the day they rotate their password.
 	if password != nil {
 		if err := service.tokens.RevokeBrowserSessions(context, id); err != nil {
 			return nil, err
@@ -190,6 +198,13 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 	return mapUser(record), nil
 }
 
+// storeAvatar persists an uploaded avatar for a user, writing the file
+// under the avatars directory and recording its path on the account.
+//
+// Uploading is the fallback for people the IdP has no photo for, so a
+// photo in Porte makes this endpoint unavailable rather than merely
+// outranked. Accepting the file and then never showing it is the worse
+// failure: the user sees a success and no change.
 func (service *Service) storeAvatar(context context.Context, userID string, reader io.Reader, contentType string) (*User, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
@@ -204,9 +219,6 @@ func (service *Service) storeAvatar(context context.Context, userID string, read
 		return nil, errors.Internal("failed to read user", err)
 	}
 
-	// Uploading is the fallback for people the IdP has no photo for, so a photo in Porte
-	// makes this endpoint unavailable rather than merely outranked. Accepting the file and
-	// then never showing it is the worse failure: the user sees a success and no change.
 	if record.OIDCPictureURL != "" {
 		return nil, errors.Invalid("your photo is managed in single sign-on — change it there")
 	}
@@ -233,6 +245,12 @@ func (service *Service) storeAvatar(context context.Context, userID string, read
 	return mapUser(record), nil
 }
 
+// clearAvatar removes a user's uploaded avatar, leaving any Porte-managed
+// photo untouched.
+//
+// Only the upload is the user's to clear. The Porte photo is not deleted
+// from here — it is not ours, and the next profile sync would bring it
+// straight back.
 func (service *Service) clearAvatar(context context.Context, userID string) (*User, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
@@ -247,8 +265,6 @@ func (service *Service) clearAvatar(context context.Context, userID string) (*Us
 		return nil, errors.Internal("failed to read user", err)
 	}
 
-	// Only the upload is the user's to clear. The Porte photo is not deleted from here — it
-	// is not ours, and the next profile sync would bring it straight back.
 	oldFilename := record.AvatarUploadPath
 	record.AvatarUploadPath = ""
 	if err := service.orm.WithContext(context).Save(&record).Error; err != nil {

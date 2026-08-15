@@ -20,12 +20,15 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// Actor is the user who triggered an event.
 type Actor struct {
 	ID    int64  `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
 }
 
+// EventData carries the resource payload of an event; at most one of the
+// sub-payloads is set according to the event type.
 type EventData struct {
 	File   *FileData   `json:"file,omitempty"`
 	Folder *FolderData `json:"folder,omitempty"`
@@ -34,6 +37,7 @@ type EventData struct {
 	Quota  *QuotaData  `json:"quota,omitempty"`
 }
 
+// FileData describes the file an event refers to.
 type FileData struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
@@ -41,11 +45,13 @@ type FileData struct {
 	Size     int64  `json:"size"`
 }
 
+// FolderData describes the folder an event refers to.
 type FolderData struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
+// ShareData describes the public share an event refers to.
 type ShareData struct {
 	ID         int64  `json:"id"`
 	Token      string `json:"token"`
@@ -56,17 +62,20 @@ type ShareData struct {
 	FolderName string `json:"folder_name,omitempty"`
 }
 
+// UserData describes the user an event refers to.
 type UserData struct {
 	ID    int64  `json:"id"`
 	Email string `json:"email"`
 }
 
+// QuotaData carries the storage usage numbers for a quota event.
 type QuotaData struct {
 	UserID       int64 `json:"user_id"`
 	StorageUsed  int64 `json:"storage_used"`
 	StorageLimit int64 `json:"storage_limit"`
 }
 
+// Event is an outbound webhook notification envelope for Nook.
 type Event struct {
 	EventType    string    `json:"event_type"`
 	OccurredAt   string    `json:"occurred_at"`
@@ -77,6 +86,7 @@ type Event struct {
 
 var retryDelays = []time.Duration{10 * time.Second, 60 * time.Second, 300 * time.Second}
 
+// Notifier delivers activity events to a configured Nook webhook, with retries.
 type Notifier struct {
 	orm    *gorm.DB
 	ctx    context.Context
@@ -85,6 +95,7 @@ type Notifier struct {
 	client *http.Client
 }
 
+// NewNotifier builds a Notifier over the given database connection.
 func NewNotifier(orm *gorm.DB) *Notifier {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Notifier{

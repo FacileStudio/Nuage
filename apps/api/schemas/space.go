@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// Space is a shared team workspace.
 type Space struct {
 	ID          int64     `json:"id" gorm:"primaryKey"`
 	FacileID    string    `json:"facile_id" gorm:"uniqueIndex;not null"`
@@ -13,6 +14,7 @@ type Space struct {
 
 func (Space) TableName() string { return "spaces" }
 
+// SpaceMember links a user to a space with a role.
 type SpaceMember struct {
 	ID       int64     `json:"id" gorm:"primaryKey"`
 	SpaceID  int64     `json:"space_id" gorm:"not null;uniqueIndex:idx_space_user"`

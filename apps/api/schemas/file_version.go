@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// FileVersion is one saved version of a file.
 type FileVersion struct {
 	ID        int64     `json:"id" gorm:"primaryKey"`
 	FileID    int64     `json:"file_id" gorm:"index;not null"`

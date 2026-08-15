@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/webdav"
 )
 
+// VirtualDir is a virtual directory served by the WebDAV filesystem.
 type VirtualDir struct {
 	fs       *NuageFS
 	ctx      context.Context
@@ -97,6 +98,7 @@ func (d *VirtualDir) Readdir(count int) ([]os.FileInfo, error) {
 	return result, nil
 }
 
+// VirtualFile is a virtual file served by the WebDAV filesystem.
 type VirtualFile struct {
 	fs         *NuageFS
 	ctx        context.Context
@@ -239,6 +241,7 @@ func (fi *nuageFileInfo) ContentType(_ context.Context) (string, error) {
 	return "", ErrNotImplemented
 }
 
+// DirInfo is a virtual directory entry implementing os.FileInfo.
 type DirInfo struct {
 	name    string
 	modTime time.Time
@@ -251,6 +254,7 @@ func (di *DirInfo) ModTime() time.Time { return di.modTime.UTC() }
 func (di *DirInfo) IsDir() bool        { return true }
 func (di *DirInfo) Sys() any           { return nil }
 
+// DevNullFile is a write-only sink file discarded on write.
 type DevNullFile struct {
 	name string
 }

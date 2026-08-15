@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// Share is a public share of a file or folder.
 type Share struct {
 	ID         int64      `json:"id" gorm:"primaryKey"`
 	Token      string     `json:"token" gorm:"uniqueIndex;not null"`
