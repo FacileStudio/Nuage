@@ -10,17 +10,21 @@ import (
 	"time"
 )
 
+// Claims is the payload of a presigned download token.
 type Claims struct {
 	FileID    int64 `json:"f"`
 	ExpiresAt int64 `json:"e"`
 }
 
+// DeriveSecret derives an HMAC signing secret from a key and a context label,
+// so one key can sign distinct token kinds independently.
 func DeriveSecret(key, context string) []byte {
 	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write([]byte(context))
 	return mac.Sum(nil)
 }
 
+// Sign mints a signed download token for the file, valid until expiresAt.
 func Sign(fileID int64, expiresAt time.Time, secret []byte) (string, error) {
 	claims := Claims{FileID: fileID, ExpiresAt: expiresAt.Unix()}
 	payload, err := json.Marshal(claims)
@@ -37,6 +41,7 @@ func Sign(fileID int64, expiresAt time.Time, secret []byte) (string, error) {
 	return payloadB64 + "." + sig, nil
 }
 
+// Verify checks a token's signature and expiry and returns its claims.
 func Verify(token string, secret []byte) (*Claims, error) {
 	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {

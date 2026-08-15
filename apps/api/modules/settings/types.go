@@ -1,30 +1,36 @@
 package settings
 
+// SettingResponse is one application setting.
 type SettingResponse struct {
 	Key       string `json:"key"`
 	Value     string `json:"value"`
 	UpdatedAt string `json:"updated_at"`
 }
 
+// SettingsListResponse is a list of application settings.
 type SettingsListResponse struct {
 	Settings []SettingResponse `json:"settings"`
 }
 
+// UpdateSettingsRequest is the body used to update settings in bulk.
 type UpdateSettingsRequest struct {
 	Settings map[string]string `json:"settings"`
 }
 
+// TestNookRequest holds the webhook connection to probe.
 type TestNookRequest struct {
 	URL     string `json:"url"`
 	Secret  string `json:"secret"`
 	Enabled bool   `json:"enabled"`
 }
 
+// TestNookResponse reports whether a test delivery succeeded.
 type TestNookResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
+// DeliveryResponse is one Nook webhook delivery attempt.
 type DeliveryResponse struct {
 	ID           int64   `json:"id"`
 	EventType    string  `json:"event_type"`
@@ -37,6 +43,7 @@ type DeliveryResponse struct {
 	DeliveredAt  *string `json:"delivered_at,omitempty"`
 }
 
+// DeliveryListResponse is a page of Nook delivery attempts.
 type DeliveryListResponse struct {
 	Deliveries []DeliveryResponse `json:"deliveries"`
 	Total      int64              `json:"total"`

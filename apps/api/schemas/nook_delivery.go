@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// NookDelivery is the persisted record of one webhook delivery attempt.
 type NookDelivery struct {
 	ID           int64      `gorm:"primaryKey"`
 	EventType    string     `gorm:"not null;index"`

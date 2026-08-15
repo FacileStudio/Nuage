@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// UploadSession is a chunked-upload session in progress.
 type UploadSession struct {
 	ID        string    `json:"id" gorm:"primaryKey"`
 	FileName  string    `json:"file_name" gorm:"not null"`
@@ -18,6 +19,7 @@ type UploadSession struct {
 
 func (UploadSession) TableName() string { return "upload_sessions" }
 
+// UploadChunk is one received chunk of an upload session.
 type UploadChunk struct {
 	ID         int64     `json:"id" gorm:"primaryKey"`
 	SessionID  string    `json:"session_id" gorm:"uniqueIndex:idx_chunk_session_part;not null"`

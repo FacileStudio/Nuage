@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// ActivityLog is the persisted record of one activity event.
 type ActivityLog struct {
 	ID           int64     `json:"id" gorm:"primaryKey"`
 	UserID       int64     `json:"user_id" gorm:"index;not null"`

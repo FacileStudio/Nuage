@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Handler is the HTTP handler for the trash module.
 type Handler struct {
 	service *Service
 }

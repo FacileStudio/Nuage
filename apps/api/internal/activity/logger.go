@@ -10,14 +10,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// Logger persists activity entries to the database asynchronously.
 type Logger struct {
 	orm *gorm.DB
 }
 
+// NewLogger builds a Logger over the given database connection.
 func NewLogger(orm *gorm.DB) *Logger {
 	return &Logger{orm: orm}
 }
 
+// Entry is one activity event to record.
 type Entry struct {
 	UserID       int64
 	EventType    string

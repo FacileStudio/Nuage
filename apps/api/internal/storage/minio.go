@@ -14,6 +14,7 @@ import (
 
 const unknownSizePartSize = 16 << 20
 
+// MinIOConfig is the S3-compatible storage connection settings.
 type MinIOConfig struct {
 	Endpoint  string
 	AccessKey string
@@ -22,6 +23,7 @@ type MinIOConfig struct {
 	UseSSL    bool
 }
 
+// ObjectInfo describes a stored object.
 type ObjectInfo struct {
 	Key          string
 	Size         int64
@@ -29,11 +31,13 @@ type ObjectInfo struct {
 	LastModified time.Time
 }
 
+// Client wraps a MinIO client bound to a single bucket.
 type Client struct {
 	mc     *minio.Client
 	bucket string
 }
 
+// NewClient builds a Client for the given configuration.
 func NewClient(cfg MinIOConfig) (*Client, error) {
 	mc, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),

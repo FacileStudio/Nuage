@@ -11,14 +11,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service provides activity listing queries.
 type Service struct {
 	orm *gorm.DB
 }
 
+// NewService builds an activity Service over the given database connection.
 func NewService(orm *gorm.DB) *Service {
 	return &Service{orm: orm}
 }
 
+// ListParams is the filter set accepted when listing activity.
 type ListParams struct {
 	UserID       *int64
 	EventType    string

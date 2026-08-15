@@ -8,6 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// RegisterRoutes wires the share management and public share endpoints onto the
+// router.
 func RegisterRoutes(router chi.Router, service *Service, authService *auth.Service, storageClient *storage.Client) {
 	handler := newHandler(service, storageClient)
 

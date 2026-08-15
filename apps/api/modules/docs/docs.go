@@ -10,6 +10,7 @@ import (
 //go:embed openapi.yaml
 var specBytes []byte
 
+// RegisterRoutes serves the API docs page and the OpenAPI specification.
 func RegisterRoutes(router chi.Router) {
 	router.Get("/docs", serveDocs)
 	router.Get("/docs/openapi.yaml", serveSpec)

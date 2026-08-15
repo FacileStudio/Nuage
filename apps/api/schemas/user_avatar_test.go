@@ -15,6 +15,10 @@ import (
 // can create and drop `users` without disturbing the integration suite sharing the
 // database. The backfill is written in PostgreSQL (regexp_replace, anchored), so testing
 // it anywhere else would test a different statement than the one that ships.
+//
+// A developer without Postgres still gets a usable suite; CI, where the
+// database is always there, would fail on the same condition rather than
+// skip silently.
 func openTestDatabase(t *testing.T) *gorm.DB {
 	t.Helper()
 
@@ -25,8 +29,6 @@ func openTestDatabase(t *testing.T) *gorm.DB {
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gormlogger.Discard})
 	if err != nil {
-		// A developer without Postgres still gets a usable suite; CI, where the database is
-		// always there, would fail on the same condition rather than skip silently.
 		if os.Getenv("CI") != "" {
 			t.Fatalf("integration test infrastructure required in CI: %v", err)
 		}
@@ -111,9 +113,13 @@ func TestAvatarSelectExprMatchesAvatar(t *testing.T) {
 
 // Rows 2 and 3 are the reason this test exists. Row 2 holds an uploaded avatar with
 // avatar_source empty because it predates that column, and a backfill keyed on
-// avatar_source = 'upload' would drop its picture without a word. Row 4 carries the data:
+// the 'upload' source would drop its picture without a word. Row 4 carries the data:
 // URI the old sync stored verbatim for every user Authentik has no photo for; left alone
 // it would read as "there is an SSO photo" and suppress the upload fallback forever.
+//
+// The row that carries both keeps its file and still renders the Porte
+// photo, and the placeholder row is gone so its user can upload again
+// and see it.
 func TestBackfillAvatarUploadPath(t *testing.T) {
 	orm := openTestDatabase(t)
 
@@ -156,7 +162,6 @@ func TestBackfillAvatarUploadPath(t *testing.T) {
 		}
 	}
 
-	// The row that carries both keeps its file, and still renders the Porte photo.
 	var both User
 	if err := orm.Where("email = ?", "upload-and-sso@example.com").First(&both).Error; err != nil {
 		t.Fatalf("read both: %v", err)
@@ -165,7 +170,6 @@ func TestBackfillAvatarUploadPath(t *testing.T) {
 		t.Errorf("SSO photo should win, got %q", both.Avatar())
 	}
 
-	// The placeholder is gone, so this user can upload again and see it.
 	var placeholder User
 	if err := orm.Where("email = ?", "placeholder@example.com").First(&placeholder).Error; err != nil {
 		t.Fatalf("read placeholder: %v", err)

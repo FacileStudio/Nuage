@@ -1,5 +1,6 @@
 package search
 
+// SearchResult is one file or folder match from a search.
 type SearchResult struct {
 	ID        int64  `json:"id"`
 	FacileID  string `json:"facile_id"`
@@ -13,6 +14,7 @@ type SearchResult struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+// SearchResponse is the result set of a search.
 type SearchResponse struct {
 	Results []SearchResult `json:"results"`
 	Total   int            `json:"total"`

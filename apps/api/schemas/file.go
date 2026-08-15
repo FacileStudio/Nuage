@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// File is a stored file record.
 type File struct {
 	ID         int64      `json:"id" gorm:"primaryKey"`
 	FacileID   string     `json:"facile_id" gorm:"uniqueIndex;not null"`

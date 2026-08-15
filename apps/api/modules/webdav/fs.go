@@ -21,6 +21,8 @@ import (
 	"gorm.io/gorm"
 )
 
+// NuageFS is a webdav.FileSystem backed by Nuage's database and object store,
+// scoped to a single user.
 type NuageFS struct {
 	db      *gorm.DB
 	storage *storage.Client
@@ -28,6 +30,7 @@ type NuageFS struct {
 	userID  int64
 }
 
+// NewNuageFS builds a webdav.FileSystem for the given user.
 func NewNuageFS(db *gorm.DB, storageClient *storage.Client, quotaService *quota.Service, userID int64) webdav.FileSystem {
 	return &NuageFS{db: db, storage: storageClient, quota: quotaService, userID: userID}
 }

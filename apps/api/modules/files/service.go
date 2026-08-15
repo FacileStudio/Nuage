@@ -24,6 +24,8 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service implements file and folder storage operations over the database and
+// object store.
 type Service struct {
 	orm           *gorm.DB
 	storage       *storage.Client
@@ -33,6 +35,8 @@ type Service struct {
 	presignSecret []byte
 }
 
+// NewService builds a files Service wired to storage, activity, nook and quota
+// services.
 func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier, actLogger *activity.Logger, quotaService *quota.Service, presignSecret []byte) *Service {
 	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret}
 }

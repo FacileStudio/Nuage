@@ -1,5 +1,6 @@
 package files
 
+// VersionResponse is one file version.
 type VersionResponse struct {
 	ID        int64  `json:"id"`
 	FileID    int64  `json:"file_id"`
@@ -10,10 +11,12 @@ type VersionResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// VersionListResponse is a list of a file's versions.
 type VersionListResponse struct {
 	Versions []VersionResponse `json:"versions"`
 }
 
+// VersionDiffResponse compares two adjacent versions of a file.
 type VersionDiffResponse struct {
 	Version    int    `json:"version"`
 	SizeBefore int64  `json:"size_before"`

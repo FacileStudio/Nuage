@@ -32,6 +32,8 @@ type UserStore struct {
 	notifier *nook.Notifier
 }
 
+// NewUserStore builds a UserStore backed by the given database connection,
+// notifying through notifier when accounts are created.
 func NewUserStore(orm *gorm.DB, notifier *nook.Notifier) *UserStore {
 	return &UserStore{orm: orm, notifier: notifier}
 }
@@ -49,6 +51,12 @@ var (
 // links a pre-existing account to a subject signing in for the first time, and
 // it is refused for an unverified address because matching on one is an account
 // takeover primitive.
+//
+// The identity provider is the source of truth for the profile, but an
+// absent claim asserts nothing: a provider that stops sending a name
+// should not blank it here. oidc_picture_url is written unconditionally
+// because an emptied one means "there is no SSO photo", which is what
+// makes the uploaded avatar show again.
 func (s *UserStore) UpsertFromOIDC(ctx context.Context, claims porte.Claims) (int64, error) {
 	email := strings.ToLower(strings.TrimSpace(claims.Email))
 	if email == "" {
@@ -81,11 +89,6 @@ func (s *UserStore) UpsertFromOIDC(ctx context.Context, claims porte.Claims) (in
 		return 0, errors.Internal("failed to resolve the identity", err)
 	}
 
-	// The identity provider is the source of truth for the profile, but an
-	// absent claim asserts nothing: a provider that stops sending a name
-	// should not blank it here. oidc_picture_url is written unconditionally
-	// because an emptied one means "there is no SSO photo", which is what
-	// makes the uploaded avatar show again.
 	updates := map[string]any{"email": email, "oidc_picture_url": oidcavatar.PhotoURL(claims.Picture)}
 	if displayName := claims.DisplayName(); displayName != "" {
 		updates["name"] = displayName
@@ -133,16 +136,17 @@ func (s *UserStore) CountUsers(ctx context.Context) (int64, error) {
 // stops the colour, the first-admin rule and the Nook event from being applied
 // on one path and forgotten on the other, which is what happened when the two
 // registration paths each built their own user row.
+//
+// The first account ever created runs the instance. Counting inside the
+// same call that inserts is a race in theory; in practice the first
+// account is created by one human on a fresh deployment, and a unique
+// index on email means the loser of any real race is refused anyway.
 func (s *UserStore) create(ctx context.Context, email, name string) (*schemas.User, error) {
 	color, err := usercolor.NextAvailable(ctx, s.orm)
 	if err != nil {
 		return nil, errors.Internal("failed to choose a user colour", err)
 	}
 
-	// The first account ever created runs the instance. Counting inside the
-	// same call that inserts is a race in theory; in practice the first
-	// account is created by one human on a fresh deployment, and a unique
-	// index on email means the loser of any real race is refused anyway.
 	var existing int64
 	if err := s.orm.WithContext(ctx).Model(&schemas.User{}).Count(&existing).Error; err != nil {
 		return nil, errors.Internal("failed to count users", err)

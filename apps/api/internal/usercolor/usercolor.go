@@ -25,10 +25,13 @@ var allowed = map[string]struct{}{
 	"7EEEDB": {},
 }
 
+// AllowedColors returns the palette of valid user colours.
 func AllowedColors() []string {
 	return append([]string(nil), palette...)
 }
 
+// Normalize coerces a stored colour to its canonical palette form, reporting
+// whether the value was one of the allowed colours at all.
 func Normalize(value string) (string, bool) {
 	normalized := strings.ToUpper(strings.TrimSpace(value))
 	normalized = strings.TrimPrefix(normalized, "#")
@@ -38,6 +41,7 @@ func Normalize(value string) (string, bool) {
 	return normalized, true
 }
 
+// NextAvailable picks the least-used palette colour for a new user.
 func NextAvailable(ctx context.Context, db *gorm.DB) (string, error) {
 	counts, err := loadCounts(db.WithContext(ctx))
 	if err != nil {
@@ -46,6 +50,8 @@ func NextAvailable(ctx context.Context, db *gorm.DB) (string, error) {
 	return chooseColor(counts), nil
 }
 
+// EnsureForUser guarantees the user has a valid colour, assigning the least-used
+// palette colour when the stored one is missing or invalid, and returns it.
 func EnsureForUser(ctx context.Context, db *gorm.DB, userID int64) (string, error) {
 	type userRecord struct {
 		Color string `gorm:"column:color"`
@@ -80,6 +86,8 @@ func EnsureForUser(ctx context.Context, db *gorm.DB, userID int64) (string, erro
 	return selected, nil
 }
 
+// BackfillMissing normalises or assigns a valid colour for every user in one
+// transaction, keeping the palette balanced as it goes.
 func BackfillMissing(ctx context.Context, db *gorm.DB) error {
 	type userRecord struct {
 		ID    int64  `gorm:"column:id"`

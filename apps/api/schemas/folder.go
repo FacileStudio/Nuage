@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// Folder is a stored folder record.
 type Folder struct {
 	ID        int64      `json:"id" gorm:"primaryKey"`
 	FacileID  string     `json:"facile_id" gorm:"uniqueIndex;not null"`

@@ -1,5 +1,6 @@
 package trash
 
+// TrashItem is one trashed file or folder.
 type TrashItem struct {
 	Type      string `json:"type"`
 	ID        int64  `json:"id"`
@@ -10,6 +11,7 @@ type TrashItem struct {
 	DeletedAt string `json:"deleted_at"`
 }
 
+// TrashListResponse is a list of trashed items.
 type TrashListResponse struct {
 	Items []TrashItem `json:"items"`
 }

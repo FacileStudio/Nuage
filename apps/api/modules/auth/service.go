@@ -26,6 +26,8 @@ type Service struct {
 	controller *Controller
 }
 
+// NewService builds the auth Service over the given database connection,
+// session manager and password kit.
 func NewService(orm *gorm.DB, sessions *session.Manager, passwords *local.Kit, logger *slog.Logger) *Service {
 	service := &Service{orm: orm, sessions: sessions, passwords: passwords, logger: logger}
 	service.controller = newController(service)
@@ -44,6 +46,9 @@ func (service *Service) RequireAuth(next http.Handler) http.Handler {
 // porte deliberately carries neither the email nor any role: what a role may
 // do is the app's business, and the profile lives in the app's table. So the
 // address is looked up here, which costs the one query the old join cost.
+//
+// The session outlived the user when out.ID is zero. porte's foreign key
+// cascades a delete, so this is a race, and it is still not authenticated.
 func (service *Service) IdentityForUser(ctx context.Context, userID int64) (string, string, bool, error) {
 	var out struct {
 		ID      int64
@@ -59,8 +64,6 @@ func (service *Service) IdentityForUser(ctx context.Context, userID int64) (stri
 		return "", "", false, errors.Internal("failed to load the account", err)
 	}
 	if out.ID == 0 {
-		// The session outlived the user. porte's foreign key cascades a
-		// delete, so this is a race, and it is still not authenticated.
 		return "", "", false, errors.Unauthorized("invalid auth token")
 	}
 	return strconv.FormatInt(out.ID, 10), out.Email, out.IsAdmin, nil

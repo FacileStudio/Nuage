@@ -28,6 +28,8 @@ func init() {
 
 const maxPutBodyBytes = 2 << 30
 
+// RegisterRoutes wires the WebDAV handler onto the router, authenticating via
+// Basic credentials.
 func RegisterRoutes(router chi.Router, db *gorm.DB, storageClient *storage.Client, authService *auth.Service, quotaService *quota.Service, logger *slog.Logger) {
 	lockSystem := webdav.NewMemLS()
 
@@ -71,6 +73,12 @@ type authenticator interface {
 	IdentityForUser(ctx context.Context, userID int64) (id string, email string, isAdmin bool, err error)
 }
 
+// requireBasicAuth authenticates a WebDAV request from its Basic credentials,
+// accepting an API token in the password field and ignoring the username.
+//
+// The username is ignored and always has been: what this endpoint wants
+// in the password field is an API token, and porte verifies it as the
+// bearer credential it is.
 func requireBasicAuth(authService authenticator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,9 +92,6 @@ func requireBasicAuth(authService authenticator) func(http.Handler) http.Handler
 				return
 			}
 
-			// The username is ignored and always has been: what this
-			// endpoint wants in the password field is an API token, and
-			// porte verifies it as the bearer credential it is.
 			id, err := authService.AuthenticateToken(w, r, password)
 			if err != nil {
 				w.Header().Set("DAV", "1, 2")

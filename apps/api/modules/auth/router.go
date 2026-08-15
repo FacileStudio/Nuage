@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// RegisterRoutes wires the auth endpoints onto the router, exposing register
+// and login only when SSO is not forced.
 func RegisterRoutes(router chi.Router, service *Service, appEnv env.Config) {
 	router.Route("/auth", func(router chi.Router) {
 		if !appEnv.SSOOnly {

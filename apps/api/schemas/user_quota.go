@@ -2,6 +2,7 @@ package schemas
 
 import "time"
 
+// UserQuota is a user's storage usage and limit.
 type UserQuota struct {
 	UserID       int64     `json:"user_id" gorm:"primaryKey"`
 	StorageUsed  int64     `json:"storage_used" gorm:"not null;default:0"`

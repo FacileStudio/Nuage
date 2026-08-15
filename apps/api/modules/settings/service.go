@@ -29,6 +29,7 @@ var allowedKeys = map[string]bool{
 	"instance_name":       true,
 }
 
+// Service exposes application settings and Nook delivery history.
 type Service struct {
 	orm      *gorm.DB
 	notifier interface {
@@ -36,6 +37,8 @@ type Service struct {
 	}
 }
 
+// NewService builds a settings Service over the given database connection and
+// Nook delivery reader.
 func NewService(orm *gorm.DB, notifier interface {
 	ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.NookDelivery, int64, error)
 }) *Service {

@@ -18,10 +18,12 @@ var validRoles = map[string]bool{
 	"member": true,
 }
 
+// Service manages spaces and their members.
 type Service struct {
 	orm *gorm.DB
 }
 
+// NewService builds a spaces Service over the given database connection.
 func NewService(orm *gorm.DB) *Service {
 	return &Service{orm: orm}
 }
