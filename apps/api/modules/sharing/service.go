@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
@@ -19,12 +19,12 @@ import (
 // Service implements public share creation and lookup.
 type Service struct {
 	orm      *gorm.DB
-	notifier *nook.Notifier
+	notifier *antenne.Notifier
 	activity *activity.Logger
 }
 
 // NewService builds a sharing Service over the given dependencies.
-func NewService(orm *gorm.DB, notifier *nook.Notifier, actLogger *activity.Logger) *Service {
+func NewService(orm *gorm.DB, notifier *antenne.Notifier, actLogger *activity.Logger) *Service {
 	return &Service{orm: orm, notifier: notifier, activity: actLogger}
 }
 
@@ -121,7 +121,7 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 
 	resName, resType := s.resolveShareResourceName(ctx, record.FileID, record.FolderID)
 
-	shareData := &nook.ShareData{
+	shareData := &antenne.ShareData{
 		ID:         record.ID,
 		Token:      record.Token,
 		Permission: record.Permission,
@@ -134,7 +134,7 @@ func (s *Service) createShare(ctx context.Context, userID int64, req CreateShare
 		shareData.FolderName = resName
 	}
 
-	s.notifier.Notify(ctx, userID, "share.created", nook.EventData{
+	s.notifier.Notify(ctx, userID, "share.created", antenne.EventData{
 		Share: shareData,
 	})
 
@@ -188,7 +188,7 @@ func (s *Service) deleteShare(ctx context.Context, userID int64, shareID string)
 
 	resName, resType := s.resolveShareResourceName(ctx, share.FileID, share.FolderID)
 
-	shareData := &nook.ShareData{
+	shareData := &antenne.ShareData{
 		ID:         share.ID,
 		Token:      share.Token,
 		Permission: share.Permission,
@@ -201,7 +201,7 @@ func (s *Service) deleteShare(ctx context.Context, userID int64, shareID string)
 		shareData.FolderName = resName
 	}
 
-	s.notifier.Notify(ctx, userID, "share.revoked", nook.EventData{
+	s.notifier.Notify(ctx, userID, "share.revoked", antenne.EventData{
 		Share: shareData,
 	})
 

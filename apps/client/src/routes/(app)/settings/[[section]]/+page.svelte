@@ -37,7 +37,7 @@
 		{ id: 'profile', label: 'Profile', icon: icons.userCircle },
 		{ id: 'appearance', label: 'Appearance', icon: icons.palette },
 		{ id: 'api', label: 'API', icon: icons.key },
-		{ id: 'nook', label: 'Nook', icon: icons.bolt },
+		{ id: 'antenne', label: 'Antenne', icon: icons.bolt },
 		{ id: 'advanced', label: 'Advanced', icon: icons.server }
 	] as const;
 
@@ -69,12 +69,12 @@
 	let revoking = $state<ApiToken | null>(null);
 
 	let instanceName = $state('');
-	let nookWebhookUrl = $state('');
-	let nookSecret = $state('');
-	let nookEnabled = $state(false);
+	let antenneWebhookUrl = $state('');
+	let antenneSecret = $state('');
+	let antenneEnabled = $state(false);
 	let settingsSaving = $state(false);
-	let testingNook = $state(false);
-	let nookTestResult = $state<{ success: boolean; message?: string } | null>(null);
+	let testingAntenne = $state(false);
+	let antenneTestResult = $state<{ success: boolean; message?: string } | null>(null);
 
 	let loggingOut = $state(false);
 
@@ -87,9 +87,9 @@
 		try {
 			const settings = await backend.getSettings(app.token);
 			instanceName = settings.instance_name ?? '';
-			nookWebhookUrl = settings.nook_webhook_url ?? '';
-			nookSecret = settings.nook_webhook_secret ?? '';
-			nookEnabled = settings.nook_enabled === 'true';
+			antenneWebhookUrl = settings.antenne_webhook_url ?? '';
+			antenneSecret = settings.antenne_webhook_secret ?? '';
+			antenneEnabled = settings.antenne_enabled === 'true';
 		} catch {
 			toast.danger('Could not load instance settings.');
 		}
@@ -181,9 +181,9 @@
 		try {
 			await backend.updateSettings(app.token, {
 				instance_name: instanceName,
-				nook_webhook_url: nookWebhookUrl,
-				nook_webhook_secret: nookSecret,
-				nook_enabled: String(nookEnabled)
+				antenne_webhook_url: antenneWebhookUrl,
+				antenne_webhook_secret: antenneSecret,
+				antenne_enabled: String(antenneEnabled)
 			});
 			toast.success('Settings saved.');
 		} catch (e) {
@@ -192,19 +192,19 @@
 		settingsSaving = false;
 	}
 
-	async function testNookConnection() {
-		testingNook = true;
-		nookTestResult = null;
+	async function testAntenneConnection() {
+		testingAntenne = true;
+		antenneTestResult = null;
 		try {
-			nookTestResult = await backend.testNook(app.token, {
-				url: nookWebhookUrl,
-				secret: nookSecret,
-				enabled: nookEnabled
+			antenneTestResult = await backend.testAntenne(app.token, {
+				url: antenneWebhookUrl,
+				secret: antenneSecret,
+				enabled: antenneEnabled
 			});
 		} catch (e) {
-			nookTestResult = { success: false, message: message(e, 'Connection failed.') };
+			antenneTestResult = { success: false, message: message(e, 'Connection failed.') };
 		}
-		testingNook = false;
+		testingAntenne = false;
 	}
 
 	/*
@@ -236,13 +236,13 @@
 	 * Not a boolean: "not connected" hides disabled, never-tested and failing behind one word,
 	 * and those have three different fixes (CHARTE §14).
 	 */
-	const nookStatus = $derived.by(() => {
-		if (!nookEnabled) return { tone: 'neutral' as const, label: 'Disabled', pulse: false };
-		if (testingNook) return { tone: 'info' as const, label: 'Testing the connection…', pulse: true };
-		if (!nookWebhookUrl) return { tone: 'warning' as const, label: 'Enabled, but no URL is set', pulse: false };
-		if (nookTestResult?.success) return { tone: 'success' as const, label: 'Reached the endpoint', pulse: false };
-		if (nookTestResult) {
-			return { tone: 'danger' as const, label: nookTestResult.message ?? 'The endpoint did not answer', pulse: false };
+	const antenneStatus = $derived.by(() => {
+		if (!antenneEnabled) return { tone: 'neutral' as const, label: 'Disabled', pulse: false };
+		if (testingAntenne) return { tone: 'info' as const, label: 'Testing the connection…', pulse: true };
+		if (!antenneWebhookUrl) return { tone: 'warning' as const, label: 'Enabled, but no URL is set', pulse: false };
+		if (antenneTestResult?.success) return { tone: 'success' as const, label: 'Reached the endpoint', pulse: false };
+		if (antenneTestResult) {
+			return { tone: 'danger' as const, label: antenneTestResult.message ?? 'The endpoint did not answer', pulse: false };
 		}
 		return { tone: 'neutral' as const, label: 'Enabled — not tested since load', pulse: false };
 	});
@@ -399,24 +399,24 @@
 				<SecretField value={`${page.url.origin}/webdav`} sensitive={false} />
 			</SettingsRow>
 		</SettingsSection>
-	{:else if section === 'nook'}
+	{:else if section === 'antenne'}
 		<SettingsSection
-			title="Nook"
-			description="Nuage posts file events to a Nook webhook so alerts land where the rest of the suite reports."
+			title="Antenne"
+			description="Nuage posts file events to an Antenne webhook so alerts land where the rest of the suite reports."
 		>
 			<SettingsRow label="Status">
-				<StatusDot tone={nookStatus.tone} label={nookStatus.label} pulse={nookStatus.pulse} />
+				<StatusDot tone={antenneStatus.tone} label={antenneStatus.label} pulse={antenneStatus.pulse} />
 			</SettingsRow>
 			<SettingsRow label="Enabled" description="Stops every outbound event when off.">
-				<Switch bind:checked={nookEnabled} aria-label="Nook integration enabled" />
+				<Switch bind:checked={antenneEnabled} aria-label="Antenne integration enabled" />
 			</SettingsRow>
 			<SettingsRow label="Webhook URL" stacked>
 				<Field>
-					<Input bind:value={nookWebhookUrl} type="url" placeholder="https://nook.example.com/hooks/nuage" />
+					<Input bind:value={antenneWebhookUrl} type="url" placeholder="https://antenne.example.com/hooks/nuage" />
 				</Field>
 			</SettingsRow>
-			<SettingsRow label="Shared secret" description="Signs every payload so Nook can tell it came from here." stacked>
-				<SecretField bind:value={nookSecret} editable placeholder="Not set" />
+			<SettingsRow label="Shared secret" description="Signs every payload so Antenne can tell it came from here." stacked>
+				<SecretField bind:value={antenneSecret} editable placeholder="Not set" />
 			</SettingsRow>
 			<SettingsRow>
 				<div class="flex flex-wrap gap-2">
@@ -426,8 +426,8 @@
 					<Button
 						variant="outline"
 						icon={icons.bolt}
-						disabled={testingNook || !nookWebhookUrl}
-						onclick={testNookConnection}
+						disabled={testingAntenne || !antenneWebhookUrl}
+						onclick={testAntenneConnection}
 					>
 						Test connection
 					</Button>

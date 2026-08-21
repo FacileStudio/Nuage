@@ -2087,12 +2087,12 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /settings/test-nook:
+  /settings/test-antenne:
     post:
-      operationId: testNookConnection
-      summary: Test Nook webhook connection (admin)
+      operationId: testAntenneConnection
+      summary: Test Antenne webhook connection (admin)
       description: |
-        Send a test event to the configured Nook uptime monitoring webhook
+        Send a test event to the configured Antenne uptime monitoring webhook
         and verify the connection. Admin only.
       tags: [Settings]
       security:
@@ -2113,7 +2113,7 @@ paths:
                 enabled:
                   type: boolean
             example:
-              url: "https://nook.facile.studio/webhook/nuage"
+              url: "https://antenne.facile.studio/webhook/nuage"
               secret: "whsec_abc123..."
               enabled: true
       responses:
@@ -2130,7 +2130,7 @@ paths:
                     type: string
               example:
                 success: true
-                message: "Nook webhook responded successfully"
+                message: "Antenne webhook responded successfully"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":

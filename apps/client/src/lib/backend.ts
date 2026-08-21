@@ -428,8 +428,8 @@ export const backend = {
 		}, token);
 	},
 
-	testNook(token: string, data: { url: string; secret: string; enabled: boolean }) {
-		return apiFetch<{ success: boolean; message?: string }>('/settings/test-nook', {
+	testAntenne(token: string, data: { url: string; secret: string; enabled: boolean }) {
+		return apiFetch<{ success: boolean; message?: string }>('/settings/test-antenne', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		}, token);

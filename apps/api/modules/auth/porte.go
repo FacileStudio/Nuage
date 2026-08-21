@@ -5,7 +5,7 @@ import (
 	stderrors "errors"
 	"strings"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/oidcavatar"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -29,12 +29,12 @@ import (
 // would be routed around by the second app that adopted it.
 type UserStore struct {
 	orm      *gorm.DB
-	notifier *nook.Notifier
+	notifier *antenne.Notifier
 }
 
 // NewUserStore builds a UserStore backed by the given database connection,
 // notifying through notifier when accounts are created.
-func NewUserStore(orm *gorm.DB, notifier *nook.Notifier) *UserStore {
+func NewUserStore(orm *gorm.DB, notifier *antenne.Notifier) *UserStore {
 	return &UserStore{orm: orm, notifier: notifier}
 }
 
@@ -133,7 +133,7 @@ func (s *UserStore) CountUsers(ctx context.Context) (int64, error) {
 
 // create is the one place a Nuage account comes into existence, whichever way
 // the human arrived — SSO or a password. Keeping it to one function is what
-// stops the colour, the first-admin rule and the Nook event from being applied
+// stops the colour, the first-admin rule and the Antenne event from being applied
 // on one path and forgotten on the other, which is what happened when the two
 // registration paths each built their own user row.
 //
@@ -157,8 +157,8 @@ func (s *UserStore) create(ctx context.Context, email, name string) (*schemas.Us
 		return nil, errors.Internal("failed to create the account", err)
 	}
 	if s.notifier != nil {
-		s.notifier.Notify(ctx, user.ID, "user.created", nook.EventData{
-			User: &nook.UserData{ID: user.ID, Email: user.Email},
+		s.notifier.Notify(ctx, user.ID, "user.created", antenne.EventData{
+			User: &antenne.UserData{ID: user.ID, Email: user.Email},
 		})
 	}
 	return &user, nil

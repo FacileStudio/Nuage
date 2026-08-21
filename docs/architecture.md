@@ -27,7 +27,7 @@ with `adapter-static`, there is no SvelteKit server, no `/api/[...path]` proxy a
 
 | Component | Path | Role |
 |---|---|---|
-| API | `apps/api` | Chi router, feature modules, migrations, WebDAV, Nook notifier |
+| API | `apps/api` | Chi router, feature modules, migrations, WebDAV, Antenne notifier |
 | Client | `apps/client` | SvelteKit UI, built static and served by the API binary |
 | Postgres | compose service | All metadata |
 | MinIO | compose service | File bytes and chunk parts |
@@ -112,7 +112,7 @@ unlink anything outside `STORAGE_DIR/avatars`.
 | `shares` | Public token, target file or folder, `permission`, optional `expires_at` |
 | `user_quotas` | `storage_used` and `storage_limit` per user |
 | `activity_logs` | Event type, resource type and id, JSON metadata |
-| `nook_deliveries` | Outbound event queue with status, attempts, `next_retry_at`, response code |
+| `antenne_deliveries` | Outbound event queue with status, attempts, `next_retry_at`, response code |
 | `tombstones` | Permanent deletions kept for `TombstoneRetention`, 90 days |
 | `settings` | Key-value application settings |
 
@@ -122,8 +122,9 @@ numeric primary key.
 `schemas.Migrate` wraps everything in one transaction holding
 `pg_advisory_xact_lock(4919)`, so concurrently starting instances serialize instead of
 racing. Inside it, `preMigrate` runs hand-written DDL that GORM cannot express — repairing
-the `api_tokens` primary key when it is still the token column, and dropping the legacy
-`shares.shared_with` column — then `AutoMigrate` over the sixteen models, then
+the `api_tokens` primary key when it is still the token column, dropping the legacy
+`shares.shared_with` column, and renaming `nook_deliveries` and the `nook_*` settings keys
+to `antenne_*` after the alert bus was renamed — then `AutoMigrate` over the sixteen models, then
 `ensureAdmin`, which promotes the earliest account when no administrator exists and does
 nothing once one does. Afterwards `usercolor.BackfillMissing` fills in absent user colors.
 
@@ -141,9 +142,9 @@ drops expired markers every 12 hours.
 
 ## Cross-app integration
 
-`internal/nook` queues outbound events in `nook_delivery` and retries them in the
-background, which is what `POST /settings/test-nook` exercises and
-`GET /settings/nook/deliveries` inspects. Logging goes to Journal: when both `JOURNAL_URL`
+`internal/antenne` queues outbound events in `antenne_deliveries` and retries them in the
+background, which is what `POST /settings/test-antenne` exercises and
+`GET /settings/antenne/deliveries` inspects. Logging goes to Journal: when both `JOURNAL_URL`
 and `JOURNAL_TOKEN` are set, `main.go` wraps the default `slog` handler with
 `journal.NewHandler`, so everything the app already logs is teed to the central instance.
 `JOURNAL_URL` must include the `/api` suffix or every line is silently dropped.

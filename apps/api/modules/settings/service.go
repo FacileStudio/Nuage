@@ -21,26 +21,26 @@ import (
 )
 
 var allowedKeys = map[string]bool{
-	"nook_webhook_url":    true,
-	"nook_webhook_secret": true,
-	"nook_enabled":        true,
-	"nook_event_types":    true,
-	"nook_batch_enabled":  true,
-	"instance_name":       true,
+	"antenne_webhook_url":    true,
+	"antenne_webhook_secret": true,
+	"antenne_enabled":        true,
+	"antenne_event_types":    true,
+	"antenne_batch_enabled":  true,
+	"instance_name":          true,
 }
 
-// Service exposes application settings and Nook delivery history.
+// Service exposes application settings and Antenne delivery history.
 type Service struct {
 	orm      *gorm.DB
 	notifier interface {
-		ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.NookDelivery, int64, error)
+		ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.AntenneDelivery, int64, error)
 	}
 }
 
 // NewService builds a settings Service over the given database connection and
-// Nook delivery reader.
+// Antenne delivery reader.
 func NewService(orm *gorm.DB, notifier interface {
-	ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.NookDelivery, int64, error)
+	ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.AntenneDelivery, int64, error)
 }) *Service {
 	return &Service{orm: orm, notifier: notifier}
 }
@@ -102,13 +102,13 @@ func (s *Service) updateSettings(ctx context.Context, values map[string]string) 
 		}
 	}
 
-	if webhookURL, ok := values["nook_webhook_url"]; ok && webhookURL != "" {
+	if webhookURL, ok := values["antenne_webhook_url"]; ok && webhookURL != "" {
 		parsed, err := url.Parse(webhookURL)
 		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			return nil, errors.Invalid("nook_webhook_url must start with http:// or https://")
+			return nil, errors.Invalid("antenne_webhook_url must start with http:// or https://")
 		}
 		if isPrivateAddress(parsed.Host) {
-			return nil, errors.Invalid("nook_webhook_url must not point to a private or internal address")
+			return nil, errors.Invalid("antenne_webhook_url must not point to a private or internal address")
 		}
 	}
 
@@ -130,7 +130,7 @@ func (s *Service) updateSettings(ctx context.Context, values map[string]string) 
 	return s.listSettings(ctx)
 }
 
-func (s *Service) testNook(ctx context.Context, input TestNookRequest) (bool, string, error) {
+func (s *Service) testAntenne(ctx context.Context, input TestAntenneRequest) (bool, string, error) {
 	webhookURL := input.URL
 	secret := input.Secret
 
@@ -139,7 +139,7 @@ func (s *Service) testNook(ctx context.Context, input TestNookRequest) (bool, st
 	}
 
 	if !input.Enabled {
-		return false, "nook is disabled", nil
+		return false, "Antenne is disabled", nil
 	}
 
 	parsed, err := url.Parse(webhookURL)
@@ -185,5 +185,5 @@ func (s *Service) testNook(ctx context.Context, input TestNookRequest) (bool, st
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return true, "ping successful", nil
 	}
-	return false, "nook responded with status " + resp.Status, nil
+	return false, "Antenne responded with status " + resp.Status, nil
 }

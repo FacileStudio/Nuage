@@ -15,7 +15,7 @@ This roadmap is organized in phases. Each phase builds on the previous one.
 - Trash with restore and permanent delete
 - OIDC/SSO + email/password auth
 - API tokens for programmatic access
-- Nook webhooks (file/folder/share events, HMAC signing)
+- Antenne webhooks (file/folder/share events, HMAC signing)
 - Sync endpoints (full state + incremental changes)
 - Duplicate filename auto-suffixing
 - PostgreSQL + MinIO (S3) backend, Docker Compose deployment
@@ -142,9 +142,9 @@ Make Nuage a great building block for other tools.
 - [ ] Auto-generate TypeScript and Go client SDKs
 - [ ] Versioned API (`/v1/`) for stability guarantees
 
-### Webhook Improvements (Nook v2)
+### Webhook Improvements (Antenne v2)
 - [x] Retry with exponential backoff (3 retries, 10s/60s/300s)
-- [x] Delivery log: `GET /settings/nook/deliveries`
+- [x] Delivery log: `GET /settings/antenne/deliveries`
 - [x] New events: `file.versioned`, `user.created`, `quota.exceeded`
 - [x] Webhook filters: subscribe to specific event types
 - [x] Batch delivery option (aggregate events over 5s window)

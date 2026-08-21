@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
 
@@ -118,8 +118,8 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 		return nil, errors.Internal("failed to read updated file", err)
 	}
 
-	s.notifier.Notify(ctx, userID, "file.versioned", nook.EventData{
-		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	s.notifier.Notify(ctx, userID, "file.versioned", antenne.EventData{
+		File: &antenne.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
 
 	if s.activity != nil {

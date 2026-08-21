@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
@@ -252,7 +252,7 @@ func TestChunkedSessionSweeper(t *testing.T) {
 		}).Error)
 
 	storageClient := newTestStorageClient(t)
-	notifier := nook.NewNotifier(ts.db)
+	notifier := antenne.NewNotifier(ts.db)
 	actLogger := activity.NewLogger(ts.db)
 	quotaService := quota.NewService(ts.db)
 	presignSecret := presign.DeriveSecret("test-secret", "nuage-presign-v1")

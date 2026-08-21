@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/internal/tombstone"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
@@ -74,7 +74,7 @@ const (
 // Nuage's floor has always been eight characters. porte defaults to
 // twelve, and raising it here would reject a password this app accepted
 // yesterday — a product decision, not a migration.
-func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *local.Kit, *oidc.Kit, error) {
+func buildAuth(ctx context.Context, db *gorm.DB, notifier *antenne.Notifier, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *local.Kit, *oidc.Kit, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, nil, nil, err
@@ -219,7 +219,7 @@ func run() int {
 		}
 	}()
 
-	notifier := nook.NewNotifier(db)
+	notifier := antenne.NewNotifier(db)
 	notifier.Start()
 	defer notifier.Stop()
 	actLogger := activity.NewLogger(db)

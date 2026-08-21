@@ -67,6 +67,7 @@ Nuage/
       main.go                      # entrypoint, router setup, service wiring
       internal/                    # shared packages
         activity/                  # activity logging
+        antenne/                   # webhook (Antenne) notifier
         authcontext/               # request-scoped auth context
         authcrypto/                # password hashing
         database/                  # GORM DB connection
@@ -75,7 +76,6 @@ Nuage/
         httpjson/                  # JSON response helpers
         logger/                    # structured logging (slog)
         middleware/                # CORS, security headers, request logging, auth
-        nook/                      # webhook (Nook) notifier
         storage/                   # MinIO S3 client wrapper
       modules/                     # feature modules (handler + service + routes)
         auth/                      # login, register, sessions, OIDC, API tokens
@@ -86,7 +86,7 @@ Nuage/
         quota/                     # per-user storage quota
         search/                    # file/folder search
         activity/                  # activity log endpoints
-        settings/                  # app settings, Nook webhook config
+        settings/                  # app settings, Antenne webhook config
         users/                     # user management, avatars
         webdav/                    # WebDAV server (Basic Auth with API tokens)
         docs/                      # API documentation endpoint

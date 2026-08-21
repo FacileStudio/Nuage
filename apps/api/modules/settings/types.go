@@ -17,20 +17,20 @@ type UpdateSettingsRequest struct {
 	Settings map[string]string `json:"settings"`
 }
 
-// TestNookRequest holds the webhook connection to probe.
-type TestNookRequest struct {
+// TestAntenneRequest holds the webhook connection to probe.
+type TestAntenneRequest struct {
 	URL     string `json:"url"`
 	Secret  string `json:"secret"`
 	Enabled bool   `json:"enabled"`
 }
 
-// TestNookResponse reports whether a test delivery succeeded.
-type TestNookResponse struct {
+// TestAntenneResponse reports whether a test delivery succeeded.
+type TestAntenneResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// DeliveryResponse is one Nook webhook delivery attempt.
+// DeliveryResponse is one Antenne webhook delivery attempt.
 type DeliveryResponse struct {
 	ID           int64   `json:"id"`
 	EventType    string  `json:"event_type"`
@@ -43,7 +43,7 @@ type DeliveryResponse struct {
 	DeliveredAt  *string `json:"delivered_at,omitempty"`
 }
 
-// DeliveryListResponse is a page of Nook delivery attempts.
+// DeliveryListResponse is a page of Antenne delivery attempts.
 type DeliveryListResponse struct {
 	Deliveries []DeliveryResponse `json:"deliveries"`
 	Total      int64              `json:"total"`

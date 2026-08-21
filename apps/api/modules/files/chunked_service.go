@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
@@ -249,8 +249,8 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		s.quota.UpdateUsage(ctx, userID, info.Size)
 	}
 
-	s.notifier.Notify(ctx, userID, "file.uploaded", nook.EventData{
-		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	s.notifier.Notify(ctx, userID, "file.uploaded", antenne.EventData{
+		File: &antenne.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
 
 	if s.activity != nil {

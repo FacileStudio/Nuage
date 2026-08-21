@@ -151,24 +151,24 @@ func (h *Handler) listDeliveries(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) testNook(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) testAntenne(w http.ResponseWriter, r *http.Request) {
 	if ok, _ := h.checkAdmin(w, r); !ok {
 		return
 	}
 
-	var req TestNookRequest
+	var req TestAntenneRequest
 	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
 		httpjson.WriteError(w, err)
 		return
 	}
 
-	success, message, err := h.service.testNook(r.Context(), req)
+	success, message, err := h.service.testAntenne(r.Context(), req)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
 	}
 
-	httpjson.WriteJSON(w, http.StatusOK, TestNookResponse{
+	httpjson.WriteJSON(w, http.StatusOK, TestAntenneResponse{
 		Success: success,
 		Message: message,
 	})

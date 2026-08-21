@@ -241,15 +241,15 @@ that actually exist, which is the repair path when accounting drifts.
 | GET | `/search` | session |
 | GET | `/settings` | session |
 | PUT | `/settings` | session |
-| POST | `/settings/test-nook` | session |
-| GET | `/settings/nook/deliveries` | session |
+| POST | `/settings/test-antenne` | session |
+| GET | `/settings/antenne/deliveries` | session |
 | GET | `/activity/me` | session |
 | GET | `/activity/files/{id}` | session |
 | GET | `/activity/` | admin |
 
 `GET /search` requires `q` and accepts a `type` filter; an empty `q` is `400`.
-`POST /settings/test-nook` sends a probe event through the Nook notifier, and
-`GET /settings/nook/deliveries` shows the queue with per-attempt status and response codes.
+`POST /settings/test-antenne` sends a probe event through the Antenne notifier, and
+`GET /settings/antenne/deliveries` shows the queue with per-attempt status and response codes.
 
 ## WebDAV
 

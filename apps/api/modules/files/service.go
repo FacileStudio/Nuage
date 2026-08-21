@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
@@ -29,15 +29,15 @@ import (
 type Service struct {
 	orm           *gorm.DB
 	storage       *storage.Client
-	notifier      *nook.Notifier
+	notifier      *antenne.Notifier
 	activity      *activity.Logger
 	quota         *quota.Service
 	presignSecret []byte
 }
 
-// NewService builds a files Service wired to storage, activity, nook and quota
+// NewService builds a files Service wired to storage, activity, antenne and quota
 // services.
-func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier, actLogger *activity.Logger, quotaService *quota.Service, presignSecret []byte) *Service {
+func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *antenne.Notifier, actLogger *activity.Logger, quotaService *quota.Service, presignSecret []byte) *Service {
 	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret}
 }
 
@@ -170,8 +170,8 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		if err := s.quota.CheckQuota(ctx, userID, estimatedSize); err != nil {
 			if s.notifier != nil {
 				if usage, qErr := s.quota.GetUsage(ctx, userID); qErr == nil {
-					s.notifier.Notify(ctx, userID, "quota.exceeded", nook.EventData{
-						Quota: &nook.QuotaData{
+					s.notifier.Notify(ctx, userID, "quota.exceeded", antenne.EventData{
+						Quota: &antenne.QuotaData{
 							UserID:       userID,
 							StorageUsed:  usage.StorageUsed,
 							StorageLimit: usage.StorageLimit,
@@ -226,8 +226,8 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		s.quota.UpdateUsage(ctx, userID, info.Size)
 	}
 
-	s.notifier.Notify(ctx, userID, "file.uploaded", nook.EventData{
-		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	s.notifier.Notify(ctx, userID, "file.uploaded", antenne.EventData{
+		File: &antenne.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
 
 	if s.activity != nil {
@@ -313,8 +313,8 @@ func (s *Service) deleteFile(ctx context.Context, userID int64, fileID string) e
 		return errors.Internal("failed to soft delete file", err)
 	}
 
-	s.notifier.Notify(ctx, userID, "file.deleted", nook.EventData{
-		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	s.notifier.Notify(ctx, userID, "file.deleted", antenne.EventData{
+		File: &antenne.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
 
 	if s.activity != nil {
@@ -365,8 +365,8 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 		return nil, errors.Internal("failed to read file", err)
 	}
 
-	s.notifier.Notify(ctx, userID, "file.updated", nook.EventData{
-		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	s.notifier.Notify(ctx, userID, "file.updated", antenne.EventData{
+		File: &antenne.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
 	})
 
 	if s.activity != nil {
@@ -424,8 +424,8 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 		return nil, errors.Internal("failed to create folder", err)
 	}
 
-	s.notifier.Notify(ctx, userID, "folder.created", nook.EventData{
-		Folder: &nook.FolderData{ID: record.ID, Name: record.Name},
+	s.notifier.Notify(ctx, userID, "folder.created", antenne.EventData{
+		Folder: &antenne.FolderData{ID: record.ID, Name: record.Name},
 	})
 
 	if s.activity != nil {
@@ -530,8 +530,8 @@ func (s *Service) updateFolder(ctx context.Context, userID int64, folderID strin
 		return nil, errors.Internal("failed to read folder", err)
 	}
 
-	s.notifier.Notify(ctx, userID, "folder.updated", nook.EventData{
-		Folder: &nook.FolderData{ID: record.ID, Name: record.Name},
+	s.notifier.Notify(ctx, userID, "folder.updated", antenne.EventData{
+		Folder: &antenne.FolderData{ID: record.ID, Name: record.Name},
 	})
 
 	if s.activity != nil {
@@ -589,8 +589,8 @@ func (s *Service) deleteFolder(ctx context.Context, userID int64, folderID strin
 		return errors.Internal("failed to soft delete folder tree", err)
 	}
 
-	s.notifier.Notify(ctx, userID, "folder.deleted", nook.EventData{
-		Folder: &nook.FolderData{ID: folder.ID, Name: folder.Name},
+	s.notifier.Notify(ctx, userID, "folder.deleted", antenne.EventData{
+		Folder: &antenne.FolderData{ID: folder.ID, Name: folder.Name},
 	})
 
 	if s.activity != nil {

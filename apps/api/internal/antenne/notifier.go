@@ -1,4 +1,4 @@
-package nook
+package antenne
 
 import (
 	"bytes"
@@ -75,7 +75,7 @@ type QuotaData struct {
 	StorageLimit int64 `json:"storage_limit"`
 }
 
-// Event is an outbound webhook notification envelope for Nook.
+// Event is an outbound webhook notification envelope for Antenne.
 type Event struct {
 	EventType    string    `json:"event_type"`
 	OccurredAt   string    `json:"occurred_at"`
@@ -86,7 +86,7 @@ type Event struct {
 
 var retryDelays = []time.Duration{10 * time.Second, 60 * time.Second, 300 * time.Second}
 
-// Notifier delivers activity events to a configured Nook webhook, with retries.
+// Notifier delivers activity events to a configured Antenne webhook, with retries.
 type Notifier struct {
 	orm    *gorm.DB
 	ctx    context.Context
@@ -139,12 +139,12 @@ func (n *Notifier) enqueue(actorID int64, eventType string, data EventData) {
 
 	payload, err := n.buildPayload(ctx, actorID, eventType, data)
 	if err != nil {
-		slog.Warn("nook: failed to build payload", slog.Any("error", err))
+		slog.Warn("antenne: failed to build payload", slog.Any("error", err))
 		return
 	}
 
 	now := time.Now()
-	delivery := schemas.NookDelivery{
+	delivery := schemas.AntenneDelivery{
 		EventType:   eventType,
 		Payload:     string(payload),
 		Status:      "pending",
@@ -153,17 +153,17 @@ func (n *Notifier) enqueue(actorID int64, eventType string, data EventData) {
 		CreatedAt:   now,
 	}
 	if err := n.orm.WithContext(ctx).Create(&delivery).Error; err != nil {
-		slog.Warn("nook: failed to enqueue delivery", slog.Any("error", err))
+		slog.Warn("antenne: failed to enqueue delivery", slog.Any("error", err))
 	}
 }
 
 func (n *Notifier) isEnabled(ctx context.Context) bool {
 	var urlSetting schemas.Setting
-	if err := n.orm.WithContext(ctx).Where("key = ?", "nook_webhook_url").First(&urlSetting).Error; err != nil || urlSetting.Value == "" {
+	if err := n.orm.WithContext(ctx).Where("key = ?", "antenne_webhook_url").First(&urlSetting).Error; err != nil || urlSetting.Value == "" {
 		return false
 	}
 	var enabledSetting schemas.Setting
-	if err := n.orm.WithContext(ctx).Where("key = ?", "nook_enabled").First(&enabledSetting).Error; err == nil {
+	if err := n.orm.WithContext(ctx).Where("key = ?", "antenne_enabled").First(&enabledSetting).Error; err == nil {
 		if enabledSetting.Value != "true" {
 			return false
 		}
@@ -173,12 +173,12 @@ func (n *Notifier) isEnabled(ctx context.Context) bool {
 
 func (n *Notifier) matchesFilter(ctx context.Context, eventType string) bool {
 	var setting schemas.Setting
-	if err := n.orm.WithContext(ctx).Where("key = ?", "nook_event_types").First(&setting).Error; err != nil || setting.Value == "" {
+	if err := n.orm.WithContext(ctx).Where("key = ?", "antenne_event_types").First(&setting).Error; err != nil || setting.Value == "" {
 		return true
 	}
 	var types []string
 	if err := json.Unmarshal([]byte(setting.Value), &types); err != nil {
-		slog.Warn("nook: invalid nook_event_types JSON, allowing all events", slog.String("value", setting.Value))
+		slog.Warn("antenne: invalid antenne_event_types JSON, allowing all events", slog.String("value", setting.Value))
 		return true
 	}
 	if len(types) == 0 {
@@ -234,7 +234,7 @@ func (n *Notifier) processQueue() {
 	ctx, cancel := context.WithTimeout(n.ctx, 30*time.Second)
 	defer cancel()
 
-	var deliveries []schemas.NookDelivery
+	var deliveries []schemas.AntenneDelivery
 	now := time.Now()
 	if err := n.orm.WithContext(ctx).
 		Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
@@ -254,7 +254,7 @@ func (n *Notifier) processQueue() {
 	}
 
 	if n.isBatchEnabled(ctx) {
-		var newDeliveries, retryDeliveries []schemas.NookDelivery
+		var newDeliveries, retryDeliveries []schemas.AntenneDelivery
 		for i := range deliveries {
 			if deliveries[i].Attempts == 0 {
 				newDeliveries = append(newDeliveries, deliveries[i])
@@ -279,7 +279,7 @@ func (n *Notifier) processQueue() {
 
 func (n *Notifier) isBatchEnabled(ctx context.Context) bool {
 	var setting schemas.Setting
-	if err := n.orm.WithContext(ctx).Where("key = ?", "nook_batch_enabled").First(&setting).Error; err != nil {
+	if err := n.orm.WithContext(ctx).Where("key = ?", "antenne_batch_enabled").First(&setting).Error; err != nil {
 		return false
 	}
 	return setting.Value == "true"
@@ -287,17 +287,17 @@ func (n *Notifier) isBatchEnabled(ctx context.Context) bool {
 
 func (n *Notifier) getWebhookConfig(ctx context.Context) (url, secret string, ok bool) {
 	var urlSetting schemas.Setting
-	if err := n.orm.WithContext(ctx).Where("key = ?", "nook_webhook_url").First(&urlSetting).Error; err != nil || urlSetting.Value == "" {
+	if err := n.orm.WithContext(ctx).Where("key = ?", "antenne_webhook_url").First(&urlSetting).Error; err != nil || urlSetting.Value == "" {
 		return "", "", false
 	}
 	var secretSetting schemas.Setting
-	if err := n.orm.WithContext(ctx).Where("key = ?", "nook_webhook_secret").First(&secretSetting).Error; err == nil {
+	if err := n.orm.WithContext(ctx).Where("key = ?", "antenne_webhook_secret").First(&secretSetting).Error; err == nil {
 		secret = secretSetting.Value
 	}
 	return urlSetting.Value, secret, true
 }
 
-func (n *Notifier) deliverOne(ctx context.Context, d *schemas.NookDelivery, webhookURL, secret string) {
+func (n *Notifier) deliverOne(ctx context.Context, d *schemas.AntenneDelivery, webhookURL, secret string) {
 	body := []byte(d.Payload)
 	start := time.Now()
 	code, respBody, err := n.send(ctx, webhookURL, secret, body)
@@ -339,7 +339,7 @@ func (n *Notifier) deliverOne(ctx context.Context, d *schemas.NookDelivery, webh
 	})
 }
 
-func (n *Notifier) scheduleRetry(d *schemas.NookDelivery) {
+func (n *Notifier) scheduleRetry(d *schemas.AntenneDelivery) {
 	retryIndex := d.Attempts - 1
 	if retryIndex >= len(retryDelays) {
 		d.Status = "failed"
@@ -350,7 +350,7 @@ func (n *Notifier) scheduleRetry(d *schemas.NookDelivery) {
 	d.Status = "pending"
 }
 
-func (n *Notifier) deliverBatch(ctx context.Context, deliveries []schemas.NookDelivery, webhookURL, secret string) {
+func (n *Notifier) deliverBatch(ctx context.Context, deliveries []schemas.AntenneDelivery, webhookURL, secret string) {
 	events := make([]json.RawMessage, len(deliveries))
 	for i, d := range deliveries {
 		events[i] = json.RawMessage(d.Payload)
@@ -435,13 +435,13 @@ func truncate(s string, max int) string {
 	return s
 }
 
-func (n *Notifier) ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.NookDelivery, int64, error) {
+func (n *Notifier) ListDeliveries(ctx context.Context, limit, offset int) ([]schemas.AntenneDelivery, int64, error) {
 	var total int64
-	if err := n.orm.WithContext(ctx).Model(&schemas.NookDelivery{}).Count(&total).Error; err != nil {
+	if err := n.orm.WithContext(ctx).Model(&schemas.AntenneDelivery{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	var deliveries []schemas.NookDelivery
+	var deliveries []schemas.AntenneDelivery
 	if err := n.orm.WithContext(ctx).
 		Order("created_at desc").
 		Limit(limit).

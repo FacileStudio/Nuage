@@ -14,8 +14,8 @@ import (
 	"testing"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/antenne"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
-	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
@@ -109,7 +109,7 @@ func setupTestServer(t *testing.T) *testServer {
 	}
 	_ = storageClient.EnsureBucket(context.Background())
 
-	notifier := nook.NewNotifier(db)
+	notifier := antenne.NewNotifier(db)
 	actLogger := activity.NewLogger(db)
 	appEnv := env.Config{SSOOnly: false}
 	sessions, passwords, kit, err := buildTestAuth(db, notifier, appEnv)
@@ -249,7 +249,7 @@ func parseJSON(resp *http.Response, dest any) {
 // buildTestAuth mirrors main.go's buildAuth over the test database. OIDC is
 // unconfigured here, so oidc.New returns a kit that serves /auth/config and
 // authenticates sessions and nothing else — which is what these tests exercise.
-func buildTestAuth(db *gorm.DB, notifier *nook.Notifier, appEnv env.Config) (*session.Manager, *local.Kit, *oidc.Kit, error) {
+func buildTestAuth(db *gorm.DB, notifier *antenne.Notifier, appEnv env.Config) (*session.Manager, *local.Kit, *oidc.Kit, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, nil, nil, err

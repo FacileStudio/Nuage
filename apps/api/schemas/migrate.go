@@ -57,7 +57,7 @@ func migrateSchema(db *gorm.DB) error {
 		&UploadChunk{},
 		&UserQuota{},
 		&ActivityLog{},
-		&NookDelivery{},
+		&AntenneDelivery{},
 		&Tombstone{},
 	); err != nil {
 		return err
@@ -183,5 +183,54 @@ func preMigrate(db *gorm.DB) error {
 		}
 	}
 
-	return nil
+	return renameNookToAntenne(db)
+}
+
+// renameNookToAntenne carries the delivery queue and its settings over from the
+// name the alert bus had before it was renamed to Antenne. The table rename is
+// what keeps a pending queue alive across the deploy: without it AutoMigrate
+// creates an empty antenne_deliveries beside the old table and every event
+// still waiting to be delivered is stranded.
+//
+// Postgres keeps every dependent object's name across ALTER TABLE ... RENAME,
+// so they are renamed one by one. The two indexes have to be: left alone,
+// AutoMigrate finds no index under the new name and builds a second copy of
+// each on the same columns. The primary key and the identity sequence keep
+// working either way and are renamed only so that nothing in the database is
+// still named nook_*.
+//
+// The settings are rows here, not columns as in Sablier: the keys live in
+// settings.key, which is the primary key, so an already-renamed row would make
+// the update collide with itself rather than be a no-op. The NOT EXISTS guard
+// is what makes a second run harmless.
+func renameNookToAntenne(db *gorm.DB) error {
+	migrator := db.Migrator()
+
+	if migrator.HasTable("nook_deliveries") && !migrator.HasTable("antenne_deliveries") {
+		if err := migrator.RenameTable("nook_deliveries", "antenne_deliveries"); err != nil {
+			return err
+		}
+		renames := []string{
+			"ALTER INDEX IF EXISTS idx_nook_status_retry RENAME TO idx_antenne_status_retry",
+			"ALTER INDEX IF EXISTS idx_nook_deliveries_event_type RENAME TO idx_antenne_deliveries_event_type",
+			"ALTER INDEX IF EXISTS nook_deliveries_pkey RENAME TO antenne_deliveries_pkey",
+			"ALTER SEQUENCE IF EXISTS nook_deliveries_id_seq RENAME TO antenne_deliveries_id_seq",
+		}
+		for _, stmt := range renames {
+			if err := db.Exec(stmt).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	if !migrator.HasTable(&Setting{}) {
+		return nil
+	}
+	return db.Exec(`
+		UPDATE settings SET key = 'antenne_' || substr(key, 6)
+		WHERE left(key, 5) = 'nook_'
+		  AND NOT EXISTS (
+			SELECT 1 FROM settings existing
+			WHERE existing.key = 'antenne_' || substr(settings.key, 6)
+		  )`).Error
 }

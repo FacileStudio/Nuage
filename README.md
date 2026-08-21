@@ -22,7 +22,7 @@ and MinIO are internal Docker services.
 - Mounts the whole tree over WebDAV using an API token as the Basic auth password
 - Enforces per-user storage quotas, with an admin view and recalculation
 - Exposes an incremental sync feed with tombstones so offline clients converge
-- Records an activity log, emits events to Nook, and tees its logs to Journal
+- Records an activity log, emits events to Antenne, and tees its logs to Journal
 - Email and password accounts plus optional OIDC SSO with an `SSO_ONLY` mode
 - Gates every space-scoped endpoint on membership, so a caller-supplied `space_id`
   cannot reach another space
