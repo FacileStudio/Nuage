@@ -5,10 +5,10 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
@@ -32,9 +32,9 @@ type Service struct {
 type Auth interface {
 	Issue(ctx context.Context, userID int64, label string) (string, porte.Session, error)
 	Sessions() *session.Manager
-	SetPassword(ctx context.Context, userID int64, email, password string) error
+	SetPassword(ctx context.Context, userID int64, password string) error
+	ChangePassword(ctx context.Context, w http.ResponseWriter, r *http.Request, userID int64, current, next string) (string, int64, error)
 	VerifyPassword(ctx context.Context, email, password string) (int64, error)
-	RevokeBrowserSessions(ctx context.Context, userID int64) error
 }
 
 // NewService builds a users Service over the given database connection,
@@ -85,12 +85,15 @@ func (service *Service) listUsers(context context.Context) ([]User, error) {
 
 // verifyPassword confirms the caller knows the account's current password, so a
 // stolen session token alone cannot be escalated into a permanent takeover by
-// changing the login credentials.
+// moving the address the account signs in with.
 //
-// porte reads porte_identities, not users.password_hash. That column
-// still holds the hash the migration copied out of it, so comparing
-// against it here would keep answering yes to the *old* password after
-// a change — the same silent divergence, read from the other side.
+// It is porte that answers, not users.password_hash. That column still holds
+// the hash the migration copied out of it, so comparing against it here would
+// keep saying yes to the *old* password after a change.
+//
+// Only the address needs this. A password change confirms itself inside
+// porte's ChangePassword, so asking here as well would hash argon2 twice for
+// one request.
 func (service *Service) verifyPassword(context context.Context, userID string, candidate string) error {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
@@ -111,24 +114,18 @@ func (service *Service) verifyPassword(context context.Context, userID string, c
 	return nil
 }
 
-// updateUser applies a partial profile update for a user, re-keying porte's
-// local identity when the email changes.
+// updateUser applies a partial profile update for a user.
 //
-// The password is porte's, not a column on this row. Writing
-// users.password_hash would look like it worked and change nothing:
-// porte reads the identity table, so the old password would keep
-// signing in and the new one would never work.
+// The password is not here. Replacing one has to confirm the current
+// password and rotate the caller's session, which porte does through the
+// response writer, so it happens in the handler layer instead.
 //
-// The address is half of porte's key for a local identity, so changing
-// it without moving that key breaks the login on the next profile edit.
-// Re-key first, then set the password on the address the account will
-// actually have.
-//
-// Changing a password signs the other browsers out. It deliberately
-// spares named API tokens: before porte they lived in their own table
-// and a DELETE on sessions never touched them, so taking them now would
-// break somebody's script on the day they rotate their password.
-func (service *Service) updateUser(context context.Context, userID string, name *string, email *string, password *string, color *string) (*User, error) {
+// Neither is the address a credential any more. porte v0.2 keyed a local
+// identity on it, so this method used to read the old address, compare it and
+// chase the key with a raw UPDATE against porte's own table; v0.3 keys on the
+// account id, which does not move, so an address change is one write on this
+// app's own row and nothing else.
+func (service *Service) updateUser(context context.Context, userID string, name *string, email *string, color *string) (*User, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return nil, errors.Internal("failed to parse user id", err)
@@ -139,30 +136,8 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 		updates["name"] = *name
 	}
 
-	if email != nil || password != nil {
-		var current schemas.User
-		if err := service.orm.WithContext(context).Select("email").First(&current, id).Error; err != nil {
-			return nil, errors.Internal("failed to read the account", err)
-		}
-		address := current.Email
-		if email != nil {
-			address = *email
-			updates["email"] = address
-			if !strings.EqualFold(address, current.Email) {
-				if err := service.orm.WithContext(context).Exec(
-					`UPDATE porte_identities SET subject = ? WHERE provider = 'local' AND subject = ?`,
-					strings.ToLower(strings.TrimSpace(address)),
-					strings.ToLower(strings.TrimSpace(current.Email)),
-				).Error; err != nil {
-					return nil, errors.Internal("failed to move the password to the new address", err)
-				}
-			}
-		}
-		if password != nil {
-			if err := service.tokens.SetPassword(context, id, address, *password); err != nil {
-				return nil, err
-			}
-		}
+	if email != nil {
+		updates["email"] = *email
 	}
 	if color != nil {
 		updates["color"] = *color
@@ -187,12 +162,6 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 	}
 	if err := service.ensureUserColor(context, &record); err != nil {
 		return nil, err
-	}
-
-	if password != nil {
-		if err := service.tokens.RevokeBrowserSessions(context, id); err != nil {
-			return nil, err
-		}
 	}
 
 	return mapUser(record), nil

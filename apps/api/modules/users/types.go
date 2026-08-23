@@ -12,8 +12,14 @@ type User struct {
 }
 
 // MeResponse wraps the profile of the current user.
+//
+// Token is set only by a successful password change. porte rotates the
+// caller's session and puts the replacement in the cookie, but this client
+// also holds a bearer token in localStorage — the one it was holding is dead
+// by then, so it comes back here for the client to store.
 type MeResponse struct {
-	User User `json:"user"`
+	User  User   `json:"user"`
+	Token string `json:"token,omitempty"`
 }
 
 // ListResponse is a list of user profiles.
@@ -22,6 +28,11 @@ type ListResponse struct {
 }
 
 // UpdateRequest is the body used to update the caller's profile.
+//
+// CurrentPassword is what turns Password from "set a first password" into
+// "replace the one there is". An account that already has a password is
+// refused without it, so a session somebody borrowed cannot quietly become a
+// borrowed account. It confirms an Email change for the same reason.
 type UpdateRequest struct {
 	Name            *string `json:"name"`
 	Email           *string `json:"email"`
