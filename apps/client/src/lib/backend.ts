@@ -33,6 +33,12 @@ export type UserProfile = {
 
 export type MeResponse = {
 	user: UserProfile;
+	/*
+	 * Only a password change sets this. The server rotates the session, so the
+	 * bearer token this client is holding is dead by the time the response
+	 * arrives and has to be replaced with the one in the body.
+	 */
+	token?: string;
 };
 
 export type NuageFile = {
@@ -435,8 +441,18 @@ export const backend = {
 		}, token);
 	},
 
-	updateProfile(token: string, data: { name?: string; email?: string }) {
-		return apiFetch<{ user: UserProfile }>('/users/me', {
+	/*
+	 * current_password is not optional in the way the type suggests: the server
+	 * refuses an email change without it, and refuses a password change on an
+	 * account that already has one. Sending password alone only works for an
+	 * SSO account adding its first.
+	 *
+	 * The field is not additive on an old server either — the API rejects
+	 * unknown JSON fields, so this and the API deploy together or the request
+	 * comes back "invalid JSON body".
+	 */
+	updateProfile(token: string, data: { name?: string; email?: string; password?: string; current_password?: string; color?: string }) {
+		return apiFetch<MeResponse>('/users/me', {
 			method: 'PATCH',
 			body: JSON.stringify(data)
 		}, token);

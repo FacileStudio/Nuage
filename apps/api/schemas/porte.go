@@ -35,9 +35,13 @@ func AdoptPorte(db *gorm.DB, issuer string) error {
 // everything except authentication. The other three stores come from porte/pg
 // unchanged — they only ever touch the tables below.
 //
-// Kept verbatim from porte otherwise, column for column: pg's queries are
+// Kept verbatim from porte otherwise, statement for statement: pg's queries are
 // written against these names, and a divergence here surfaces as a runtime
-// error on the login path rather than at boot.
+// error on the login path rather than at boot. That includes porte v0.3.0's
+// re-key of the local subject onto the user id — nothing here calls
+// portepg.EnsureSchema, so a migration living only in porte's own Schema would
+// never run against this database and every existing password login would
+// answer "invalid credentials" to the right password.
 const porteSchema = `
 CREATE TABLE IF NOT EXISTS porte_identities (
 	user_id         bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -56,6 +60,9 @@ CREATE TABLE IF NOT EXISTS porte_identities (
 CREATE INDEX IF NOT EXISTS porte_identities_user_idx ON porte_identities (user_id);
 ALTER TABLE porte_identities ADD COLUMN IF NOT EXISTS created_at timestamptz;
 ALTER TABLE porte_identities ALTER COLUMN created_at SET DEFAULT now();
+
+UPDATE porte_identities SET subject = user_id::text
+ WHERE provider = 'local' AND subject <> user_id::text;
 
 CREATE TABLE IF NOT EXISTS porte_sessions (
 	id           bigserial PRIMARY KEY,
@@ -139,16 +146,19 @@ $$;
 // uses the parameters this app already used — so the move is a copy and nobody
 // resets anything.
 //
-// The subject is the lowercased address because that is what porte/local
-// normalises to before looking one up; a row keyed on a mixed-case address
-// would simply never be found.
+// The subject is the account id, which is what porte.LocalSubject returns.
+// v0.2 keyed it on the lowercased address, and that key moved every time
+// somebody edited their profile, so this app carried an UPDATE against
+// porte_identities to chase it. The id does not move, so the chase is gone —
+// and writing the address here would re-introduce a row the re-key above has
+// already run past.
 //
 // users.password_hash is deliberately left in place. Blanking it in the same
 // deploy makes the change unrollbackable for the sake of tidiness, and a
 // column nothing reads can be dropped on any later day.
 const adoptExistingPasswords = `
 INSERT INTO porte_identities (user_id, provider, subject, password_hash)
-SELECT id, 'local', lower(btrim(email)), password_hash
+SELECT id, 'local', id::text, password_hash
   FROM users
  WHERE coalesce(password_hash, '') <> ''
 ON CONFLICT (provider, subject) DO NOTHING;

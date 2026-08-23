@@ -3,6 +3,7 @@ package users
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
+	"github.com/FacileStudio/porte"
 	"github.com/FacileStudio/tronc/errors"
 )
 
@@ -62,7 +64,18 @@ func (controller *Controller) me(context context.Context) (*MeResponse, error) {
 	return &MeResponse{User: *user}, nil
 }
 
-func (controller *Controller) updateMe(context context.Context, req *UpdateRequest) (*MeResponse, error) {
+// updateMe applies a profile edit, and is where the password path lives rather
+// than in the service: porte rotates the caller's session cookie itself, so
+// the write needs the ResponseWriter and the request that only a handler holds.
+//
+// Moving the address the account signs in with is confirmed with the current
+// password, the same as replacing one, because a borrowed session must not be
+// enough to do it. That confirmation is asked for here only when the body
+// carries no password: when it carries one, porte's ChangePassword confirms it
+// a few lines below and asking twice would hash argon2 twice for one request.
+// An account with no password has nothing to confirm either way, which is the
+// branch SetPassword serves.
+func (controller *Controller) updateMe(context context.Context, w http.ResponseWriter, request *http.Request, req *UpdateRequest) (*MeResponse, error) {
 	identity, ok := authcontext.IdentityFromContext(context)
 	if !ok {
 		return nil, errors.Unauthorized("missing auth")
@@ -94,9 +107,9 @@ func (controller *Controller) updateMe(context context.Context, req *UpdateReque
 		password = req.Password
 	}
 
-	if password != nil || email != nil {
-		if req.CurrentPassword == nil || *req.CurrentPassword == "" {
-			return nil, errors.Invalid("current_password is required to change the email or password")
+	if email != nil && password == nil {
+		if req.CurrentPassword == nil || strings.TrimSpace(*req.CurrentPassword) == "" {
+			return nil, errors.Invalid("current_password is required to change the email")
 		}
 		if err := controller.service.verifyPassword(context, identity.UserID, *req.CurrentPassword); err != nil {
 			return nil, err
@@ -116,12 +129,57 @@ func (controller *Controller) updateMe(context context.Context, req *UpdateReque
 		return nil, errors.Invalid("at least one field must be provided")
 	}
 
-	user, err := controller.service.updateUser(context, identity.UserID, name, email, password, color)
+	var rotated string
+	if password != nil {
+		token, err := controller.changePassword(context, w, request, identity.UserID, req, *password)
+		if err != nil {
+			return nil, err
+		}
+		rotated = token
+	}
+
+	user, err := controller.service.updateUser(context, identity.UserID, name, email, color)
 	if err != nil {
 		return nil, err
 	}
 
-	return &MeResponse{User: *user}, nil
+	return &MeResponse{User: *user, Token: rotated}, nil
+}
+
+// changePassword picks between porte's two password writes and returns the
+// caller's replacement token when there is one.
+//
+// They are two calls rather than one because only one of them is safe to make
+// on a session alone: SetPassword gives a first password to an account that
+// has none, and porte refuses it with ErrPasswordSet once there is one.
+// Replacing a password goes through ChangePassword, which confirms the current
+// one — OWASP ASVS puts that at L1 (v4 2.1.6, v5 6.2.3) — then ends the
+// account's other logins and rotates this caller's session through w.
+//
+// ErrPasswordSet is answered as a 400 naming the field rather than porte's
+// 409, because the caller left something out rather than losing a race. A
+// blank current password counts as none given, so it reaches the same answer
+// instead of "invalid credentials".
+func (controller *Controller) changePassword(context context.Context, w http.ResponseWriter, request *http.Request, userID string, req *UpdateRequest, password string) (string, error) {
+	id, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return "", errors.Internal("failed to parse user id", err)
+	}
+
+	current := ""
+	if req.CurrentPassword != nil {
+		current = strings.TrimSpace(*req.CurrentPassword)
+	}
+	if current != "" {
+		token, _, err := controller.service.tokens.ChangePassword(context, w, request, id, current, password)
+		return token, err
+	}
+
+	err = controller.service.tokens.SetPassword(context, id, password)
+	if stderrors.Is(err, porte.ErrPasswordSet) {
+		return "", errors.Invalid("current_password is required to change your password")
+	}
+	return "", err
 }
 
 func (controller *Controller) deleteAvatar(context context.Context) (*MeResponse, error) {

@@ -69,30 +69,6 @@ func (service *Service) IdentityForUser(ctx context.Context, userID int64) (stri
 	return strconv.FormatInt(out.ID, 10), out.Email, out.IsAdmin, nil
 }
 
-// RevokeBrowserSessions ends every login a user holds and spares their named
-// API tokens.
-//
-// Changing a password signs the other browsers out — that is what this app did
-// and it is the point of the rule. It is not porte's RevokeUser, which takes
-// everything: before porte the tokens lived in their own table and were
-// untouched by a DELETE on sessions, so taking them now would silently break
-// whatever script holds one on the day somebody rotates their password.
-func (service *Service) RevokeBrowserSessions(ctx context.Context, userID int64) error {
-	held, err := service.sessions.List(ctx, userID)
-	if err != nil {
-		return errors.Internal("failed to read the sessions", err)
-	}
-	for _, candidate := range held {
-		if candidate.Label != "" {
-			continue
-		}
-		if err := service.sessions.Revoke(ctx, userID, candidate.ID); err != nil {
-			return errors.Internal("failed to revoke a session", err)
-		}
-	}
-	return nil
-}
-
 // Register creates an account through porte/local and signs it in. The cookie
 // is set on the way out and the token comes back in the body, so one call
 // serves the browser and anything holding the old {user_id, token} shape.
@@ -112,9 +88,24 @@ func (service *Service) Login(ctx context.Context, w http.ResponseWriter, r *htt
 	return strconv.FormatInt(userID, 10), token, nil
 }
 
-// SetPassword is what PATCH /users/me calls when the body carries one.
-func (service *Service) SetPassword(ctx context.Context, userID int64, email, password string) error {
-	return service.passwords.SetPassword(ctx, userID, email, password)
+// SetPassword gives a first password to an account that has none. porte
+// answers ErrPasswordSet once there is one, because a session alone is not
+// evidence enough to replace a password — that is ChangePassword.
+func (service *Service) SetPassword(ctx context.Context, userID int64, password string) error {
+	return service.passwords.SetPassword(ctx, userID, password)
+}
+
+// ChangePassword replaces a password after confirming the current one, and
+// returns the caller's new token beside the number of other logins it ended.
+//
+// It takes the writer and the request because porte rotates this caller's
+// session itself: the old token is dead before the call returns and the
+// replacement is already in the cookie, so the screen that made the change
+// keeps working. Named API tokens survive — before porte they lived in their
+// own table and a password change never touched them, and taking them now
+// would break somebody's script on the day they rotate.
+func (service *Service) ChangePassword(ctx context.Context, w http.ResponseWriter, r *http.Request, userID int64, current, next string) (string, int64, error) {
+	return service.passwords.ChangePassword(ctx, w, r, userID, current, next)
 }
 
 // Issue mints a named API token: a porte session with a label and no expiry,
