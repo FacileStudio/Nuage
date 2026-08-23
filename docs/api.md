@@ -66,6 +66,13 @@ Both credential endpoints are rate limited to 10 requests per minute per IP.
 | DELETE | `/users/me/api-token/{id}` | session |
 | GET | `/users/{id}` | session |
 
+`PATCH /users/me` takes any of `name`, `email`, `password`, `current_password`. Changing a
+password requires `current_password` alongside it; sending `password` alone is only valid for an
+account that has none yet, and anything else is 400 rather than a silent replacement. A wrong
+`current_password` is 401. The change ends the account's **other** logins and rotates the
+caller's own session, so the client that made it stays signed in and named API tokens keep
+working. An email change is confirmed separately, which predates all of this.
+
 A user is `{"id","email","name","avatar_url","avatar_source","color","created_at"}`.
 `avatar_source` distinguishes an uploaded avatar from one imported from OIDC, which is what
 stops a profile sync from overwriting a deliberate upload.
