@@ -157,7 +157,7 @@ credentials.
   counting against quota because the refund happens on permanent delete. The UI used to promise
   "deleted after 30 days" — do not put that claim back without writing the job.
 - `/login` and `/` are the **suite reference implementations** of the shared auth/landing
-  convention (see `~/.jardin/memory/conventions/facile-auth-screen.md`): raw elements, zero
+  convention (see `~/.mycelium/memory/conventions/facile-auth-screen.md`): raw elements, zero
   component imports, four class constants that are byte-identical across 16 repos. They are
   deliberately **not** built from muse — porting them breaks a cross-repo invariant. They still
   match the theme, because `app.css` aliases their `background`/`border-input` names onto muse
