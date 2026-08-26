@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"testing"
@@ -116,6 +117,45 @@ func TestSpaceMemberSeesSpaceFiles(t *testing.T) {
 	parseJSON(resp, &listing)
 	require.Len(t, listing.Files, 1)
 	assert.Equal(t, "roadmap.txt", listing.Files[0].Name)
+}
+
+func TestSpaceMemberCanDownloadAnotherMembersFile(t *testing.T) {
+	ts := setupTestServer(t)
+	_, owner := registerUser(ts, "owner-dl@example.com", "password12345")
+	memberID, member := registerUser(ts, "member-dl@example.com", "password12345")
+
+	spaceID := createSpace(t, ts, owner, "Download Space")
+	addSpaceMember(t, ts, owner, spaceID, memberID)
+
+	uploadResp := uploadFileToSpace(ts, owner, "shared_dl.txt", "shared content", spaceID)
+	require.Equal(t, http.StatusCreated, uploadResp.StatusCode)
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(uploadResp, &file)
+
+	dlResp := doGet(ts, fmt.Sprintf("/files/%d/download", file.ID), member)
+	require.Equal(t, http.StatusOK, dlResp.StatusCode)
+	defer dlResp.Body.Close()
+	body, _ := io.ReadAll(dlResp.Body)
+	assert.Equal(t, "shared content", string(body))
+}
+
+func TestOutsiderCannotDownloadSpaceFile(t *testing.T) {
+	ts := setupTestServer(t)
+	_, owner := registerUser(ts, "owner-dl2@example.com", "password12345")
+	_, outsider := registerUser(ts, "outsider-dl@example.com", "password12345")
+
+	spaceID := createSpace(t, ts, owner, "Closed Download Space")
+	uploadResp := uploadFileToSpace(ts, owner, "private_dl.txt", "secret", spaceID)
+	require.Equal(t, http.StatusCreated, uploadResp.StatusCode)
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(uploadResp, &file)
+
+	dlResp := doGet(ts, fmt.Sprintf("/files/%d/download", file.ID), outsider)
+	assert.Equal(t, http.StatusNotFound, dlResp.StatusCode)
 }
 
 func TestCannotUploadIntoAnotherUsersFolder(t *testing.T) {

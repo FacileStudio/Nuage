@@ -279,8 +279,18 @@ func (s *Service) getFile(ctx context.Context, userID int64, fileID string) (*sc
 		return nil, errors.Invalid("invalid file id")
 	}
 
+	spaceIDs, err := spaceaccess.MemberIDs(ctx, s.orm, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	reach := s.orm.Where("uploaded_by = ? AND space_id IS NULL", userID)
+	if len(spaceIDs) > 0 {
+		reach = reach.Or("space_id IN ?", spaceIDs)
+	}
+
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ? AND deleted_at IS NULL", id, userID).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).Where(reach).First(&record).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.NotFound("file not found")
 		}
