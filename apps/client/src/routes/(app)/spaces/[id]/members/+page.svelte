@@ -140,14 +140,23 @@
 			members = members.filter((m) => m.id !== target.id);
 			removing = null;
 			toast.success(`Removed ${memberName(target)}.`);
-		} catch {
-			toast.danger('Could not remove that member.');
+		} catch (e) {
+			toast.danger(e instanceof Error && e.message ? e.message : 'Could not remove that member.');
+			throw e;
 		}
 	}
 
 	const isOwnerOrAdmin = $derived(space?.role === 'owner' || space?.role === 'admin');
 	const isOwner = $derived(space?.role === 'owner');
+	const ownerCount = $derived(members.filter((m) => m.role === 'owner').length);
 	const memberName = (member: SpaceMember) => member.user?.name || member.user?.email || 'Unknown';
+
+	function canRemove(member: SpaceMember) {
+		if (!isOwnerOrAdmin) return false;
+		if (space?.role === 'admin' && (member.role === 'owner' || member.role === 'admin')) return false;
+		if (member.role === 'owner' && ownerCount <= 1) return false;
+		return true;
+	}
 </script>
 
 <svelte:head>
@@ -204,12 +213,14 @@
 						{/if}
 					</div>
 
-					<!-- The owner's role is not a control. Demoting the last owner orphans the space,
-					     and the API refuses it anyway, so the UI should not offer the move. -->
-					{#if member.role === 'owner' || !isOwnerOrAdmin}
-						<Badge tone={roleTone(member.role)}>{member.role}</Badge>
-					{:else}
-						<div class="flex items-center gap-1">
+					<div class="flex items-center gap-1">
+						<!-- The owner's role is not a control: `updateMember` refuses to change any
+						     owner's role at all, so the select would only ever produce an error.
+						     Removal is a separate question — `removeMember` allows it as long as
+						     another owner remains. -->
+						{#if member.role === 'owner' || !isOwnerOrAdmin}
+							<Badge tone={roleTone(member.role)}>{member.role}</Badge>
+						{:else}
 							<Select
 								value={member.role}
 								aria-label="Role for {memberName(member)}"
@@ -220,6 +231,8 @@
 								<option value="admin">Admin</option>
 								{#if isOwner}<option value="owner">Owner</option>{/if}
 							</Select>
+						{/if}
+						{#if canRemove(member)}
 							<Button
 								variant="ghost-danger"
 								size="sm"
@@ -229,8 +242,8 @@
 							>
 								Remove
 							</Button>
-						</div>
-					{/if}
+						{/if}
+					</div>
 				</div>
 			{/each}
 		</Card>

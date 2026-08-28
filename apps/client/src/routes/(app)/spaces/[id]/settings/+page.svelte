@@ -61,7 +61,12 @@
 	}
 
 	async function confirmDelete() {
-		await backend.deleteSpace(app.token, spaceId);
+		try {
+			await backend.deleteSpace(app.token, spaceId);
+		} catch (e) {
+			toast.danger(e instanceof Error && e.message ? e.message : 'Could not delete that space.');
+			throw e;
+		}
 		if (spaceStore.current?.id === spaceId) spaceStore.clear();
 		toast.success('Space deleted.');
 		goto('/spaces');

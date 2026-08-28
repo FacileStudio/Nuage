@@ -20,6 +20,8 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Put("/{id}", handler.update)
 		r.Delete("/{id}", handler.deleteSpace)
 
+		r.Post("/{id}/leave", handler.leave)
+
 		r.Get("/{id}/members", handler.listMembers)
 		r.Post("/{id}/members", handler.addMember)
 		r.Put("/{id}/members/{memberId}", handler.updateMember)
