@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Badge, Button, Card, EmptyState, Spinner, toast } from '@facile/muse';
+	import { Badge, Button, Card, ConfirmModal, EmptyState, Spinner, toast } from '@facile/muse';
 	import { backend, type Space, type SpaceMember } from '$lib/backend';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { formatDate } from '$lib/format';
@@ -16,6 +17,7 @@
 	let space = $state<Space | null>(null);
 	let members = $state<SpaceMember[]>([]);
 	let loading = $state(true);
+	let leaveOpen = $state(false);
 
 	let spaceId = $derived(Number(page.params.id));
 
@@ -41,6 +43,25 @@
 		if (!space) return;
 		spaceStore.set(space);
 		toast.success(`Now working in “${space.name}”.`);
+	}
+
+	/*
+	 * The one refusal a real user hits is the 409 a sole owner gets, and its message names the
+	 * two ways out — so it is shown verbatim and the error is rethrown, which is what keeps
+	 * ConfirmModal open instead of dismissing the dialog on a leave that never happened.
+	 */
+	async function confirmLeave() {
+		const target = space;
+		if (!target) return;
+		try {
+			await backend.leaveSpace(app.token, spaceId);
+		} catch (e) {
+			toast.danger(e instanceof Error && e.message ? e.message : 'Could not leave that space.');
+			throw e;
+		}
+		if (spaceStore.id === target.id) spaceStore.clear();
+		toast.success(`You left “${target.name}”.`);
+		goto('/spaces');
 	}
 
 	const isCurrent = $derived(space !== null && spaceStore.id === space.id);
@@ -78,6 +99,9 @@
 						Settings
 					</Button>
 				{/if}
+				<Button variant="ghost-danger" icon={icons.logout} onclick={() => (leaveOpen = true)}>
+					Leave space
+				</Button>
 			{/snippet}
 		</PageHeader>
 
@@ -130,3 +154,12 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmModal
+	bind:open={leaveOpen}
+	title="Leave “{space?.name ?? 'this space'}”?"
+	description="You lose access to every file in the space, including the ones you uploaded — they stay here. An owner or admin can add you back."
+	confirmLabel="Leave space"
+	tone="danger"
+	onConfirm={confirmLeave}
+/>

@@ -631,6 +631,10 @@ export const backend = {
 		return apiFetch<{ deleted: boolean }>(`/spaces/${id}`, { method: 'DELETE' }, token);
 	},
 
+	leaveSpace(token: string, id: number) {
+		return apiFetch<{ left: boolean }>(`/spaces/${id}/leave`, { method: 'POST' }, token);
+	},
+
 	listSpaceMembers(token: string, spaceId: number) {
 		return apiFetch<{ members: SpaceMember[] }>(`/spaces/${spaceId}/members`, {}, token);
 	},

@@ -262,13 +262,20 @@ func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64,
 		return errors.Internal("failed to find member", err)
 	}
 
-	if member.Role == "owner" {
-		return errors.Forbidden("cannot remove the owner")
+	callerRole, err := s.getMemberRole(ctx, spaceID, userID)
+	if err != nil {
+		return err
+	}
+	if callerRole == "admin" && (member.Role == "owner" || member.Role == "admin") {
+		return errors.Forbidden("admins cannot remove owners or other admins")
 	}
 
-	callerRole, _ := s.getMemberRole(ctx, spaceID, userID)
-	if callerRole == "admin" && member.Role == "admin" {
-		return errors.Forbidden("admins cannot remove other admins")
+	sole, err := s.isSoleOwner(ctx, spaceID, member.Role)
+	if err != nil {
+		return err
+	}
+	if sole {
+		return errors.Conflict("cannot remove the last owner; promote another owner first")
 	}
 
 	if err := s.orm.WithContext(ctx).Delete(&member).Error; err != nil {
@@ -276,6 +283,46 @@ func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64,
 	}
 
 	return nil
+}
+
+func (s *Service) leaveSpace(ctx context.Context, userID int64, spaceID int64) error {
+	var member schemas.SpaceMember
+	if err := s.orm.WithContext(ctx).Where("space_id = ? AND user_id = ?", spaceID, userID).First(&member).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.Forbidden("you are not a member of this space")
+		}
+		return errors.Internal("failed to check membership", err)
+	}
+
+	sole, err := s.isSoleOwner(ctx, spaceID, member.Role)
+	if err != nil {
+		return err
+	}
+	if sole {
+		return errors.Conflict("the sole owner cannot leave; transfer ownership or delete the space")
+	}
+
+	if err := s.orm.WithContext(ctx).Delete(&member).Error; err != nil {
+		return errors.Internal("failed to leave space", err)
+	}
+
+	return nil
+}
+
+func (s *Service) isSoleOwner(ctx context.Context, spaceID int64, role string) (bool, error) {
+	if role != "owner" {
+		return false, nil
+	}
+
+	var owners int64
+	if err := s.orm.WithContext(ctx).
+		Model(&schemas.SpaceMember{}).
+		Where("space_id = ? AND role = ?", spaceID, "owner").
+		Count(&owners).Error; err != nil {
+		return false, errors.Internal("failed to count space owners", err)
+	}
+
+	return owners <= 1, nil
 }
 
 func (s *Service) getMemberRole(ctx context.Context, spaceID int64, userID int64) (string, error) {

@@ -160,6 +160,33 @@ func (h *Handler) deleteSpace(w http.ResponseWriter, r *http.Request) {
 	httpjson.WriteJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
+func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	spaceID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Invalid("invalid space id"))
+		return
+	}
+
+	if err := h.service.leaveSpace(r.Context(), userID, spaceID); err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	httpjson.WriteJSON(w, http.StatusOK, map[string]bool{"left": true})
+}
+
 func (h *Handler) listMembers(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
