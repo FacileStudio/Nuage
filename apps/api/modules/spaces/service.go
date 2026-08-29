@@ -3,29 +3,28 @@ package spaces
 import (
 	"context"
 	stderrors "errors"
+	"strconv"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
+	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	portespaces "github.com/FacileStudio/porte/spaces"
 	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
-
-var validRoles = map[string]bool{
-	"owner":  true,
-	"admin":  true,
-	"member": true,
-}
 
 // Service manages spaces and their members.
 type Service struct {
-	orm *gorm.DB
+	orm   *gorm.DB
+	guard portespaces.Guard
 }
 
 // NewService builds a spaces Service over the given database connection.
 func NewService(orm *gorm.DB) *Service {
-	return &Service{orm: orm}
+	return &Service{orm: orm, guard: spaceaccess.NewGuard(orm)}
 }
 
 func (s *Service) createSpace(ctx context.Context, userID int64, req CreateSpaceRequest) (*schemas.Space, error) {
@@ -97,7 +96,7 @@ func (s *Service) getSpace(ctx context.Context, userID int64, spaceID int64) (*S
 }
 
 func (s *Service) updateSpace(ctx context.Context, userID int64, spaceID int64, req UpdateSpaceRequest) (*schemas.Space, error) {
-	if err := s.requireRole(ctx, spaceID, userID, "owner", "admin"); err != nil {
+	if err := s.requireRole(ctx, spaceID, userID, portespaces.RoleAdmin); err != nil {
 		return nil, err
 	}
 
@@ -127,7 +126,7 @@ func (s *Service) updateSpace(ctx context.Context, userID int64, spaceID int64, 
 }
 
 func (s *Service) deleteSpace(ctx context.Context, userID int64, spaceID int64) error {
-	if err := s.requireRole(ctx, spaceID, userID, "owner"); err != nil {
+	if err := s.requireRole(ctx, spaceID, userID, portespaces.RoleOwner); err != nil {
 		return err
 	}
 
@@ -164,7 +163,8 @@ func (s *Service) listMembers(ctx context.Context, userID int64, spaceID int64) 
 }
 
 func (s *Service) addMember(ctx context.Context, userID int64, spaceID int64, req AddMemberRequest) (*MemberResponse, error) {
-	if err := s.requireRole(ctx, spaceID, userID, "owner", "admin"); err != nil {
+	actor, err := s.scope(ctx, spaceID, userID, portespaces.RoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 
@@ -172,11 +172,12 @@ func (s *Service) addMember(ctx context.Context, userID int64, spaceID int64, re
 	if role == "" {
 		role = "member"
 	}
-	if !validRoles[role] {
-		return nil, errors.Invalid("invalid role, must be one of: owner, admin, member")
+	target, err := parseRole(role)
+	if err != nil {
+		return nil, err
 	}
-	if role == "owner" {
-		return nil, errors.Invalid("cannot add another owner")
+	if !s.guard.AssignableBy(actor, target) {
+		return nil, errors.Forbidden("cannot grant a role above your own")
 	}
 
 	var existing schemas.SpaceMember
@@ -211,12 +212,14 @@ func (s *Service) addMember(ctx context.Context, userID int64, spaceID int64, re
 }
 
 func (s *Service) updateMember(ctx context.Context, userID int64, spaceID int64, memberID int64, req UpdateMemberRequest) (*MemberResponse, error) {
-	if err := s.requireRole(ctx, spaceID, userID, "owner", "admin"); err != nil {
+	actor, err := s.scope(ctx, spaceID, userID, portespaces.RoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 
-	if !validRoles[req.Role] {
-		return nil, errors.Invalid("invalid role, must be one of: owner, admin, member")
+	target, err := parseRole(req.Role)
+	if err != nil {
+		return nil, err
 	}
 
 	var member schemas.SpaceMember
@@ -231,12 +234,11 @@ func (s *Service) updateMember(ctx context.Context, userID int64, spaceID int64,
 		return nil, errors.Forbidden("cannot change the owner's role")
 	}
 
-	callerRole, _ := s.getMemberRole(ctx, spaceID, userID)
-	if callerRole == "admin" && req.Role == "owner" {
+	if !s.guard.AssignableBy(actor, target) {
 		return nil, errors.Forbidden("admins cannot promote to owner")
 	}
 
-	member.Role = req.Role
+	member.Role = string(target)
 	if err := s.orm.WithContext(ctx).Save(&member).Error; err != nil {
 		return nil, errors.Internal("failed to update member role", err)
 	}
@@ -250,105 +252,101 @@ func (s *Service) updateMember(ctx context.Context, userID int64, spaceID int64,
 }
 
 func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64, memberID int64) error {
-	if err := s.requireRole(ctx, spaceID, userID, "owner", "admin"); err != nil {
+	actor, err := s.scope(ctx, spaceID, userID, portespaces.RoleAdmin)
+	if err != nil {
 		return err
 	}
 
-	var member schemas.SpaceMember
-	if err := s.orm.WithContext(ctx).Where("id = ? AND space_id = ?", memberID, spaceID).First(&member).Error; err != nil {
-		if stderrors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.NotFound("member not found")
+	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockMembers(ctx, tx, spaceID); err != nil {
+			return err
 		}
-		return errors.Internal("failed to find member", err)
-	}
 
-	callerRole, err := s.getMemberRole(ctx, spaceID, userID)
-	if err != nil {
-		return err
-	}
-	if callerRole == "admin" && (member.Role == "owner" || member.Role == "admin") {
-		return errors.Forbidden("admins cannot remove owners or other admins")
-	}
+		var member schemas.SpaceMember
+		if err := tx.Where("id = ? AND space_id = ?", memberID, spaceID).First(&member).Error; err != nil {
+			if stderrors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.NotFound("member not found")
+			}
+			return errors.Internal("failed to find member", err)
+		}
 
-	sole, err := s.isSoleOwner(ctx, spaceID, member.Role)
-	if err != nil {
-		return err
-	}
-	if sole {
-		return errors.Conflict("cannot remove the last owner; promote another owner first")
-	}
+		if actor.Role == portespaces.RoleAdmin && portespaces.Role(member.Role) != portespaces.RoleMember {
+			return errors.Forbidden("admins cannot remove owners or other admins")
+		}
 
-	if err := s.orm.WithContext(ctx).Delete(&member).Error; err != nil {
-		return errors.Internal("failed to remove member", err)
-	}
+		leave := spaceaccess.NewGuard(tx).CanLeave(ctx, strconv.FormatInt(member.UserID, 10), strconv.FormatInt(spaceID, 10))
+		if leave != nil {
+			if stderrors.Is(leave, portespaces.ErrSoleOwner) {
+				return errors.Conflict("cannot remove the last owner; promote another owner first")
+			}
+			return spaceaccess.Translate(leave)
+		}
 
-	return nil
+		if err := tx.Delete(&member).Error; err != nil {
+			return errors.Internal("failed to remove member", err)
+		}
+		return nil
+	})
 }
 
 func (s *Service) leaveSpace(ctx context.Context, userID int64, spaceID int64) error {
-	var member schemas.SpaceMember
-	if err := s.orm.WithContext(ctx).Where("space_id = ? AND user_id = ?", spaceID, userID).First(&member).Error; err != nil {
-		if stderrors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.Forbidden("you are not a member of this space")
+	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockMembers(ctx, tx, spaceID); err != nil {
+			return err
 		}
-		return errors.Internal("failed to check membership", err)
-	}
 
-	sole, err := s.isSoleOwner(ctx, spaceID, member.Role)
-	if err != nil {
-		return err
-	}
-	if sole {
-		return errors.Conflict("the sole owner cannot leave; transfer ownership or delete the space")
-	}
+		leave := spaceaccess.NewGuard(tx).CanLeave(ctx, strconv.FormatInt(userID, 10), strconv.FormatInt(spaceID, 10))
+		if leave != nil {
+			if stderrors.Is(leave, portespaces.ErrSoleOwner) {
+				return errors.Conflict("the sole owner cannot leave; transfer ownership or delete the space")
+			}
+			return spaceaccess.Translate(leave)
+		}
 
-	if err := s.orm.WithContext(ctx).Delete(&member).Error; err != nil {
-		return errors.Internal("failed to leave space", err)
-	}
-
-	return nil
+		err := tx.Where("space_id = ? AND user_id = ?", spaceID, userID).Delete(&schemas.SpaceMember{}).Error
+		if err != nil {
+			return errors.Internal("failed to leave space", err)
+		}
+		return nil
+	})
 }
 
-func (s *Service) isSoleOwner(ctx context.Context, spaceID int64, role string) (bool, error) {
-	if role != "owner" {
-		return false, nil
-	}
-
-	var owners int64
-	if err := s.orm.WithContext(ctx).
-		Model(&schemas.SpaceMember{}).
-		Where("space_id = ? AND role = ?", spaceID, "owner").
-		Count(&owners).Error; err != nil {
-		return false, errors.Internal("failed to count space owners", err)
-	}
-
-	return owners <= 1, nil
+func (s *Service) scope(ctx context.Context, spaceID int64, userID int64, min portespaces.Role) (portespaces.Scope, error) {
+	scope, err := s.guard.Require(ctx, strconv.FormatInt(userID, 10), strconv.FormatInt(spaceID, 10), min)
+	return scope, spaceaccess.Translate(err)
 }
 
 func (s *Service) getMemberRole(ctx context.Context, spaceID int64, userID int64) (string, error) {
-	var member schemas.SpaceMember
-	if err := s.orm.WithContext(ctx).Where("space_id = ? AND user_id = ?", spaceID, userID).First(&member).Error; err != nil {
-		if stderrors.Is(err, gorm.ErrRecordNotFound) {
-			return "", errors.Forbidden("you are not a member of this space")
-		}
-		return "", errors.Internal("failed to check membership", err)
+	scope, err := s.guard.Resolve(ctx, strconv.FormatInt(userID, 10), strconv.FormatInt(spaceID, 10))
+	if err != nil {
+		return "", spaceaccess.Translate(err)
 	}
-	return member.Role, nil
+	return string(scope.Role), nil
 }
 
-func (s *Service) requireRole(ctx context.Context, spaceID int64, userID int64, roles ...string) error {
-	role, err := s.getMemberRole(ctx, spaceID, userID)
+func (s *Service) requireRole(ctx context.Context, spaceID int64, userID int64, min portespaces.Role) error {
+	_, err := s.scope(ctx, spaceID, userID, min)
+	return err
+}
+
+func parseRole(role string) (portespaces.Role, error) {
+	parsed := portespaces.Role(role)
+	if !portespaces.Default().Valid(parsed) {
+		return "", errors.Invalid("invalid role, must be one of: owner, admin, member")
+	}
+	return parsed, nil
+}
+
+func lockMembers(ctx context.Context, tx *gorm.DB, spaceID int64) error {
+	var rows []schemas.SpaceMember
+	err := tx.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("space_id = ?", spaceID).
+		Find(&rows).Error
 	if err != nil {
-		return err
+		return errors.Internal("failed to lock space members", err)
 	}
-
-	for _, r := range roles {
-		if role == r {
-			return nil
-		}
-	}
-
-	return errors.Forbidden("insufficient permissions")
+	return nil
 }
 
 func (s *Service) ResolveSpaceAccess(ctx context.Context, spaceID int64, userID int64) error {
