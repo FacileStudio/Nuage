@@ -69,8 +69,15 @@ func (c *Client) PutObject(ctx context.Context, key string, reader io.Reader, si
 	return err
 }
 
-func (c *Client) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
-	return c.mc.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
+// GetObject opens the object for reading. The reader seeks by issuing a fresh
+// ranged GET against the bucket, so a caller can answer a byte range without
+// pulling the whole object through the API first.
+func (c *Client) GetObject(ctx context.Context, key string) (io.ReadSeekCloser, error) {
+	obj, err := c.mc.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return obj, nil
 }
 
 func (c *Client) DeleteObject(ctx context.Context, key string) error {

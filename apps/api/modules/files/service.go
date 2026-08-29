@@ -299,7 +299,7 @@ func (s *Service) getFile(ctx context.Context, userID int64, fileID string) (*sc
 	return &record, nil
 }
 
-func (s *Service) downloadFile(ctx context.Context, userID int64, fileID string) (io.ReadCloser, *schemas.File, error) {
+func (s *Service) downloadFile(ctx context.Context, userID int64, fileID string) (io.ReadSeekCloser, *schemas.File, error) {
 	record, err := s.getFile(ctx, userID, fileID)
 	if err != nil {
 		return nil, nil, err
@@ -628,7 +628,7 @@ func (s *Service) presignFile(ctx context.Context, userID int64, fileID string, 
 	return token, expiresAt, nil
 }
 
-func (s *Service) downloadPresigned(ctx context.Context, token string) (io.ReadCloser, *schemas.File, error) {
+func (s *Service) downloadPresigned(ctx context.Context, token string) (io.ReadSeekCloser, *schemas.File, error) {
 	claims, err := presign.Verify(token, s.presignSecret)
 	if err != nil {
 		return nil, nil, errors.Unauthorized(err.Error())

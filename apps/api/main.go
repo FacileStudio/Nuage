@@ -266,8 +266,6 @@ func run() int {
 	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 
 	router.Route(apiPrefix, func(r chi.Router) {
-		docs.RegisterRoutes(r)
-
 		r.Get(avatarRoutePrefix+"*", func(w http.ResponseWriter, request *http.Request) {
 			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
 			avatarFS.ServeHTTP(w, request)
@@ -289,6 +287,7 @@ func run() int {
 	})
 
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, appLogger)
+	docs.Mount(router)
 
 	clientDir := spa.DirFromEnv()
 	if spa.Available(clientDir) {

@@ -1,13 +1,11 @@
 package sharing
 
 import (
-	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/httpfile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
@@ -168,11 +166,9 @@ func (h *Handler) downloadSharedFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	w.Header().Set("Content-Type", file.MimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(file.Name)))
-	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
-	w.WriteHeader(http.StatusOK)
-	io.Copy(w, reader)
+	if err := httpfile.Serve(w, r, file, reader); err != nil {
+		httpjson.WriteError(w, err)
+	}
 }
 
 func (h *Handler) listSharedFolder(w http.ResponseWriter, r *http.Request) {

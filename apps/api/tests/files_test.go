@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,6 +41,44 @@ func TestUploadAndDownload(t *testing.T) {
 	body, _ := io.ReadAll(dlResp.Body)
 	dlResp.Body.Close()
 	assert.Equal(t, content, string(body))
+}
+
+// TestDownloadServesRanges guards the byte-range contract the PDF viewer needs:
+// pdf.js reads the cross-reference table at the end of the file before it can
+// render page one, so an endpoint that only answers 200 with the whole body
+// makes the first page wait for the last byte.
+func TestDownloadServesRanges(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "range@example.com", "password12345")
+
+	content := "0123456789"
+	resp := uploadFile(ts, token, "ranged.pdf", content, nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &file)
+	path := fmt.Sprintf("/files/%d/download", file.ID)
+
+	full := doGet(ts, path, token)
+	require.Equal(t, http.StatusOK, full.StatusCode)
+	full.Body.Close()
+	assert.Equal(t, "bytes", full.Header.Get("Accept-Ranges"))
+	assert.Equal(t, "attachment; filename*=UTF-8''ranged.pdf", full.Header.Get("Content-Disposition"))
+
+	req := httptest.NewRequest("GET", path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Range", "bytes=0-3")
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	partial := w.Result()
+
+	require.Equal(t, http.StatusPartialContent, partial.StatusCode)
+	assert.Equal(t, "bytes 0-3/10", partial.Header.Get("Content-Range"))
+	body, _ := io.ReadAll(partial.Body)
+	partial.Body.Close()
+	assert.Equal(t, "0123", string(body))
 }
 
 func TestUploadToFolder(t *testing.T) {

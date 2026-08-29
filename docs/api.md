@@ -13,8 +13,7 @@ Auth is `Authorization: Bearer <token>`, either a session token or an API token.
 what lets a plain `<img src>` or a browser download work. WebDAV uses HTTP Basic instead,
 with an API token as the password.
 
-An interactive reference generated from `apps/api/modules/docs/openapi.yaml` is served at
-`/docs`, with the raw spec at `/docs/openapi.yaml`.
+An interactive reference powered by Scalar is served at `/docs`, with the OpenAPI 3.1 schema at `/docs/openapi.json`.
 
 ## Health and docs
 
@@ -23,7 +22,7 @@ An interactive reference generated from `apps/api/modules/docs/openapi.yaml` is 
 | GET | `/health` | public |
 | GET | `/ready` | public |
 | GET | `/docs` | public |
-| GET | `/docs/openapi.yaml` | public |
+| GET | `/docs/openapi.json` | public |
 | GET | `/avatars/*` | public |
 
 `/ready` pings Postgres and MinIO with a 2-second budget and answers `503` with

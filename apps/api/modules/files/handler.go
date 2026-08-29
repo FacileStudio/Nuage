@@ -2,15 +2,13 @@ package files
 
 import (
 	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/httpfile"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
 
@@ -174,12 +172,8 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	w.Header().Set("Content-Type", record.MimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(record.Name)))
-	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
-	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, reader); err != nil {
-		slog.Error("file stream interrupted", slog.Int64("file_id", record.ID), slog.Any("error", err))
+	if err := httpfile.Serve(w, r, record, reader); err != nil {
+		httpjson.WriteError(w, err)
 	}
 }
 
@@ -258,13 +252,9 @@ func (h *Handler) presignedDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	w.Header().Set("Content-Type", record.MimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(record.Name)))
-	w.Header().Set("Content-Length", strconv.FormatInt(record.Size, 10))
 	w.Header().Set("Cache-Control", "private, no-store")
-	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, reader); err != nil {
-		slog.Error("presigned stream interrupted", slog.Any("error", err))
+	if err := httpfile.Serve(w, r, record, reader); err != nil {
+		httpjson.WriteError(w, err)
 	}
 }
 
