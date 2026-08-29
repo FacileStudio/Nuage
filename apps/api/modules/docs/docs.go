@@ -770,6 +770,14 @@ func Reference() apiref.Config {
 							PathParams: []Field{{Name: "id", Type: "string", Description: "Space ID"}, {Name: "memberId", Type: "string", Description: "Member ID"}},
 							Status:     http.StatusNoContent,
 						},
+						{
+							Method:     "POST",
+							Path:       "/spaces/{id}/leave",
+							Summary:    "Leave a space",
+							Auth:       "bearer",
+							PathParams: []Field{{Name: "id", Type: "string", Description: "Space ID"}},
+							Status:     http.StatusNoContent,
+						},
 					},
 				},
 				{

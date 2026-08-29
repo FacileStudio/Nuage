@@ -77,6 +77,7 @@ func TestRegistryIsComplete(t *testing.T) {
 		"/settings/test-nook",
 		"/trash/{type}/{id}/restore",
 		"/users/me/avatar",
+		"/spaces/{id}/leave",
 	); len(issues) > 0 {
 		t.Errorf("incomplete documentation routes: %v", issues)
 	}

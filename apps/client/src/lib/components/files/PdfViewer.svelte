@@ -386,6 +386,10 @@
 
 	function onPointerDown(event: PointerEvent) {
 		if (loading) return;
+		/* A release the browser never reports leaves a phantom finger in the map, and the next
+		   real touch then reads as a pinch. The primary pointer starts every gesture, so it is
+		   the one place a reset is always safe. */
+		if (event.isPrimary) pointers.clear();
 		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 		if (pointers.size === 2) {
 			startPinch();
@@ -521,10 +525,7 @@
 				>
 					<iconify-icon icon={icons.chevronLeft} width="20" height="20"></iconify-icon>
 				</IconButton>
-				<span
-					aria-live="polite"
-					class="min-w-14 shrink-0 text-center text-fc-xs tabular-nums"
-				>
+				<span aria-live="polite" class="min-w-14 shrink-0 text-center text-fc-xs tabular-nums">
 					{pageNum} / {totalPages}
 				</span>
 				<IconButton
@@ -550,9 +551,7 @@
 				>
 					<iconify-icon icon={icons.minus} width="18" height="18"></iconify-icon>
 				</IconButton>
-				<span
-					class="hidden min-w-12 shrink-0 text-center text-fc-xs tabular-nums sm:block"
-				>
+				<span class="hidden min-w-12 shrink-0 text-center text-fc-xs tabular-nums sm:block">
 					{Math.round(scale * 100)}%
 				</span>
 				<IconButton
@@ -565,7 +564,12 @@
 				</IconButton>
 
 				<Divider class="mx-1 my-0 h-5 w-px shrink-0 border-t-0 border-l" />
-				<IconButton variant="ghost" onclick={resetFit} aria-label="Fit to width" class="text-fc-fg">
+				<IconButton
+					variant="ghost"
+					onclick={resetFit}
+					aria-label="Fit to width"
+					class="text-fc-fg"
+				>
 					<iconify-icon icon={nuage.fullscreen} width="18" height="18"></iconify-icon>
 				</IconButton>
 			</div>
