@@ -252,13 +252,15 @@ func (s *Service) updateMember(ctx context.Context, userID int64, spaceID int64,
 }
 
 func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64, memberID int64) error {
-	actor, err := s.scope(ctx, spaceID, userID, portespaces.RoleAdmin)
-	if err != nil {
-		return err
-	}
-
 	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockMembers(ctx, tx, spaceID); err != nil {
+			return err
+		}
+
+		locked := spaceaccess.NewGuard(tx)
+
+		actor, err := scopeOn(ctx, locked, spaceID, userID, portespaces.RoleAdmin)
+		if err != nil {
 			return err
 		}
 
@@ -274,7 +276,7 @@ func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64,
 			return errors.Forbidden("admins cannot remove owners or other admins")
 		}
 
-		leave := spaceaccess.NewGuard(tx).CanLeave(ctx, strconv.FormatInt(member.UserID, 10), strconv.FormatInt(spaceID, 10))
+		leave := locked.CanLeave(ctx, strconv.FormatInt(member.UserID, 10), strconv.FormatInt(spaceID, 10))
 		if leave != nil {
 			if stderrors.Is(leave, portespaces.ErrSoleOwner) {
 				return errors.Conflict("cannot remove the last owner; promote another owner first")
@@ -312,7 +314,14 @@ func (s *Service) leaveSpace(ctx context.Context, userID int64, spaceID int64) e
 }
 
 func (s *Service) scope(ctx context.Context, spaceID int64, userID int64, min portespaces.Role) (portespaces.Scope, error) {
-	scope, err := s.guard.Require(ctx, strconv.FormatInt(userID, 10), strconv.FormatInt(spaceID, 10), min)
+	return scopeOn(ctx, s.guard, spaceID, userID, min)
+}
+
+// scopeOn resolves the caller's role through the given guard. Callers that act
+// on the outcome inside a transaction pass a guard built on the transaction
+// handle, so the role is read under the same lock the decision relies on.
+func scopeOn(ctx context.Context, guard portespaces.Guard, spaceID int64, userID int64, min portespaces.Role) (portespaces.Scope, error) {
+	scope, err := guard.Require(ctx, strconv.FormatInt(userID, 10), strconv.FormatInt(spaceID, 10), min)
 	return scope, spaceaccess.Translate(err)
 }
 
@@ -347,11 +356,6 @@ func lockMembers(ctx context.Context, tx *gorm.DB, spaceID int64) error {
 		return errors.Internal("failed to lock space members", err)
 	}
 	return nil
-}
-
-func (s *Service) ResolveSpaceAccess(ctx context.Context, spaceID int64, userID int64) error {
-	_, err := s.getMemberRole(ctx, spaceID, userID)
-	return err
 }
 
 func mapSpaceWithRole(space schemas.Space, role string) SpaceResponse {
