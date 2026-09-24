@@ -398,6 +398,12 @@
 			<SettingsRow label="Endpoint" description="Sign in with your email and an API token as the password." stacked>
 				<SecretField value={`${page.url.origin}/webdav`} sensitive={false} />
 			</SettingsRow>
+			<SettingsRow label="Space mount" description="Replace <id> with the space's id to mount that space alone." stacked>
+				<SecretField value={`${page.url.origin}/webdav/spaces/<id>`} sensitive={false} />
+			</SettingsRow>
+			<SettingsRow label="Space index" description="Read-only. Lists the spaces you can mount." stacked>
+				<SecretField value={`${page.url.origin}/webdav/spaces/`} sensitive={false} />
+			</SettingsRow>
 		</SettingsSection>
 	{:else if section === 'nook'}
 		<SettingsSection
