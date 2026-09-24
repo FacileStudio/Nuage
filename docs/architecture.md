@@ -18,6 +18,14 @@ because external clients such as Finder depend on that URL, and mounts the built
 bundle last as the catch-all through tronc's `spa` package. Postgres and MinIO are internal —
 they only `expose` their ports on the compose network.
 
+`/webdav` has three shapes. `/webdav/` is the caller's personal tree, and the filesystem
+narrows its queries by `owner_id` or `uploaded_by` plus `space_id IS NULL`, so a space's
+folders never appear there. `/webdav/spaces/` is a read-only index listing one collection per
+space the caller belongs to, named by numeric id, and `/webdav/spaces/{id}/` is a mount
+scoped to that one space with the full method set. The scope is enforced with
+`spaceaccess.Require` on every request, after Basic authentication, and a non-member is
+answered `404` rather than `403` so the URL cannot be used to probe which spaces exist.
+
 Nuage used to be the visible exception to the suite's one-container rule, running a separate
 `adapter-node` SvelteKit server and a strip-prefix middleware. That is gone: the client builds
 with `adapter-static`, there is no SvelteKit server, no `/api/[...path]` proxy and no

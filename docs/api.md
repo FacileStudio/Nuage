@@ -255,12 +255,35 @@ that actually exist, which is the repair path when accounting drifts.
 | Method | Path | Auth |
 |---|---|---|
 | OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, MOVE, COPY, LOCK, UNLOCK | `/webdav/*` | Basic |
+| PROPFIND | `/webdav/spaces/` | Basic |
+| OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, MOVE, COPY, LOCK, UNLOCK | `/webdav/spaces/{id}/` | Basic |
+
+`/webdav/` is the caller's **personal** tree. The filesystem selects folders on `owner_id`
+and files on `uploaded_by`, and adds `space_id IS NULL` to both, so a space's folders never
+surface in the personal listing.
+
+`/webdav/spaces/` is a read-only index: it answers `PROPFIND` with `207` and one collection
+per space the caller is a member of, each named by the space's numeric id, and it accepts no
+writes. `/webdav/spaces/{id}/` is a mount scoped to that single space, with the full method
+set. The `{id}` segment must be numeric: `/webdav/spaces/abc/` is `404`. A
+trailing-slash-less `/webdav/spaces` or `/webdav/spaces/{id}` answers `301` to the slash
+form WebDAV clients expect.
+
+Membership is checked on every request, after authentication and never before, through
+`spaceaccess.Require`. A caller who is not a member of the space gets `404`, not `403`:
+deliberate, so that a mount URL cannot be used to probe which space ids exist. The `spaces`
+segment is reserved, so a personal folder named exactly `spaces` is not reachable over
+WebDAV.
+
+Writes inside a space mount stamp `space_id`, so a file or folder created over WebDAV lands
+in the space instead of outside it. A `MOVE` or `COPY` whose `Destination` header points at a
+different mount, another space or the personal tree, is refused with `502`.
 
 Backed by `golang.org/x/net/webdav` over a custom filesystem that maps the user's files and
 folders onto MinIO. Authentication is HTTP Basic with `WWW-Authenticate: Basic realm="Nuage
 WebDAV"`; the **username is ignored** and the password must be an API token. `PUT` bodies
-are capped at 2 GiB, locking is in-memory, and the whole prefix is exempt from the general
-rate limit.
+are capped at 2 GiB, locks are in-memory and scoped per mount and per user, and the whole
+prefix is exempt from the general rate limit.
 
 ## Errors and rate limits
 

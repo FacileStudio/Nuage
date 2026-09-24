@@ -129,6 +129,9 @@ nuage upgrade        # self-update from GitHub
 - [x] Lock support (in-memory) for Finder write access
 - [x] .DS_Store and resource fork filtering
 - [x] Recursive folder delete via WebDAV
+- [x] Per-space mounts at `/webdav/spaces/{id}/`, membership checked per request
+- [x] Read-only spaces index at `/webdav/spaces/`, one collection per membership
+- [x] `/webdav/` scoped to the personal tree, so space folders no longer leak into the listing
 
 ---
 
