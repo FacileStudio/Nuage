@@ -22,7 +22,7 @@
 		Tabs,
 		toast
 	} from '@facile/muse';
-	import { backend, type ApiToken, type UserProfile } from '$lib/backend';
+	import { backend, type ApiToken, type Space, type UserProfile } from '$lib/backend';
 	import { theme, type ThemePreference } from '$lib/theme.svelte';
 	import { formatDate } from '$lib/format';
 	import { icons, nuage } from '$lib/icons';
@@ -62,6 +62,7 @@
 	let avatarFromSSO = $derived(app.user?.avatar_source === 'oidc');
 
 	let apiTokens = $state<ApiToken[]>([]);
+	let spaces = $state<Space[]>([]);
 	let tokenDrawerOpen = $state(false);
 	let newTokenName = $state('');
 	let createdToken = $state<string | null>(null);
@@ -80,7 +81,7 @@
 
 	onMount(async () => {
 		profileName = app.user?.name ?? '';
-		await Promise.all([loadSettings(), loadApiTokens()]);
+		await Promise.all([loadSettings(), loadApiTokens(), loadSpaces()]);
 	});
 
 	async function loadSettings() {
@@ -101,6 +102,15 @@
 			apiTokens = res.tokens ?? [];
 		} catch {
 			apiTokens = [];
+		}
+	}
+
+	async function loadSpaces() {
+		try {
+			const res = await backend.listSpaces(app.token);
+			spaces = res.spaces ?? [];
+		} catch {
+			spaces = [];
 		}
 	}
 
@@ -395,12 +405,14 @@
 		</SettingsSection>
 
 		<SettingsSection title="WebDAV" description="Mount Nuage in Finder or any WebDAV client.">
-			<SettingsRow label="Endpoint" description="Sign in with your email and an API token as the password." stacked>
+			<SettingsRow label="Personal" description="Sign in with your email and an API token as the password." stacked>
 				<SecretField value={`${page.url.origin}/webdav`} sensitive={false} />
 			</SettingsRow>
-			<SettingsRow label="Space mount" description="Replace <id> with the space's id to mount that space alone." stacked>
-				<SecretField value={`${page.url.origin}/webdav/spaces/<id>`} sensitive={false} />
-			</SettingsRow>
+			{#each spaces as space (space.id)}
+				<SettingsRow label={space.name} description="Mount this space on its own." stacked>
+					<SecretField value={`${page.url.origin}/webdav/spaces/${space.id}`} sensitive={false} />
+				</SettingsRow>
+			{/each}
 			<SettingsRow label="Space index" description="Read-only. Lists the spaces you can mount." stacked>
 				<SecretField value={`${page.url.origin}/webdav/spaces/`} sensitive={false} />
 			</SettingsRow>

@@ -10,6 +10,7 @@
 		Input,
 		SettingsRow,
 		SettingsSection,
+		SecretField,
 		Spinner,
 		Textarea,
 		toast
@@ -119,6 +120,19 @@
 				<Button icon={icons.check} disabled={saving} onclick={saveSettings}>
 					{saving ? 'Saving…' : 'Save changes'}
 				</Button>
+			</SettingsRow>
+		</SettingsSection>
+
+		<SettingsSection
+			title="WebDAV"
+			description="Mount this space on its own in Finder or any WebDAV client."
+		>
+			<SettingsRow
+				label="Mount URL"
+				description="Sign in with your email and an API token as the password."
+				stacked
+			>
+				<SecretField value={`${page.url.origin}/webdav/spaces/${spaceId}`} sensitive={false} />
 			</SettingsRow>
 		</SettingsSection>
 
