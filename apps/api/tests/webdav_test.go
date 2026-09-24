@@ -460,3 +460,59 @@ func TestWebDAVSpacesIndexRedirectsToTrailingSlash(t *testing.T) {
 	require.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
 	assert.Equal(t, "/webdav/spaces/", resp.Header.Get("Location"))
 }
+
+func TestWebDAVSpacesIndexRefusesWrites(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-index-ro@example.com", "password12345")
+
+	req := httptest.NewRequest("PUT", "/webdav/spaces/", strings.NewReader(""))
+	req.SetBasicAuth("user@example.com", token)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	require.GreaterOrEqual(t, w.Result().StatusCode, 400)
+
+	resp := davRequest(ts, "MKCOL", "/webdav/spaces/newspace", token, "")
+	require.GreaterOrEqual(t, resp.StatusCode, 400)
+
+	resp = davRequest(ts, "DELETE", "/webdav/spaces/", token, "")
+	require.GreaterOrEqual(t, resp.StatusCode, 400)
+
+	var folders int64
+	require.NoError(t, ts.db.Model(&schemas.Folder{}).Where("name = ?", "newspace").Count(&folders).Error)
+	assert.Zero(t, folders)
+
+	var files int64
+	require.NoError(t, ts.db.Model(&schemas.File{}).Count(&files).Error)
+	assert.Zero(t, files)
+}
+
+func TestWebDAVSpacesMoveWithinSpaceSucceeds(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-move-within@example.com", "password12345")
+	spaceID := createSpace(t, ts, token, "Move Within")
+	base := davSpaceBase(spaceID)
+
+	req := httptest.NewRequest("PUT", base+"original.txt", strings.NewReader("move me"))
+	req.SetBasicAuth("user@example.com", token)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Result().StatusCode)
+
+	req = httptest.NewRequest("MOVE", base+"original.txt", nil)
+	req.SetBasicAuth("user@example.com", token)
+	req.Header.Set("Destination", base+"renamed.txt")
+	w = httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	require.True(t, w.Result().StatusCode == 201 || w.Result().StatusCode == 204,
+		fmt.Sprintf("expected 201 or 204, got %d", w.Result().StatusCode))
+
+	resp := davRequest(ts, "GET", base+"renamed.txt", token, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, "move me", string(body))
+
+	var record schemas.File
+	require.NoError(t, ts.db.Where("name = ?", "renamed.txt").First(&record).Error)
+	require.NotNil(t, record.SpaceID)
+	assert.Equal(t, spaceID, *record.SpaceID)
+}

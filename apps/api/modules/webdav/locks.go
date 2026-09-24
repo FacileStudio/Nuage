@@ -33,11 +33,14 @@ func (l *lockRegistry) forKey(key string) webdav.LockSystem {
 	return ls
 }
 
-// lockKey namespaces a lock system per mount so tokens never cross mounts.
+// lockKey namespaces a lock system per mount so tokens never cross mounts. A
+// space mount is keyed by the space alone, not by the caller: every member has
+// to share one lock table, or a lock taken by one member would not stop another
+// from overwriting the file it guards.
 func lockKey(userID int64, m mountPath) string {
 	switch m.kind {
 	case mountSpace:
-		return fmt.Sprintf("u%d/s%d", userID, m.spaceID)
+		return fmt.Sprintf("s%d", m.spaceID)
 	case mountIndex:
 		return fmt.Sprintf("u%d/index", userID)
 	default:

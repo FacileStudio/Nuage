@@ -44,6 +44,9 @@ func TestParseMountPath(t *testing.T) {
 		{"space file", "/webdav/spaces/3/a/b.txt", true, mountSpace, 3, "/webdav/spaces/3/"},
 		{"space thirty is not three", "/webdav/spaces/30/x", true, mountSpace, 30, "/webdav/spaces/30/"},
 		{"space non-numeric", "/webdav/spaces/abc", false, 0, 0, ""},
+		{"double slash personal", "/webdav//a.txt", true, mountPersonal, 0, "/webdav"},
+		{"double slash index", "/webdav//spaces", true, mountIndex, 0, "/webdav/spaces/"},
+		{"double slash space", "/webdav//spaces/3/x", true, mountSpace, 3, "/webdav/spaces/3/"},
 		{"outside webdav", "/api/files", false, 0, 0, ""},
 		{"empty", "", false, 0, 0, ""},
 	}
@@ -128,6 +131,30 @@ func TestIndexSpaceID(t *testing.T) {
 	}
 }
 
+func TestLockKey(t *testing.T) {
+	personal := mountPath{kind: mountPersonal}
+	index := mountPath{kind: mountIndex}
+	space3 := mountPath{kind: mountSpace, spaceID: 3}
+	space4 := mountPath{kind: mountSpace, spaceID: 4}
+
+	if lockKey(1, space3) != lockKey(2, space3) {
+		t.Errorf("two members of one space got different lock systems: %q and %q",
+			lockKey(1, space3), lockKey(2, space3))
+	}
+	if lockKey(1, space3) == lockKey(1, space4) {
+		t.Errorf("two spaces share a lock system: %q", lockKey(1, space3))
+	}
+	if lockKey(1, personal) == lockKey(2, personal) {
+		t.Errorf("two users share a personal lock system: %q", lockKey(1, personal))
+	}
+	if lockKey(1, index) == lockKey(2, index) {
+		t.Errorf("two users share an index lock system: %q", lockKey(1, index))
+	}
+	if lockKey(1, space3) == lockKey(1, personal) {
+		t.Errorf("a space and the personal tree share a lock system: %q", lockKey(1, space3))
+	}
+}
+
 func TestDestinationEscapesMount(t *testing.T) {
 	personal := mountPath{kind: mountPersonal, prefix: "/webdav"}
 	index := mountPath{kind: mountIndex, prefix: "/webdav/spaces/"}
@@ -148,6 +175,8 @@ func TestDestinationEscapesMount(t *testing.T) {
 		{"personal within personal", personal, "http://host/webdav/a.txt", false},
 		{"index from space", space30, "http://host/webdav/spaces/", true},
 		{"space from index", index, "http://host/webdav/spaces/3/a.txt", true},
+		{"double slash into spaces folder", personal, "/webdav//spaces/dst.txt", true},
+		{"double slash within space", space3, "/webdav//spaces/3/a.txt", false},
 	}
 
 	for _, tc := range cases {

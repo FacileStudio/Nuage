@@ -54,8 +54,14 @@ func (s *spacesFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 }
 
 // OpenFile opens the index root, listing the caller's spaces as its children. A
-// space entry opens empty: its contents live on the space mount, not here.
-func (s *spacesFS) OpenFile(ctx context.Context, name string, _ int, _ os.FileMode) (webdav.File, error) {
+// space entry opens empty: its contents live on the space mount, not here. Any
+// write flag is refused here rather than in Mkdir and RemoveAll alone, because
+// the library reaches a write through OpenFile and answers an empty-body PUT
+// with 201 before the filesystem's own refusal is ever consulted.
+func (s *spacesFS) OpenFile(ctx context.Context, name string, flag int, _ os.FileMode) (webdav.File, error) {
+	if flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_APPEND) != 0 {
+		return nil, os.ErrPermission
+	}
 	id, err := s.indexTarget(ctx, name)
 	if err != nil {
 		return nil, err

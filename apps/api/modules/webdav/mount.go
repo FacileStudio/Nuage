@@ -38,7 +38,7 @@ type mountPath struct {
 // whole path segments, never a string prefix, so /webdav/spaces/30 is space 30
 // and never space 3 with a remainder of "0".
 func parseMountPath(urlPath string) (mountPath, bool) {
-	segments := strings.Split(strings.Trim(urlPath, "/"), "/")
+	segments := pathSegments(urlPath)
 	if len(segments) == 0 || segments[0] != "webdav" {
 		return mountPath{}, false
 	}
@@ -53,6 +53,20 @@ func parseMountPath(urlPath string) (mountPath, bool) {
 		return mountPath{}, false
 	}
 	return mountPath{kind: mountSpace, spaceID: id, prefix: spacesPrefix + segments[2] + "/"}, true
+}
+
+// pathSegments splits a URL path into its non-empty segments. Dropping empty
+// ones keeps an internal double slash from changing which mount a path
+// addresses, which is how /webdav//spaces/x would otherwise read as personal.
+func pathSegments(urlPath string) []string {
+	raw := strings.Split(strings.Trim(urlPath, "/"), "/")
+	segments := make([]string, 0, len(raw))
+	for _, segment := range raw {
+		if segment != "" {
+			segments = append(segments, segment)
+		}
+	}
+	return segments
 }
 
 // needsTrailingSlashRedirect reports whether a spaces URL is missing the

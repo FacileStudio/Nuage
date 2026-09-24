@@ -263,8 +263,8 @@ and files on `uploaded_by`, and adds `space_id IS NULL` to both, so a space's fo
 surface in the personal listing.
 
 `/webdav/spaces/` is a read-only index: it answers `PROPFIND` with `207` and one collection
-per space the caller is a member of, each named by the space's numeric id, and it accepts no
-writes. `/webdav/spaces/{id}/` is a mount scoped to that single space, with the full method
+per space the caller is a member of, each named by the space's numeric id, and every write
+method is refused. `/webdav/spaces/{id}/` is a mount scoped to that single space, with the full method
 set. The `{id}` segment must be numeric: `/webdav/spaces/abc/` is `404`. A
 trailing-slash-less `/webdav/spaces` or `/webdav/spaces/{id}` answers `301` to the slash
 form WebDAV clients expect.
@@ -282,8 +282,8 @@ different mount, another space or the personal tree, is refused with `502`.
 Backed by `golang.org/x/net/webdav` over a custom filesystem that maps the user's files and
 folders onto MinIO. Authentication is HTTP Basic with `WWW-Authenticate: Basic realm="Nuage
 WebDAV"`; the **username is ignored** and the password must be an API token. `PUT` bodies
-are capped at 2 GiB, locks are in-memory and scoped per mount and per user, and the whole
-prefix is exempt from the general rate limit.
+are capped at 2 GiB, locks are in-memory and scoped per mount, so every member of a space
+shares one lock table for it, and the whole prefix is exempt from the general rate limit.
 
 ## Errors and rate limits
 
