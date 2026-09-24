@@ -2,8 +2,10 @@ package webdav
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
@@ -28,39 +30,99 @@ func init() {
 
 const maxPutBodyBytes = 2 << 30
 
+// davServer serves WebDAV requests for one authenticated caller across the
+// personal tree, the spaces index and the per-space mounts.
+type davServer struct {
+	db      *gorm.DB
+	storage *storage.Client
+	quota   *quota.Service
+	locks   *lockRegistry
+	logger  *slog.Logger
+}
+
 // RegisterRoutes wires the WebDAV handler onto the router, authenticating via
 // Basic credentials.
 func RegisterRoutes(router chi.Router, db *gorm.DB, storageClient *storage.Client, authService *auth.Service, quotaService *quota.Service, logger *slog.Logger) {
-	lockSystem := webdav.NewMemLS()
+	server := &davServer{db: db, storage: storageClient, quota: quotaService, locks: newLockRegistry(), logger: logger}
 
 	router.Route("/webdav", func(r chi.Router) {
 		r.Use(requireBasicAuth(authService))
-		r.HandleFunc("/*", func(w http.ResponseWriter, req *http.Request) {
-			identity, ok := authcontext.IdentityFromContext(req.Context())
-			if !ok {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-			uid, _ := strconv.ParseInt(identity.UserID, 10, 64)
-
-			if req.Method == http.MethodPut {
-				req.Body = http.MaxBytesReader(w, req.Body, maxPutBodyBytes)
-			}
-
-			handler := &webdav.Handler{
-				Prefix:     "/webdav",
-				FileSystem: NewNuageFS(db, storageClient, quotaService, uid),
-				LockSystem: lockSystem,
-				Logger: func(r *http.Request, err error) {
-					if err != nil {
-						logger.Error("webdav", slog.String("method", r.Method),
-							slog.String("path", r.URL.Path), slog.Any("error", err))
-					}
-				},
-			}
-			handler.ServeHTTP(w, req)
-		})
+		r.HandleFunc("/*", server.serve)
 	})
+}
+
+func (s *davServer) serve(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	uid, _ := strconv.ParseInt(identity.UserID, 10, 64)
+
+	mount, ok := parseMountPath(r.URL.Path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if needsTrailingSlashRedirect(r.URL.Path, mount) {
+		http.Redirect(w, r, r.URL.Path+"/", http.StatusMovedPermanently)
+		return
+	}
+
+	fs, key, err := s.mount(r.Context(), uid, mount)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	if r.Method == http.MethodPut {
+		r.Body = http.MaxBytesReader(w, r.Body, maxPutBodyBytes)
+	}
+	if (r.Method == "MOVE" || r.Method == "COPY") && destinationEscapesMount(mount, r.Header.Get("Destination")) {
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		return
+	}
+
+	s.handler(mount, fs, key).ServeHTTP(w, r)
+}
+
+func (s *davServer) mount(ctx context.Context, userID int64, m mountPath) (webdav.FileSystem, string, error) {
+	switch m.kind {
+	case mountIndex:
+		return newSpacesFS(s.db, userID), lockKey(userID, m), nil
+	case mountSpace:
+		sc, err := resolveSpaceScope(ctx, s.db, userID, m.spaceID)
+		if err != nil {
+			return nil, "", err
+		}
+		return NewNuageFS(s.db, s.storage, s.quota, sc), lockKey(userID, m), nil
+	default:
+		return NewNuageFS(s.db, s.storage, s.quota, scope{userID: userID}), lockKey(userID, m), nil
+	}
+}
+
+func (s *davServer) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, os.ErrNotExist) {
+		http.NotFound(w, r)
+		return
+	}
+	s.logger.Error("webdav", slog.String("method", r.Method),
+		slog.String("path", r.URL.Path), slog.Any("error", err))
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+}
+
+func (s *davServer) handler(m mountPath, fs webdav.FileSystem, key string) *webdav.Handler {
+	return &webdav.Handler{
+		Prefix:     m.prefix,
+		FileSystem: fs,
+		LockSystem: s.locks.forKey(key),
+		Logger: func(r *http.Request, err error) {
+			if err != nil {
+				s.logger.Error("webdav", slog.String("method", r.Method),
+					slog.String("path", r.URL.Path), slog.Any("error", err))
+			}
+		},
+	}
 }
 
 // authenticator is the auth service, narrowed to the one thing WebDAV needs.

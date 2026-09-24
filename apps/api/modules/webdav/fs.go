@@ -22,17 +22,17 @@ import (
 )
 
 // NuageFS is a webdav.FileSystem backed by Nuage's database and object store,
-// scoped to a single user.
+// scoped to the personal tree of a user or to one space they belong to.
 type NuageFS struct {
 	db      *gorm.DB
 	storage *storage.Client
 	quota   *quota.Service
-	userID  int64
+	scope   scope
 }
 
-// NewNuageFS builds a webdav.FileSystem for the given user.
-func NewNuageFS(db *gorm.DB, storageClient *storage.Client, quotaService *quota.Service, userID int64) webdav.FileSystem {
-	return &NuageFS{db: db, storage: storageClient, quota: quotaService, userID: userID}
+// NewNuageFS builds a webdav.FileSystem for the given scope.
+func NewNuageFS(db *gorm.DB, storageClient *storage.Client, quotaService *quota.Service, scope scope) webdav.FileSystem {
+	return &NuageFS{db: db, storage: storageClient, quota: quotaService, scope: scope}
 }
 
 func (fs *NuageFS) resolvePath(ctx context.Context, name string) (*schemas.Folder, *schemas.File, error) {
@@ -48,7 +48,7 @@ func (fs *NuageFS) resolvePath(ctx context.Context, name string) (*schemas.Folde
 		isLast := i == len(parts)-1
 
 		var folder schemas.Folder
-		q := fs.db.WithContext(ctx).Where("name = ? AND owner_id = ? AND deleted_at IS NULL", part, fs.userID)
+		q := fs.scope.folders(fs.db.WithContext(ctx)).Where("name = ? AND deleted_at IS NULL", part)
 		if currentFolderID != nil {
 			q = q.Where("parent_id = ?", *currentFolderID)
 		} else {
@@ -65,7 +65,7 @@ func (fs *NuageFS) resolvePath(ctx context.Context, name string) (*schemas.Folde
 
 		if isLast {
 			var file schemas.File
-			fq := fs.db.WithContext(ctx).Where("name = ? AND uploaded_by = ? AND deleted_at IS NULL", part, fs.userID)
+			fq := fs.scope.files(fs.db.WithContext(ctx)).Where("name = ? AND deleted_at IS NULL", part)
 			if currentFolderID != nil {
 				fq = fq.Where("folder_id = ?", *currentFolderID)
 			} else {
@@ -136,7 +136,8 @@ func (fs *NuageFS) Mkdir(ctx context.Context, name string, perm os.FileMode) err
 		FacileID: facile.NewID(),
 		Name:     base,
 		ParentID: parentID,
-		OwnerID:  fs.userID,
+		OwnerID:  fs.scope.userID,
+		SpaceID:  fs.scope.spaceID,
 	}
 	return fs.db.WithContext(ctx).Create(folder).Error
 }
@@ -213,13 +214,13 @@ func (fs *NuageFS) RemoveAll(ctx context.Context, name string) error {
 	now := time.Now()
 
 	if file != nil {
-		if file.UploadedBy != fs.userID {
+		if !fs.scope.ownsFile(file) {
 			return os.ErrPermission
 		}
 		return fs.db.WithContext(ctx).Model(file).Update("deleted_at", now).Error
 	}
 	if folder != nil {
-		if folder.OwnerID != fs.userID {
+		if !fs.scope.ownsFolder(folder) {
 			return os.ErrPermission
 		}
 		return fs.softDeleteRecursive(ctx, folder.ID, now)
@@ -229,15 +230,15 @@ func (fs *NuageFS) RemoveAll(ctx context.Context, name string) error {
 
 func (fs *NuageFS) softDeleteRecursive(ctx context.Context, folderID int64, now time.Time) error {
 	var subfolders []schemas.Folder
-	fs.db.WithContext(ctx).Where("parent_id = ? AND owner_id = ? AND deleted_at IS NULL", folderID, fs.userID).Find(&subfolders)
+	fs.scope.folders(fs.db.WithContext(ctx)).Where("parent_id = ? AND deleted_at IS NULL", folderID).Find(&subfolders)
 	for _, sub := range subfolders {
 		if err := fs.softDeleteRecursive(ctx, sub.ID, now); err != nil {
 			return err
 		}
 	}
 
-	if err := fs.db.WithContext(ctx).Model(&schemas.File{}).
-		Where("folder_id = ? AND uploaded_by = ? AND deleted_at IS NULL", folderID, fs.userID).
+	if err := fs.scope.files(fs.db.WithContext(ctx).Model(&schemas.File{})).
+		Where("folder_id = ? AND deleted_at IS NULL", folderID).
 		Update("deleted_at", now).Error; err != nil {
 		return err
 	}
@@ -256,10 +257,10 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 		return err
 	}
 
-	if file != nil && file.UploadedBy != fs.userID {
+	if file != nil && !fs.scope.ownsFile(file) {
 		return os.ErrPermission
 	}
-	if folder != nil && folder.OwnerID != fs.userID {
+	if folder != nil && !fs.scope.ownsFolder(folder) {
 		return os.ErrPermission
 	}
 
@@ -274,7 +275,7 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 		if parent == nil {
 			return os.ErrNotExist
 		}
-		if parent.OwnerID != fs.userID {
+		if !fs.scope.ownsFolder(parent) {
 			return os.ErrPermission
 		}
 		newParentID = &parent.ID
@@ -302,19 +303,17 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 }
 
 func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath string, content io.ReadSeeker, size int64) error {
+	parent, _, err := fs.resolvePath(ctx, parentPath)
+	if err != nil {
+		return err
+	}
 	var folderID *int64
-	if parentPath != "/" && parentPath != "." && parentPath != "" {
-		parent, _, err := fs.resolvePath(ctx, parentPath)
-		if err != nil {
-			return err
-		}
-		if parent != nil {
-			folderID = &parent.ID
-		}
+	if parent != nil {
+		folderID = &parent.ID
 	}
 
 	if fs.quota != nil {
-		if err := fs.quota.CheckQuota(ctx, fs.userID, size); err != nil {
+		if err := fs.quota.CheckQuota(ctx, fs.scope.userID, size); err != nil {
 			return err
 		}
 	}
@@ -325,7 +324,7 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 	}
 
 	fid := facile.NewID()
-	bucketKey := fmt.Sprintf("%d/%s/%s", fs.userID, fid, name)
+	bucketKey := fmt.Sprintf("%d/%s/%s", fs.scope.userID, fid, name)
 
 	hasher := sha256.New()
 	tee := io.TeeReader(content, hasher)
@@ -341,26 +340,27 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 		Hash:       hex.EncodeToString(hasher.Sum(nil)),
 		BucketKey:  bucketKey,
 		FolderID:   folderID,
-		UploadedBy: fs.userID,
+		UploadedBy: fs.scope.userID,
+		SpaceID:    fs.scope.spaceID,
 	}
 	if err := fs.db.WithContext(ctx).Create(record).Error; err != nil {
 		_ = fs.storage.DeleteObject(ctx, bucketKey)
 		return err
 	}
 	if fs.quota != nil {
-		fs.quota.UpdateUsage(ctx, fs.userID, size)
+		fs.quota.UpdateUsage(ctx, fs.scope.userID, size)
 	}
 	return nil
 }
 
 func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, content io.ReadSeeker, size int64) error {
-	if file.UploadedBy != fs.userID {
+	if !fs.scope.ownsFile(file) {
 		return os.ErrPermission
 	}
 
 	if fs.quota != nil {
 		if delta := size - file.Size; delta > 0 {
-			if err := fs.quota.CheckQuota(ctx, fs.userID, delta); err != nil {
+			if err := fs.quota.CheckQuota(ctx, fs.scope.userID, delta); err != nil {
 				return err
 			}
 		}
@@ -385,7 +385,7 @@ func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, conten
 		return err
 	}
 	if fs.quota != nil {
-		fs.quota.UpdateUsage(ctx, fs.userID, size-file.Size)
+		fs.quota.UpdateUsage(ctx, fs.scope.userID, size-file.Size)
 	}
 	return nil
 }

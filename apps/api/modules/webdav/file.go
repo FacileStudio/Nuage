@@ -49,7 +49,7 @@ func (d *VirtualDir) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error
 func (d *VirtualDir) Readdir(count int) ([]os.FileInfo, error) {
 	if d.children == nil {
 		var folders []schemas.Folder
-		fq := d.fs.db.WithContext(d.ctx).Where("owner_id = ? AND deleted_at IS NULL", d.fs.userID).Order("name asc")
+		fq := d.fs.scope.folders(d.fs.db.WithContext(d.ctx)).Where("deleted_at IS NULL").Order("name asc")
 		if d.folderID != nil {
 			fq = fq.Where("parent_id = ?", *d.folderID)
 		} else {
@@ -58,7 +58,7 @@ func (d *VirtualDir) Readdir(count int) ([]os.FileInfo, error) {
 		fq.Find(&folders)
 
 		var files []schemas.File
-		ffq := d.fs.db.WithContext(d.ctx).Where("uploaded_by = ? AND deleted_at IS NULL", d.fs.userID).Order("name asc")
+		ffq := d.fs.scope.files(d.fs.db.WithContext(d.ctx)).Where("deleted_at IS NULL").Order("name asc")
 		if d.folderID != nil {
 			ffq = ffq.Where("folder_id = ?", *d.folderID)
 		} else {

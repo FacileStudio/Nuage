@@ -280,3 +280,183 @@ func TestWebDAVDSStoreIgnored(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	assert.NotContains(t, string(body), ".DS_Store")
 }
+
+func davSpaceBase(id int64) string {
+	return fmt.Sprintf("/webdav/spaces/%d/", id)
+}
+
+func TestWebDAVSpacesPropfindListsMemberSpaces(t *testing.T) {
+	ts := setupTestServer(t)
+	_, owner := registerUser(ts, "dav-space-list@example.com", "password12345")
+	_, foreign := registerUser(ts, "dav-space-list-other@example.com", "password12345")
+
+	memberSpace := createSpace(t, ts, owner, "Member Space")
+	foreignSpace := createSpace(t, ts, foreign, "Foreign Space")
+
+	resp := davRequest(ts, "PROPFIND", "/webdav/spaces/", owner, "")
+	require.Equal(t, 207, resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+	assert.Contains(t, string(body), fmt.Sprintf("/webdav/spaces/%d", memberSpace))
+	assert.NotContains(t, string(body), fmt.Sprintf("/webdav/spaces/%d", foreignSpace))
+}
+
+func TestWebDAVSpacesPropfindMemberMount(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-mount@example.com", "password12345")
+	spaceID := createSpace(t, ts, token, "Mount Space")
+
+	resp := davRequest(ts, "PROPFIND", davSpaceBase(spaceID), token, "")
+	assert.Equal(t, 207, resp.StatusCode)
+}
+
+func TestWebDAVSpacesPropfindNonMemberIsNotFound(t *testing.T) {
+	ts := setupTestServer(t)
+	_, owner := registerUser(ts, "dav-space-closed@example.com", "password12345")
+	_, outsider := registerUser(ts, "dav-space-outsider@example.com", "password12345")
+	spaceID := createSpace(t, ts, owner, "Closed Space")
+
+	resp := davRequest(ts, "PROPFIND", davSpaceBase(spaceID), outsider, "")
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.NotEqual(t, http.StatusForbidden, resp.StatusCode)
+}
+
+func TestWebDAVSpacesNonNumericSegmentIsNotFound(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-junkid@example.com", "password12345")
+
+	resp := davRequest(ts, "PROPFIND", "/webdav/spaces/abc/", token, "")
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestWebDAVSpacesPutStampsSpaceID(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-put@example.com", "password12345")
+	spaceID := createSpace(t, ts, token, "Upload Space")
+
+	resp := davRequest(ts, "PUT", davSpaceBase(spaceID)+"note.txt", token, "space note")
+	require.Equal(t, 201, resp.StatusCode)
+
+	getResp := davRequest(ts, "GET", davSpaceBase(spaceID)+"note.txt", token, "")
+	require.Equal(t, http.StatusOK, getResp.StatusCode)
+	body, _ := io.ReadAll(getResp.Body)
+	assert.Equal(t, "space note", string(body))
+
+	var file schemas.File
+	require.NoError(t, ts.db.Where("name = ?", "note.txt").First(&file).Error)
+	require.NotNil(t, file.SpaceID, "a space mount upload must stamp space_id")
+	assert.Equal(t, spaceID, *file.SpaceID)
+}
+
+func TestWebDAVSpacesMkcolStampsSpaceID(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-mkcol@example.com", "password12345")
+	spaceID := createSpace(t, ts, token, "Folder Space")
+
+	resp := davRequest(ts, "MKCOL", davSpaceBase(spaceID)+"sub", token, "")
+	require.Equal(t, 201, resp.StatusCode)
+
+	var folder schemas.Folder
+	require.NoError(t, ts.db.Where("name = ?", "sub").First(&folder).Error)
+	require.NotNil(t, folder.SpaceID, "a space mount mkcol must stamp space_id")
+	assert.Equal(t, spaceID, *folder.SpaceID)
+}
+
+func TestWebDAVSpacesAnyMemberCanDelete(t *testing.T) {
+	ts := setupTestServer(t)
+	_, owner := registerUser(ts, "dav-space-ownerdel@example.com", "password12345")
+	memberID, member := registerUser(ts, "dav-space-memberdel@example.com", "password12345")
+
+	spaceID := createSpace(t, ts, owner, "Delete Space")
+	addSpaceMember(t, ts, owner, spaceID, memberID)
+	require.Equal(t, http.StatusCreated, uploadFileToSpace(ts, owner, "owned.bin", "owned", spaceID).StatusCode)
+
+	resp := davRequest(ts, "DELETE", davSpaceBase(spaceID)+"owned.bin", member, "")
+	assert.Equal(t, 204, resp.StatusCode)
+
+	after := davRequest(ts, "GET", davSpaceBase(spaceID)+"owned.bin", member, "")
+	assert.Equal(t, http.StatusNotFound, after.StatusCode)
+}
+
+func TestWebDAVPersonalRootExcludesSpaceFolders(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-leak@example.com", "password12345")
+	spaceID := createSpace(t, ts, token, "Leak Space")
+
+	folderResp := doJSON(ts, "POST", "/folders", map[string]any{"name": "spacefoldersonly", "space_id": spaceID}, token)
+	require.Equal(t, http.StatusCreated, folderResp.StatusCode)
+	require.Equal(t, http.StatusCreated, uploadFileToSpace(ts, token, "spacefileonly.txt", "hidden", spaceID).StatusCode)
+
+	resp := davRequest(ts, "PROPFIND", "/webdav/", token, "")
+	require.Equal(t, 207, resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+	assert.NotContains(t, string(body), "spacefoldersonly")
+	assert.NotContains(t, string(body), "spacefileonly.txt")
+}
+
+func TestWebDAVSpacesMoveAcrossMountsFails(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-move@example.com", "password12345")
+	spaceA := createSpace(t, ts, token, "Move From")
+	spaceB := createSpace(t, ts, token, "Move To")
+	require.Equal(t, http.StatusCreated, uploadFileToSpace(ts, token, "x.txt", "cross mount", spaceA).StatusCode)
+
+	req := httptest.NewRequest("MOVE", davSpaceBase(spaceA)+"x.txt", nil)
+	req.SetBasicAuth("user@example.com", token)
+	req.Header.Set("Destination", davSpaceBase(spaceB)+"x.txt")
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadGateway, w.Result().StatusCode)
+
+	source := davRequest(ts, "GET", davSpaceBase(spaceA)+"x.txt", token, "")
+	require.Equal(t, http.StatusOK, source.StatusCode)
+	body, _ := io.ReadAll(source.Body)
+	assert.Equal(t, "cross mount", string(body))
+
+	assert.Equal(t, http.StatusNotFound, davRequest(ts, "GET", davSpaceBase(spaceB)+"x.txt", token, "").StatusCode)
+
+	var moved int64
+	require.NoError(t, ts.db.Model(&schemas.File{}).Where("space_id = ?", spaceB).Count(&moved).Error)
+	assert.Zero(t, moved, "a refused cross-mount move must create nothing in the destination space")
+}
+
+func TestWebDAVSpacesOptionsRequiresAuth(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-options@example.com", "password12345")
+	spaceID := createSpace(t, ts, token, "Options Space")
+
+	req := httptest.NewRequest("OPTIONS", davSpaceBase(spaceID), nil)
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	resp := w.Result()
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	assert.NotEmpty(t, resp.Header.Get("WWW-Authenticate"))
+}
+
+func TestWebDAVSpacesRedirectsToTrailingSlash(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-space-redirect@example.com", "password12345")
+	spaceID := createSpace(t, ts, token, "Redirect Space")
+
+	req := httptest.NewRequest("PROPFIND", fmt.Sprintf("/webdav/spaces/%d", spaceID), nil)
+	req.SetBasicAuth("user@example.com", token)
+	req.Header.Set("Depth", "1")
+	req.Header.Set("Content-Type", "application/xml")
+	w := httptest.NewRecorder()
+	ts.router.ServeHTTP(w, req)
+	resp := w.Result()
+
+	require.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+	assert.Contains(t, resp.Header.Get("Location"), davSpaceBase(spaceID))
+}
+
+func TestWebDAVSpacesIndexRedirectsToTrailingSlash(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "dav-index-redirect@example.com", "password12345")
+
+	resp := davRequest(ts, "PROPFIND", "/webdav/spaces", token, "")
+	require.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+	assert.Equal(t, "/webdav/spaces/", resp.Header.Get("Location"))
+}
