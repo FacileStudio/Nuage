@@ -131,8 +131,11 @@ boot without one, and why rotating it invalidates every outstanding link.
 and returns `{"session_id","expires_at"}`. Each part is a raw `PUT` body capped at 100 MiB.
 `status` returns the session plus `uploaded_chunks`, each
 `{"part_number","size","hash"}` — which is what makes a resume possible after a network
-drop. `complete` assembles the parts and returns the finished file; `DELETE` aborts and
-discards them.
+drop. `complete` assembles the parts and returns the finished file; it takes an optional
+`{"file_id"}`, and when that names a file the caller owns the bytes are committed as its
+next version instead of a new file, so the file keeps its id, name, folder, share links and
+history — the only way to replace content past the 100 MiB single-request limit without
+creating a duplicate. `DELETE` aborts and discards them.
 
 All `/files/upload` paths are exempt from the general 100/minute rate limit, since one large
 transfer issues hundreds of sequential requests. A background sweeper expires abandoned
