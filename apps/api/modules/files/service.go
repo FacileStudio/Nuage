@@ -43,6 +43,69 @@ func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Noti
 
 const maxDeduplicationAttempts = 1000
 
+// nameLockKey names the advisory lock that serialises name reservations in one
+// folder. Creates in different folders never contend, and a personal create is
+// scoped to its owner because that is what the deduplication filters on.
+func nameLockKey(kind string, ownerID int64, spaceID, parentID *int64) string {
+	scope := fmt.Sprintf("user-%d", ownerID)
+	if spaceID != nil {
+		scope = fmt.Sprintf("space-%d", *spaceID)
+	}
+	parent := "root"
+	if parentID != nil {
+		parent = strconv.FormatInt(*parentID, 10)
+	}
+	return fmt.Sprintf("nuage:name:%s:%s:%s", kind, scope, parent)
+}
+
+// withNameLock runs fn inside a transaction that holds the folder's name lock.
+//
+// The caller deduplicates and inserts within fn, so a name it picked cannot be
+// taken by a concurrent create between the two. The lock is transactional, so it
+// is held for the insert alone and never across the upload that precedes it.
+func (s *Service) withNameLock(ctx context.Context, key string, fn func(tx *gorm.DB) error) error {
+	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key).Error; err != nil {
+			return err
+		}
+		return fn(tx)
+	})
+}
+
+// saveNewFile reserves a name in the file's folder and inserts the record under
+// it, both under that folder's name lock.
+func (s *Service) saveNewFile(ctx context.Context, record *schemas.File, requested string) error {
+	key := nameLockKey("file", record.UploadedBy, record.SpaceID, record.FolderID)
+	return s.withNameLock(ctx, key, func(tx *gorm.DB) error {
+		reserved, err := deduplicateFileName(tx, record.UploadedBy, requested, record.FolderID, record.SpaceID)
+		if err != nil {
+			return err
+		}
+		record.Name = reserved
+		if err := tx.Create(record).Error; err != nil {
+			return errors.Internal("failed to save file record", err)
+		}
+		return nil
+	})
+}
+
+// saveNewFolder reserves a name under the folder's parent and inserts the record
+// under it, both under that parent's name lock.
+func (s *Service) saveNewFolder(ctx context.Context, record *schemas.Folder, requested string) error {
+	key := nameLockKey("folder", record.OwnerID, record.SpaceID, record.ParentID)
+	return s.withNameLock(ctx, key, func(tx *gorm.DB) error {
+		reserved, err := deduplicateFolderName(tx, record.OwnerID, requested, record.ParentID, record.SpaceID)
+		if err != nil {
+			return err
+		}
+		record.Name = reserved
+		if err := tx.Create(record).Error; err != nil {
+			return errors.Internal("failed to create folder", err)
+		}
+		return nil
+	})
+}
+
 // requireWritableFolder rejects writes targeting a folder the caller cannot
 // reach, or one that currently sits in the trash.
 func (s *Service) requireWritableFolder(ctx context.Context, userID int64, folderID int64, spaceID *int64) error {
@@ -64,9 +127,14 @@ func (s *Service) requireWritableFolder(ctx context.Context, userID int64, folde
 	return nil
 }
 
-func (s *Service) deduplicateFileName(ctx context.Context, userID int64, name string, folderID *int64, spaceID *int64) (string, error) {
+// deduplicateFileName returns the first free name for a new file in the folder.
+//
+// It has to run on the transaction that holds the folder's name lock and inserts
+// the row: the check excludes a concurrent create only when nothing can take the
+// name between the check and the insert.
+func deduplicateFileName(db *gorm.DB, userID int64, name string, folderID *int64, spaceID *int64) (string, error) {
 	check := func(candidate string) (bool, error) {
-		query := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("name = ? AND deleted_at IS NULL", candidate)
+		query := db.Model(&schemas.File{}).Where("name = ? AND deleted_at IS NULL", candidate)
 		if spaceID != nil {
 			query = query.Where("space_id = ?", *spaceID)
 		} else {
@@ -112,9 +180,11 @@ func (s *Service) deduplicateFileName(ctx context.Context, userID int64, name st
 	return "", errors.Invalid("too many files with this name")
 }
 
-func (s *Service) deduplicateFolderName(ctx context.Context, userID int64, name string, parentID *int64, spaceID *int64) (string, error) {
+// deduplicateFolderName returns the first free name for a new folder under its
+// parent, under the same lock-and-transaction rule as deduplicateFileName.
+func deduplicateFolderName(db *gorm.DB, userID int64, name string, parentID *int64, spaceID *int64) (string, error) {
 	check := func(candidate string) (bool, error) {
-		query := s.orm.WithContext(ctx).Model(&schemas.Folder{}).Where("name = ? AND deleted_at IS NULL", candidate)
+		query := db.Model(&schemas.Folder{}).Where("name = ? AND deleted_at IS NULL", candidate)
 		if spaceID != nil {
 			query = query.Where("space_id = ?", *spaceID)
 		} else {
@@ -183,12 +253,8 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		}
 	}
 
-	name, err := s.deduplicateFileName(ctx, userID, name, folderID, spaceID)
-	if err != nil {
-		return nil, err
-	}
 	facileID := facile.NewID()
-	bucketKey := fmt.Sprintf("%d/%s/%s", userID, facileID, name)
+	bucketKey := fmt.Sprintf("%d/%s", userID, facileID)
 
 	hasher := sha256.New()
 	tee := io.TeeReader(reader, hasher)
@@ -206,7 +272,6 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 
 	record := &schemas.File{
 		FacileID:   facileID,
-		Name:       name,
 		MimeType:   mimeType,
 		Size:       info.Size,
 		Hash:       fileHash,
@@ -217,9 +282,9 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		SpaceID:    spaceID,
 	}
 
-	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {
+	if err := s.saveNewFile(ctx, record, name); err != nil {
 		_ = s.storage.DeleteObject(ctx, bucketKey)
-		return nil, errors.Internal("failed to save file record", err)
+		return nil, err
 	}
 
 	if s.quota != nil {
@@ -419,19 +484,14 @@ func (s *Service) createFolder(ctx context.Context, userID int64, name string, p
 		}
 	}
 
-	name, err := s.deduplicateFolderName(ctx, userID, name, parentID, spaceID)
-	if err != nil {
-		return nil, err
-	}
 	record := &schemas.Folder{
 		FacileID: facile.NewID(),
-		Name:     name,
 		ParentID: parentID,
 		OwnerID:  userID,
 		SpaceID:  spaceID,
 	}
-	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {
-		return nil, errors.Internal("failed to create folder", err)
+	if err := s.saveNewFolder(ctx, record, name); err != nil {
+		return nil, err
 	}
 
 	s.notifier.Notify(ctx, userID, "folder.created", nook.EventData{

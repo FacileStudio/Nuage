@@ -193,13 +193,13 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		}
 	}
 
-	target, name, err := s.uploadTarget(ctx, userID, &session, targetFileID)
+	target, err := s.uploadTarget(ctx, userID, targetFileID)
 	if err != nil {
 		s.releaseSessionClaim(sessionID)
 		return nil, err
 	}
 	fileID := facile.NewID()
-	bucketKey := fmt.Sprintf("%d/%s/%s", userID, fileID, name)
+	bucketKey := fmt.Sprintf("%d/%s", userID, fileID)
 
 	fileHash, err := s.storage.AssembleChunks(ctx, bucketKey, chunkKeys, totalSize, session.MimeType)
 	if err != nil {
@@ -220,7 +220,6 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 
 	record := &schemas.File{
 		FacileID:   fileID,
-		Name:       name,
 		MimeType:   session.MimeType,
 		Size:       info.Size,
 		Hash:       fileHash,
@@ -231,10 +230,10 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		SpaceID:    session.SpaceID,
 	}
 
-	if err := s.orm.WithContext(ctx).Create(record).Error; err != nil {
+	if err := s.saveNewFile(ctx, record, session.FileName); err != nil {
 		_ = s.storage.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
-		return nil, errors.Internal("failed to save file record", err)
+		return nil, err
 	}
 
 	s.finishSession(ctx, sessionID)
@@ -257,18 +256,15 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	return record, nil
 }
 
-// uploadTarget resolves what a completed session writes and under which name.
+// uploadTarget resolves the existing file a completed session replaces, or nil
+// when the bytes become a new file.
 //
 // A session that names an existing file replaces that file's content and keeps
-// its name, folder, id and history. One that names nothing becomes a new file,
-// which is where the folder's other names have to be avoided.
-func (s *Service) uploadTarget(ctx context.Context, userID int64, session *schemas.UploadSession, targetFileID *int64) (*schemas.File, string, error) {
+// its name, folder, id and history. One that names nothing is named by the
+// caller, under the folder's name lock, when the record is inserted.
+func (s *Service) uploadTarget(ctx context.Context, userID int64, targetFileID *int64) (*schemas.File, error) {
 	if targetFileID == nil {
-		name, err := s.deduplicateFileName(ctx, userID, session.FileName, session.FolderID, session.SpaceID)
-		if err != nil {
-			return nil, "", err
-		}
-		return nil, name, nil
+		return nil, nil
 	}
 
 	var record schemas.File
@@ -276,11 +272,11 @@ func (s *Service) uploadTarget(ctx context.Context, userID int64, session *schem
 		Where("id = ? AND uploaded_by = ? AND deleted_at IS NULL", *targetFileID, userID).
 		First(&record).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, "", errors.NotFound("file not found")
+			return nil, errors.NotFound("file not found")
 		}
-		return nil, "", errors.Internal("failed to read the file being updated", err)
+		return nil, errors.Internal("failed to read the file being updated", err)
 	}
-	return &record, record.Name, nil
+	return &record, nil
 }
 
 // finishVersionedUpload commits assembled bytes into an existing file and closes
