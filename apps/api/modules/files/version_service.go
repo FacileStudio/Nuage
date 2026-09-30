@@ -60,46 +60,7 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 		return nil, errors.Internal("failed to stat new version", err)
 	}
 
-	oldSize := record.Size
-	txErr := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var current schemas.File
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&current).Error; err != nil {
-			return errors.Internal("failed to lock file record", err)
-		}
-
-		var maxVersion int
-		if err := tx.Model(&schemas.FileVersion{}).
-			Where("file_id = ?", id).
-			Select("COALESCE(MAX(version), 0)").
-			Scan(&maxVersion).Error; err != nil {
-			return errors.Internal("failed to determine next version", err)
-		}
-
-		version := &schemas.FileVersion{
-			FileID:    current.ID,
-			Version:   maxVersion + 1,
-			BucketKey: current.BucketKey,
-			Hash:      current.Hash,
-			Size:      current.Size,
-			CreatedBy: userID,
-		}
-		if err := tx.Create(version).Error; err != nil {
-			return errors.Internal("failed to create version record", err)
-		}
-
-		oldSize = current.Size
-		updates := map[string]any{
-			"bucket_key": newBucketKey,
-			"hash":       fileHash,
-			"size":       info.Size,
-			"mime_type":  mimeType,
-			"updated_at": time.Now(),
-		}
-		if err := tx.Model(&schemas.File{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-			return errors.Internal("failed to update file record", err)
-		}
-		return nil
-	})
+	oldSize, txErr := s.writeVersion(ctx, userID, id, newBucketKey, fileHash, mimeType, info.Size)
 	if txErr != nil {
 		_ = s.storage.DeleteObject(ctx, newBucketKey)
 		return nil, txErr
@@ -130,6 +91,71 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 	}
 
 	return &record, nil
+}
+
+// writeVersion makes bucketKey the content of an existing file, keeping the
+// bytes currently stored as the next version. It returns the size the file had
+// before, which is what the caller settles against the quota.
+func (s *Service) writeVersion(ctx context.Context, userID int64, fileID int64, bucketKey, fileHash, mimeType string, size int64) (int64, error) {
+	var oldSize int64
+	txErr := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var current schemas.File
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fileID).First(&current).Error; err != nil {
+			return errors.Internal("failed to lock file record", err)
+		}
+
+		var maxVersion int
+		if err := tx.Model(&schemas.FileVersion{}).
+			Where("file_id = ?", fileID).
+			Select("COALESCE(MAX(version), 0)").
+			Scan(&maxVersion).Error; err != nil {
+			return errors.Internal("failed to determine next version", err)
+		}
+
+		version := &schemas.FileVersion{
+			FileID:    current.ID,
+			Version:   maxVersion + 1,
+			BucketKey: current.BucketKey,
+			Hash:      current.Hash,
+			Size:      current.Size,
+			CreatedBy: userID,
+		}
+		if err := tx.Create(version).Error; err != nil {
+			return errors.Internal("failed to create version record", err)
+		}
+
+		oldSize = current.Size
+		updates := map[string]any{
+			"bucket_key": bucketKey,
+			"hash":       fileHash,
+			"size":       size,
+			"mime_type":  mimeType,
+			"updated_at": time.Now(),
+		}
+		if err := tx.Model(&schemas.File{}).Where("id = ?", fileID).Updates(updates).Error; err != nil {
+			return errors.Internal("failed to update file record", err)
+		}
+		return nil
+	})
+	if txErr != nil {
+		return 0, txErr
+	}
+	return oldSize, nil
+}
+
+// commitUploadedVersion makes an already-stored object the content of a file and
+// settles the quota for the difference in size.
+func (s *Service) commitUploadedVersion(ctx context.Context, userID int64, fileID int64, bucketKey, fileHash, mimeType string, size int64) error {
+	oldSize, err := s.writeVersion(ctx, userID, fileID, bucketKey, fileHash, mimeType, size)
+	if err != nil {
+		return err
+	}
+	if s.quota != nil {
+		if delta := size - oldSize; delta != 0 {
+			s.quota.UpdateUsage(ctx, userID, delta)
+		}
+	}
+	return nil
 }
 
 func (s *Service) listVersions(ctx context.Context, userID int64, fileID string) ([]schemas.FileVersion, error) {

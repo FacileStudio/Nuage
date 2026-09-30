@@ -90,7 +90,15 @@ func (h *Handler) completeUpload(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := chi.URLParam(r, "sessionId")
 
-	record, err := h.service.completeUpload(r.Context(), userID, sessionID)
+	var req CompleteUploadRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := httpjson.DecodeJSON(w, r, &req); err != nil {
+			httpjson.WriteError(w, err)
+			return
+		}
+	}
+
+	record, err := h.service.completeUpload(r.Context(), userID, sessionID, req.FileID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return

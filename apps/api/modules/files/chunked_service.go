@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,8 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -139,7 +142,7 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 	return chunk, nil
 }
 
-func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID string) (*schemas.File, error) {
+func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID string, targetFileID *int64) (*schemas.File, error) {
 	claim := s.orm.WithContext(ctx).Model(&schemas.UploadSession{}).
 		Where("id = ? AND user_id = ? AND status = 'pending' AND expires_at > ?", sessionID, userID, time.Now()).
 		Update("status", "assembling")
@@ -190,7 +193,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		}
 	}
 
-	name, err := s.deduplicateFileName(ctx, userID, session.FileName, session.FolderID, session.SpaceID)
+	target, name, err := s.uploadTarget(ctx, userID, &session, targetFileID)
 	if err != nil {
 		s.releaseSessionClaim(sessionID)
 		return nil, err
@@ -209,6 +212,10 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		_ = s.storage.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
 		return nil, errors.Internal("failed to verify assembled file", err)
+	}
+
+	if target != nil {
+		return s.finishVersionedUpload(ctx, userID, sessionID, target, bucketKey, fileHash, session.MimeType, info.Size)
 	}
 
 	record := &schemas.File{
@@ -230,20 +237,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		return nil, errors.Internal("failed to save file record", err)
 	}
 
-	if err := s.orm.WithContext(ctx).Model(&schemas.UploadSession{}).Where("id = ?", sessionID).Update("status", "completed").Error; err != nil {
-		slog.Warn("chunked: failed to mark session completed", slog.String("session_id", sessionID), slog.Any("error", err))
-	}
-
-	go func() {
-		cleanCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := s.storage.DeletePrefix(cleanCtx, fmt.Sprintf("chunks/%s/", sessionID)); err != nil {
-			slog.Warn("chunked: failed to clean chunks from storage", slog.Any("error", err))
-		}
-		if err := s.orm.WithContext(cleanCtx).Where("session_id = ?", sessionID).Delete(&schemas.UploadChunk{}).Error; err != nil {
-			slog.Warn("chunked: failed to clean chunk records", slog.Any("error", err))
-		}
-	}()
+	s.finishSession(ctx, sessionID)
 
 	if s.quota != nil {
 		s.quota.UpdateUsage(ctx, userID, info.Size)
@@ -261,6 +255,82 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	}
 
 	return record, nil
+}
+
+// uploadTarget resolves what a completed session writes and under which name.
+//
+// A session that names an existing file replaces that file's content and keeps
+// its name, folder, id and history. One that names nothing becomes a new file,
+// which is where the folder's other names have to be avoided.
+func (s *Service) uploadTarget(ctx context.Context, userID int64, session *schemas.UploadSession, targetFileID *int64) (*schemas.File, string, error) {
+	if targetFileID == nil {
+		name, err := s.deduplicateFileName(ctx, userID, session.FileName, session.FolderID, session.SpaceID)
+		if err != nil {
+			return nil, "", err
+		}
+		return nil, name, nil
+	}
+
+	var record schemas.File
+	if err := s.orm.WithContext(ctx).
+		Where("id = ? AND uploaded_by = ? AND deleted_at IS NULL", *targetFileID, userID).
+		First(&record).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, "", errors.NotFound("file not found")
+		}
+		return nil, "", errors.Internal("failed to read the file being updated", err)
+	}
+	return &record, record.Name, nil
+}
+
+// finishVersionedUpload commits assembled bytes into an existing file and closes
+// the session, the way reuploadFile closes a single-request replacement.
+func (s *Service) finishVersionedUpload(ctx context.Context, userID int64, sessionID string, target *schemas.File, bucketKey, fileHash, mimeType string, size int64) (*schemas.File, error) {
+	if err := s.commitUploadedVersion(ctx, userID, target.ID, bucketKey, fileHash, mimeType, size); err != nil {
+		_ = s.storage.DeleteObject(ctx, bucketKey)
+		s.releaseSessionClaim(sessionID)
+		return nil, err
+	}
+
+	s.finishSession(ctx, sessionID)
+	go s.cleanOldVersions(target.ID, userID)
+
+	var record schemas.File
+	if err := s.orm.WithContext(ctx).Where("id = ?", target.ID).First(&record).Error; err != nil {
+		return nil, errors.Internal("failed to read updated file", err)
+	}
+
+	s.notifier.Notify(ctx, userID, "file.versioned", nook.EventData{
+		File: &nook.FileData{ID: record.ID, Name: record.Name, MimeType: record.MimeType, Size: record.Size},
+	})
+
+	if s.activity != nil {
+		s.activity.Log(ctx, activity.Entry{
+			UserID: userID, EventType: "file.versioned", ResourceType: "file",
+			ResourceID: record.ID, ResourceName: record.Name,
+		})
+	}
+
+	return &record, nil
+}
+
+// finishSession marks a completed session and clears its chunks in the
+// background, once its bytes are part of a file.
+func (s *Service) finishSession(ctx context.Context, sessionID string) {
+	if err := s.orm.WithContext(ctx).Model(&schemas.UploadSession{}).Where("id = ?", sessionID).Update("status", "completed").Error; err != nil {
+		slog.Warn("chunked: failed to mark session completed", slog.String("session_id", sessionID), slog.Any("error", err))
+	}
+
+	go func() {
+		cleanCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.storage.DeletePrefix(cleanCtx, fmt.Sprintf("chunks/%s/", sessionID)); err != nil {
+			slog.Warn("chunked: failed to clean chunks from storage", slog.Any("error", err))
+		}
+		if err := s.orm.WithContext(cleanCtx).Where("session_id = ?", sessionID).Delete(&schemas.UploadChunk{}).Error; err != nil {
+			slog.Warn("chunked: failed to clean chunk records", slog.Any("error", err))
+		}
+	}()
 }
 
 func (s *Service) releaseSessionClaim(sessionID string) {

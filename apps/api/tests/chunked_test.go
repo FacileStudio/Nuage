@@ -111,6 +111,91 @@ func TestChunkedUploadComplete(t *testing.T) {
 	assert.Equal(t, full, body)
 }
 
+// A completed session that names an existing file replaces that file's content
+// instead of creating a second one. This is how a sync client updates a file too
+// large for a single request while keeping its id, name, folder, share links and
+// history — and without the name collision that used to rename the update.
+func TestChunkedCompleteReplacesAnExistingFile(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "chunked-version@example.com", "password12345")
+
+	resp := uploadFile(ts, token, "report.bin", "first body", nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var original struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	parseJSON(resp, &original)
+	require.NotZero(t, original.ID)
+
+	content := []byte("second body, and a longer one than before")
+	wantHash := sha256.Sum256(content)
+	sessionID := initSession(t, ts, token, int64(len(content)))
+	require.Equal(t, http.StatusCreated, putChunk(ts, token, sessionID, 1, content).StatusCode)
+
+	resp = doJSON(ts, "POST", fmt.Sprintf("/files/upload/%s/complete", sessionID), map[string]any{"file_id": original.ID}, token)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var result struct {
+		File struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+			Hash string `json:"hash"`
+			Size int64  `json:"size"`
+		} `json:"file"`
+	}
+	parseJSON(resp, &result)
+
+	assert.Equal(t, original.ID, result.File.ID, "the file keeps its id")
+	assert.Equal(t, original.Name, result.File.Name, "the file keeps its name")
+	assert.Equal(t, hex.EncodeToString(wantHash[:]), result.File.Hash)
+	assert.Equal(t, int64(len(content)), result.File.Size)
+
+	var files int64
+	require.NoError(t, ts.db.Model(&schemas.File{}).Where("name = ?", original.Name).Count(&files).Error)
+	assert.Equal(t, int64(1), files, "no second object was created beside it")
+
+	var versions int64
+	require.NoError(t, ts.db.Model(&schemas.FileVersion{}).Where("file_id = ?", original.ID).Count(&versions).Error)
+	assert.Equal(t, int64(1), versions, "the previous content is kept as a version")
+
+	dlResp := doGet(ts, fmt.Sprintf("/files/%d/download", original.ID), token)
+	require.Equal(t, http.StatusOK, dlResp.StatusCode)
+	body, err := io.ReadAll(dlResp.Body)
+	require.NoError(t, err)
+	dlResp.Body.Close()
+	assert.Equal(t, content, body)
+}
+
+// A session that names a file the caller does not own is refused, and the name
+// must not be created as a new file either.
+func TestChunkedCompleteRefusesSomeoneElsesFile(t *testing.T) {
+	ts := setupTestServer(t)
+	_, ownerToken := registerUser(ts, "chunked-owner@example.com", "password12345")
+	_, otherToken := registerUser(ts, "chunked-other@example.com", "password12345")
+
+	resp := uploadFile(ts, ownerToken, "private.bin", "owned content", nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var owned struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &owned)
+
+	content := []byte("stolen content")
+	sessionID := initSession(t, ts, otherToken, int64(len(content)))
+	require.Equal(t, http.StatusCreated, putChunk(ts, otherToken, sessionID, 1, content).StatusCode)
+
+	resp = doJSON(ts, "POST", fmt.Sprintf("/files/upload/%s/complete", sessionID), map[string]any{"file_id": owned.ID}, otherToken)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	dlResp := doGet(ts, fmt.Sprintf("/files/%d/download", owned.ID), ownerToken)
+	require.Equal(t, http.StatusOK, dlResp.StatusCode)
+	body, err := io.ReadAll(dlResp.Body)
+	require.NoError(t, err)
+	dlResp.Body.Close()
+	assert.Equal(t, "owned content", string(body))
+}
+
 func TestChunkedUploadMissingChunk(t *testing.T) {
 	ts := setupTestServer(t)
 	_, token := registerUser(ts, "chunked-hole@example.com", "password12345")

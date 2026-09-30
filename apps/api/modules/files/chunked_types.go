@@ -33,6 +33,15 @@ type SessionStatusResponse struct {
 	ExpiresAt      string          `json:"expires_at"`
 }
 
+// CompleteUploadRequest is the body that finishes a chunked upload.
+//
+// FileID names an existing file the assembled bytes replace as its next version,
+// which keeps its id, name, folder, share links and history. Omitted, the upload
+// becomes a new file.
+type CompleteUploadRequest struct {
+	FileID *int64 `json:"file_id"`
+}
+
 // CompleteUploadResponse is the finished file after completing an upload.
 type CompleteUploadResponse struct {
 	File FileResponse `json:"file"`
