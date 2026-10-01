@@ -17,8 +17,18 @@ RUN go mod download
 
 COPY apps/api ./
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} \
-    go build -trimpath -ldflags="-s -w" -o bin/api .
+# The commit is read from the repository the context was built out of and linked
+# in, so a running container can name the revision it is serving. That is why
+# `.git` is the one thing .dockerignore keeps. -buildvcs=false because the
+# stamp is the answer here, not the toolchain's own guess at a partial checkout.
+COPY .git /repo/.git
+RUN apk add --no-cache git
+
+RUN commit="$(git -C /repo rev-parse --short=12 HEAD 2>/dev/null)"; \
+    ldflags="-s -w"; \
+    [ -z "$commit" ] || ldflags="$ldflags -X github.com/FacileStudio/Nuage/apps/api/internal/version.stamp=$commit"; \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} \
+    go build -trimpath -buildvcs=false -ldflags="$ldflags" -o bin/api .
 
 FROM api-build AS dirs
 RUN mkdir -p /layout/app/data/avatars

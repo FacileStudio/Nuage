@@ -1,7 +1,7 @@
 # Build context for the root Dockerfile is the repo root: it builds the client
 # from apps/client and the API from apps/api into one image, so neither may be
-# excluded here.
-.git
+# excluded here. `.git` stays for the same reason — the API build reads the
+# commit out of it and links it in, so the image can report what it is serving.
 **/.env
 **/.env.*
 !**/.env.example

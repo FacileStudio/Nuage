@@ -19,6 +19,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/internal/tombstone"
+	"github.com/FacileStudio/Nuage/apps/api/internal/version"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/docs"
@@ -41,6 +42,7 @@ import (
 	"github.com/FacileStudio/porte/session"
 	"github.com/FacileStudio/tronc/health"
 	"github.com/FacileStudio/tronc/healthcheck"
+	"github.com/FacileStudio/tronc/httpjson"
 	"github.com/FacileStudio/tronc/httpx"
 	"github.com/FacileStudio/tronc/logger"
 	troncmiddleware "github.com/FacileStudio/tronc/middleware"
@@ -137,6 +139,20 @@ func startTombstonePruner(ctx context.Context, db *gorm.DB, appLogger *slog.Logg
 			}
 		}
 	}()
+}
+
+// registerVersionRoute answers /version and /api/version with the version of
+// the running binary.
+//
+// Both paths, for the reason health.Mount registers both: the public edge may
+// forward only /api/*, and a probe that answers on one and 404s on the other is
+// how a deploy ends up unverifiable.
+func registerVersionRoute(router chi.Router) {
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		httpjson.WriteJSON(w, http.StatusOK, map[string]string{"version": version.String()})
+	}
+	router.Get("/version", handler)
+	router.Get(apiPrefix+"/version", handler)
 }
 
 // run wires the config, database, storage, auth and every module's routes
@@ -262,6 +278,7 @@ func run() int {
 	health.Mount(router, health.DB(sqlDB), func(ctx context.Context) error {
 		return storageClient.EnsureBucket(ctx)
 	})
+	registerVersionRoute(router)
 
 	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 

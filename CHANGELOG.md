@@ -10,6 +10,14 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Added
+
+- **`GET /api/version` names the build the container is serving.** The image build reads
+  the commit out of the repository it was built from and links it in, so a deploy can be
+  asked which revision it is rather than assumed to be the one that was pushed. It answers
+  `{"version":"<commit>"}`, or `dev` for a binary with no stamp — a local `go run`, or a
+  build context that carried no `.git`.
+
 ## [0.1.2] - 2026-10-01
 
 ### Fixed

@@ -8,8 +8,11 @@ Nuage ships one image, built by the root `Dockerfile` with the repo root as cont
 
 1. `oven/bun:1` installs with `--frozen-lockfile` and builds the client with
    `adapter-static`.
-2. `golang:1.25-alpine` downloads the module's dependencies, copies `apps/api`, and builds a
-   static binary with `CGO_ENABLED=0`.
+2. `golang:1.26-alpine` downloads the module's dependencies, copies `apps/api`, and builds a
+   static binary with `CGO_ENABLED=0`. It also reads the commit out of the build context's
+   `.git` and links it in, so `GET /api/version` names the revision the container is
+   serving; `.git` is therefore deliberately absent from `.dockerignore`, and a build
+   context without it still builds and reports `dev`.
 3. The runtime stage copies the binary and the built client, and runs on port `4000`.
 
 There is no client image and no `BODY_SIZE_LIMIT`: with no SvelteKit server in the path,

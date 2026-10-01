@@ -21,6 +21,7 @@ An interactive reference powered by Scalar is served at `/docs`, with the OpenAP
 |---|---|---|
 | GET | `/health` | public |
 | GET | `/ready` | public |
+| GET | `/version` | public |
 | GET | `/docs` | public |
 | GET | `/docs/openapi.json` | public |
 | GET | `/avatars/*` | public |
@@ -28,6 +29,11 @@ An interactive reference powered by Scalar is served at `/docs`, with the OpenAP
 `/ready` pings Postgres and MinIO with a 2-second budget and answers `503` with
 `{"status":"not_ready","reason":"database"}` or `"storage"`. `/avatars/*` is a file server
 over `STORAGE_DIR/avatars` with `Cache-Control: public, max-age=86400, immutable`.
+
+`/version` answers `{"version":"..."}` with the version of the running binary: the commit
+the image was built from, or `dev` when it carries no stamp. All three probes are also
+registered under `/api`, so they answer whether the public edge forwards the whole host or
+only `/api/*`.
 
 ## Auth
 
