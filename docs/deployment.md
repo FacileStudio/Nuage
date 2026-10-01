@@ -6,14 +6,37 @@ How the image is built, what Compose starts, and how Traefik maps one hostname t
 
 Nuage ships one image, built by the root `Dockerfile` with the repo root as context:
 
-1. `oven/bun:1` installs with `--frozen-lockfile` and builds the client with
+1. `oven/bun:1.3.13` installs with `--frozen-lockfile` and builds the client with
    `adapter-static`.
 2. `golang:1.26-alpine` downloads the module's dependencies, copies `apps/api`, and builds a
    static binary with `CGO_ENABLED=0`. It also reads the commit out of the build context's
    `.git` and links it in, so `GET /api/version` names the revision the container is
    serving; `.git` is therefore deliberately absent from `.dockerignore`, and a build
    context without it still builds and reports `dev`.
-3. The runtime stage copies the binary and the built client, and runs on port `4000`.
+3. `gcr.io/distroless/static-debian12:nonroot` receives the binary, the built client and an
+   empty `/app/data`, and runs on port `4000`.
+
+Every base is pinned by tag rather than by floating major, so a rebuild does not quietly
+move onto a new one.
+
+## The container runs as nonroot
+
+The image ends on `USER nonroot:nonroot` (uid 65532). The API is the only thing that writes
+to disk — file bytes go to MinIO, and WebDAV stages large uploads in `/tmp`, which is `1777`
+in the base — and what it writes is `STORAGE_DIR`, so that directory is the whole
+requirement.
+
+In the image `/app/data` is owned by 65532, and a **fresh** volume inherits that. An
+**existing** `api_data` volume does not: it was written by the root container that ran
+before, so avatar uploads fail with a permission error until it is chowned once.
+
+```sh
+docker run --rm -v <project>_api_data:/data alpine chown -R 65532:65532 /data
+```
+
+`docker volume ls` names it — the prefix is the Compose project. Booting is not what breaks:
+`/app/data/avatars` already exists, so the startup `MkdirAll` succeeds either way and the
+failure only shows up the first time somebody changes an avatar.
 
 There is no client image and no `BODY_SIZE_LIMIT`: with no SvelteKit server in the path,
 upload size is bounded by the API and Traefik alone. The healthcheck is the binary's own

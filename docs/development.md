@@ -6,7 +6,7 @@ Local setup, the integration test suite and what it needs, and the checks to run
 
 | Tool | Version | Why |
 |---|---|---|
-| Go | 1.26 | `go 1.26` in `apps/api/go.mod`, pinned in `mise.toml`; the image builds on `golang:1.26-alpine` |
+| Go | 1.26 | `go 1.26` in `apps/api/go.mod`, pinned in `mise.toml`; the image builds on `golang:1.26.8-alpine` |
 | Bun | 1.3 | Client install, dev server, type-check, build, and the client tests |
 | Docker | any recent | Postgres and MinIO, and the full-stack compose run |
 

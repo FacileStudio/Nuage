@@ -18,6 +18,19 @@ tag records what shipped rather than triggering the deploy.
   `{"version":"<commit>"}`, or `dev` for a binary with no stamp — a local `go run`, or a
   build context that carried no `.git`.
 
+### Changed
+
+- **The container runs as `nonroot`, and every base image is pinned by tag**
+  (`oven/bun:1.3.13`, `golang:1.26.8-alpine`, `gcr.io/distroless/static-debian12:nonroot`),
+  so a rebuild no longer moves on its own to whatever the floating tag points at. Nothing
+  in the image needed root: file bytes go to MinIO, WebDAV stages uploads in the base's
+  `1777` `/tmp`, and the only directory the API writes is `STORAGE_DIR`, which the image now
+  hands over already owned by 65532. **An existing `api_data` volume was written by the
+  root container and must be chowned once** — `docker run --rm -v <project>_api_data:/data
+  alpine chown -R 65532:65532 /data` — or avatar uploads fail. Starting is not what breaks:
+  the startup `MkdirAll` finds `avatars` already there and the failure waits for the first
+  avatar change.
+
 ## [0.1.2] - 2026-10-01
 
 ### Fixed
