@@ -14,7 +14,8 @@ Nuage ships one image, built by the root `Dockerfile` with the repo root as cont
    serving; `.git` is therefore deliberately absent from `.dockerignore`, and a build
    context without it still builds and reports `dev`.
 3. `gcr.io/distroless/static-debian12:nonroot` receives the binary, the built client and an
-   empty `/app/data`, and runs on port `4000`.
+   empty `/app/data`, and runs on port `4000`. It carries the same `HEALTHCHECK` as the
+   Compose service, re-executing the binary because the base has no shell to probe with.
 
 Every base is pinned by tag rather than by floating major, so a rebuild does not quietly
 move onto a new one.

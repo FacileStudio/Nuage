@@ -54,4 +54,12 @@ EXPOSE 4000
 # the process either.
 USER nonroot:nonroot
 
+# distroless has no shell, no wget and no curl, so re-executing the binary is the
+# only probe there is — tronc's healthcheck package answers before any
+# configuration is read. docker-compose.yml declares the same probe with the same
+# numbers; carrying it here means any runtime that starts this container gets it,
+# and not only the one that reads that compose file.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/api", "healthcheck"]
+
 ENTRYPOINT ["/api"]
