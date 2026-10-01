@@ -1,18 +1,20 @@
 # Nuage — Development
 
-Local setup, the integration test suite and what it needs, and the checks CI runs.
+Local setup, the integration test suite and what it needs, and the checks to run before pushing.
 
 ## Prerequisites
 
 | Tool | Version | Why |
 |---|---|---|
-| Go | 1.24 | `go 1.24.0` in `apps/api/go.mod`; the image builds on `golang:1.24.9-alpine` |
+| Go | 1.26 | `go 1.26` in `apps/api/go.mod`, pinned in `mise.toml`; the image builds on `golang:1.26-alpine` |
 | Bun | 1.3 | Client install, dev server, type-check, build, and the client tests |
 | Docker | any recent | Postgres and MinIO, and the full-stack compose run |
 
-There is no `mise.toml` and no `scripts/check.sh` in this repo — unlike most of the Go
-family, Nuage's gate is the GitHub Actions workflow, and locally you run the commands
-directly.
+The gate lives in `scripts/check.sh`: gofmt, `go vet` and `go test` over the Go module,
+then the client type-check. `mise run check` is the same run (`mise.toml` also pins the
+Go toolchain); `--go-only` skips the client and `--format` rewrites the Go sources in
+place. `mise run hooks` points `core.hooksPath` at `.githooks`, so that same gate runs
+before every push.
 
 ## Setup
 
@@ -79,8 +81,8 @@ go test ./tests/ -count=1
 ```
 
 When a `TEST_*` variable is missing the suite skips — unless `CI` is set, in which case it
-calls `t.Fatalf` instead. A green CI run can therefore never mean "the infrastructure was
-absent so nothing ran".
+calls `t.Fatalf` instead, so a run that was meant to check something cannot pass by
+doing nothing.
 
 The suite covers auth, authorization, files, folders, chunked uploads, presigned links,
 quota, search, shares, sync, trash, versioning, activity, and WebDAV.
@@ -96,11 +98,15 @@ bun run build     # production build
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on every pull request. It brings up
-a `postgres:16.11-alpine` service container, then starts MinIO with `docker run` rather than
-as a service container — GitHub service containers cannot pass a `command`, and MinIO needs
-`server /data`. It waits on `/minio/health/live`, then runs `go build ./...`,
-`go vet ./...`, and `go test ./tests/ -count=1` with `CI=true`.
+`.github/workflows/filet.yml` runs on pushes to `main` and on every pull request. It runs
+[filet](https://github.com/FacileStudio/filet) at `fail-on: error`, which enforces the
+style, architecture and complexity rules in `filet.yml`; `filet check .` is the same run
+locally, and `filet test .` adds the test runner.
+
+It does **not** bring up Postgres and MinIO, so it never runs the integration suite: a
+green workflow means the rules passed, not that the tests did. The suite is on you, and on
+the pre-push hook once `mise run hooks` has enabled it — `scripts/check.sh` runs it with
+whatever `TEST_*` variables are in your environment, and it skips when they are unset.
 
 ## Conventions
 
@@ -114,9 +120,9 @@ TypeScript, and every API call goes through `src/lib/backend.ts`.
 
 ## Things that will bite you
 
-- **Two Docker build contexts.** `apps/api/Dockerfile` builds from the repo root but only
-  copies `apps/api`; `apps/client/Dockerfile` builds from `apps/client`. Each directory has
-  its own `.dockerignore`.
+- **One Dockerfile, one build context.** The root `Dockerfile` builds the client from
+  `apps/client` and the API from `apps/api` into one image, and its context is the repo
+  root, so the root `.dockerignore` is the only one — and it must not exclude either app.
 - **Rate limits during manual testing.** 100 requests per minute per IP overall, and 10 per
   minute on `/auth/login` and `/auth/register`. Upload and WebDAV paths are exempt.
 - **The sync cursor redelivers.** `server_time` is dated slightly in the past on purpose, so
