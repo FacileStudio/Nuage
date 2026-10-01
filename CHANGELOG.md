@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-01
+
 ### Added
 
 - **`GET /api/version` names the build the container is serving.** The image build reads
