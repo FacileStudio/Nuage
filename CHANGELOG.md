@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-01
+
 ### Fixed
 
 - **A rename or a move that landed on a name the destination folder already
