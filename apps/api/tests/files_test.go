@@ -156,6 +156,87 @@ func TestUpdateFile(t *testing.T) {
 	assert.Equal(t, "new.txt", updated.Name)
 }
 
+// A rename onto a name the folder already holds is a create into that folder as
+// far as names go: the server has to deduplicate it rather than let two files
+// hold one name, which is the key the sync clients match on.
+func TestRenameDeduplicatesAgainstTheFolder(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "rename-dedup@example.com", "password12345")
+
+	uploadFile(ts, token, "one.txt", "first", nil)
+
+	resp := uploadFile(ts, token, "two.txt", "second", nil)
+	var second struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &second)
+
+	rename := doJSON(ts, "PUT", fmt.Sprintf("/files/%d", second.ID), map[string]string{"name": "one.txt"}, token)
+	require.Equal(t, http.StatusOK, rename.StatusCode)
+
+	var renamed struct {
+		Name string `json:"name"`
+	}
+	parseJSON(rename, &renamed)
+	assert.Equal(t, "one (1).txt", renamed.Name)
+}
+
+// A move takes the destination folder's name lock too: landing on a name that
+// folder already holds is deduplicated the same way.
+func TestMoveIntoAFolderDeduplicates(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "move-dedup@example.com", "password12345")
+
+	folderResp := doJSON(ts, "POST", "/folders", map[string]string{"name": "docs"}, token)
+	require.Equal(t, http.StatusCreated, folderResp.StatusCode)
+	var folder struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(folderResp, &folder)
+
+	uploadFile(ts, token, "doc.txt", "already in docs", &folder.ID)
+
+	resp := uploadFile(ts, token, "doc.txt", "at the root", nil)
+	var root struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &root)
+
+	move := doJSON(ts, "PUT", fmt.Sprintf("/files/%d", root.ID), map[string]any{"folder_id": folder.ID}, token)
+	require.Equal(t, http.StatusOK, move.StatusCode)
+
+	var moved struct {
+		Name     string `json:"name"`
+		FolderID *int64 `json:"folder_id"`
+	}
+	parseJSON(move, &moved)
+	assert.Equal(t, "doc (1).txt", moved.Name)
+	require.NotNil(t, moved.FolderID)
+	assert.Equal(t, folder.ID, *moved.FolderID)
+}
+
+// Renaming a file to the name it already holds must not deduplicate against
+// itself.
+func TestRenamingAFileToItsOwnNameIsANoop(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "rename-self@example.com", "password12345")
+
+	resp := uploadFile(ts, token, "solo.txt", "content", nil)
+	var file struct {
+		ID int64 `json:"id"`
+	}
+	parseJSON(resp, &file)
+
+	rename := doJSON(ts, "PUT", fmt.Sprintf("/files/%d", file.ID), map[string]string{"name": "solo.txt"}, token)
+	require.Equal(t, http.StatusOK, rename.StatusCode)
+
+	var renamed struct {
+		Name string `json:"name"`
+	}
+	parseJSON(rename, &renamed)
+	assert.Equal(t, "solo.txt", renamed.Name)
+}
+
 func TestDeleteFile(t *testing.T) {
 	ts := setupTestServer(t)
 	_, token := registerUser(ts, "delete@example.com", "password12345")

@@ -77,7 +77,7 @@ func (s *Service) withNameLock(ctx context.Context, key string, fn func(tx *gorm
 func (s *Service) saveNewFile(ctx context.Context, record *schemas.File, requested string) error {
 	key := nameLockKey("file", record.UploadedBy, record.SpaceID, record.FolderID)
 	return s.withNameLock(ctx, key, func(tx *gorm.DB) error {
-		reserved, err := deduplicateFileName(tx, record.UploadedBy, requested, record.FolderID, record.SpaceID)
+		reserved, err := deduplicateFileName(tx, record.UploadedBy, requested, record.FolderID, record.SpaceID, 0)
 		if err != nil {
 			return err
 		}
@@ -127,14 +127,19 @@ func (s *Service) requireWritableFolder(ctx context.Context, userID int64, folde
 	return nil
 }
 
-// deduplicateFileName returns the first free name for a new file in the folder.
+// deduplicateFileName returns the first free name for a file in the folder.
 //
-// It has to run on the transaction that holds the folder's name lock and inserts
+// It has to run on the transaction that holds the folder's name lock and writes
 // the row: the check excludes a concurrent create only when nothing can take the
-// name between the check and the insert.
-func deduplicateFileName(db *gorm.DB, userID int64, name string, folderID *int64, spaceID *int64) (string, error) {
+// name between the check and the write. `excludeID` is the row the caller is
+// about to write — a move or a rename keeps one file, and that file must not
+// collide with the name it already holds. Pass 0 for a create.
+func deduplicateFileName(db *gorm.DB, userID int64, name string, folderID *int64, spaceID *int64, excludeID int64) (string, error) {
 	check := func(candidate string) (bool, error) {
 		query := db.Model(&schemas.File{}).Where("name = ? AND deleted_at IS NULL", candidate)
+		if excludeID > 0 {
+			query = query.Where("id <> ?", excludeID)
+		}
 		if spaceID != nil {
 			query = query.Where("space_id = ?", *spaceID)
 		} else {
@@ -408,13 +413,27 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 		return nil, errors.Invalid("invalid file id")
 	}
 
-	updates := map[string]any{}
-	if name != nil {
-		updates["name"] = *name
+	var current schemas.File
+	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ?", id, userID).First(&current).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.NotFound("file not found")
+		}
+		return nil, errors.Internal("failed to read file", err)
 	}
+
+	if name == nil && folderID == nil {
+		return nil, errors.Invalid("at least one field must be provided")
+	}
+
+	requestedName := current.Name
+	if name != nil {
+		requestedName = *name
+	}
+
+	targetFolder := current.FolderID
 	if folderID != nil {
 		if *folderID == 0 {
-			updates["folder_id"] = nil
+			targetFolder = nil
 		} else {
 			var folder schemas.Folder
 			if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *folderID, userID).First(&folder).Error; err != nil {
@@ -423,20 +442,41 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 				}
 				return nil, errors.Internal("failed to verify folder", err)
 			}
-			updates["folder_id"] = *folderID
+			targetFolder = folderID
 		}
 	}
 
-	if len(updates) == 0 {
-		return nil, errors.Invalid("at least one field must be provided")
-	}
+	// A rename or a move is a create into the destination folder as far as names
+	// are concerned, so it takes that folder's name lock and deduplicates against
+	// it — excluding the row being moved, which is allowed to keep its own name.
+	// Without this, a move could leave two files holding one name in a folder, and
+	// the sync clients, which match by name, would then oscillate.
+	key := nameLockKey("file", current.UploadedBy, current.SpaceID, targetFolder)
+	if err := s.withNameLock(ctx, key, func(tx *gorm.DB) error {
+		reserved, err := deduplicateFileName(tx, current.UploadedBy, requestedName, targetFolder, current.SpaceID, current.ID)
+		if err != nil {
+			return err
+		}
 
-	if err := s.orm.WithContext(ctx).Model(&schemas.File{}).Where("id = ? AND uploaded_by = ?", id, userID).Updates(updates).Error; err != nil {
-		return nil, errors.Internal("failed to update file", err)
+		updates := map[string]any{"name": reserved}
+		if folderID != nil {
+			if targetFolder == nil {
+				updates["folder_id"] = nil
+			} else {
+				updates["folder_id"] = *targetFolder
+			}
+		}
+
+		if err := tx.Model(&schemas.File{}).Where("id = ?", current.ID).Updates(updates).Error; err != nil {
+			return errors.Internal("failed to update file", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	var record schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ?", id, userID).First(&record).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Where("id = ?", current.ID).First(&record).Error; err != nil {
 		return nil, errors.Internal("failed to read file", err)
 	}
 

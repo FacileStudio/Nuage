@@ -10,6 +10,16 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A rename or a move that landed on a name the destination folder already
+  held stored a second file under that name.** The create path deduplicated, but
+  `PUT /files/{id}` wrote the name it was handed, so a client move could leave
+  two files holding one name in a folder — and the sync clients, which match by
+  name, would then oscillate between them. A rename or move now takes the
+  destination folder's name lock and deduplicates against it, excluding the file
+  being moved so it can still keep its own name.
+
 ## [0.1.1] - 2026-09-30
 
 ### Fixed
