@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/porte"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
@@ -20,6 +21,7 @@ import (
 type Authenticator interface {
 	RequireAuth(http.Handler) http.Handler
 	IdentityForUser(ctx context.Context, userID int64) (id string, email string, isAdmin bool, err error)
+	ScopeForSession(ctx context.Context, sessionID int64) (*tokenscope.Scope, error)
 }
 
 // RequireAuth runs porte's middleware and then fills in what porte
@@ -40,6 +42,15 @@ func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 				httpjson.WriteError(w, errors.Unauthorized("missing auth"))
 				return
 			}
+			scope, err := auth.ScopeForSession(request.Context(), authenticated.SessionID)
+			if err != nil {
+				httpjson.WriteError(w, err)
+				return
+			}
+			if scope != nil && !tokenscope.Permits(request.Method, request.URL.Path) {
+				httpjson.WriteError(w, errors.Forbidden("this token cannot call this endpoint"))
+				return
+			}
 			userID, email, isAdmin, err := auth.IdentityForUser(request.Context(), authenticated.UserID)
 			if err != nil {
 				httpjson.WriteError(w, err)
@@ -48,8 +59,11 @@ func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 			authContext := authcontext.WithIdentity(request.Context(), authcontext.Identity{
 				UserID:  userID,
 				Email:   email,
-				IsAdmin: isAdmin,
+				IsAdmin: isAdmin && scope == nil,
 			})
+			if scope != nil {
+				authContext = tokenscope.With(authContext, scope)
+			}
 			next.ServeHTTP(w, request.WithContext(authContext))
 		})
 	}

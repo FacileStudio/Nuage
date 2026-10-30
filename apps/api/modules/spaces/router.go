@@ -15,6 +15,7 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Use(middleware.RequireAuth(authService))
 
 		r.Post("/", handler.create)
+		r.Put("/by-facile-id/{facileId}", handler.ensure)
 		r.Get("/", handler.list)
 		r.Get("/{id}", handler.get)
 		r.Put("/{id}", handler.update)

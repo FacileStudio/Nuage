@@ -18,6 +18,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
@@ -230,6 +231,11 @@ func deduplicateFolderName(db *gorm.DB, userID int64, name string, parentID *int
 }
 
 func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string, spaceID *int64) (*schemas.File, error) {
+	if err := tokenscope.RequireSpace(ctx, spaceID); err != nil {
+		return nil, err
+	}
+	originApp = tokenscope.Origin(ctx, originApp)
+
 	if spaceID != nil {
 		if err := spaceaccess.Require(ctx, s.orm, *spaceID, userID); err != nil {
 			return nil, err
@@ -318,6 +324,9 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 }
 
 func (s *Service) listFiles(ctx context.Context, userID int64, folderID *int64, search string, linkedTo string, originApp string, spaceID *int64) ([]schemas.File, error) {
+	if err := tokenscope.RequireSpace(ctx, spaceID); err != nil {
+		return nil, err
+	}
 	query := s.orm.WithContext(ctx).Where("deleted_at IS NULL").Order("created_at desc")
 	if spaceID != nil {
 		if err := spaceaccess.Require(ctx, s.orm, *spaceID, userID); err != nil {
@@ -361,9 +370,9 @@ func (s *Service) getFile(ctx context.Context, userID int64, fileID string) (*sc
 		return nil, err
 	}
 
-	reach := s.orm.Where("uploaded_by = ? AND space_id IS NULL", userID)
-	if len(spaceIDs) > 0 {
-		reach = reach.Or("space_id IN ?", spaceIDs)
+	reach := s.orm.Where("space_id IN ?", append([]int64{0}, spaceIDs...))
+	if tokenscope.From(ctx) == nil {
+		reach = reach.Or("uploaded_by = ? AND space_id IS NULL", userID)
 	}
 
 	var record schemas.File

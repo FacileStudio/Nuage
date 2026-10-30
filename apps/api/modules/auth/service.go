@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte"
 	"github.com/FacileStudio/porte/local"
@@ -122,6 +123,13 @@ func (service *Service) AuthenticateRequest(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return 0, err
 	}
+	scope, err := service.ScopeForSession(r.Context(), identity.SessionID)
+	if err != nil {
+		return 0, err
+	}
+	if scope != nil {
+		return 0, errors.Forbidden("this token cannot be used here")
+	}
 	return identity.UserID, nil
 }
 
@@ -143,3 +151,38 @@ func (service *Service) VerifyPassword(ctx context.Context, email, password stri
 
 // Sessions exposes the manager for the modules that list or revoke tokens.
 func (service *Service) Sessions() *session.Manager { return service.sessions }
+
+// ScopeForSession returns the restriction attached to a session, or nil when
+// the session is an ordinary login or an unrestricted personal token. The
+// space ids are resolved now, so a space provisioned after the token was
+// minted becomes reachable without touching the token.
+func (service *Service) ScopeForSession(ctx context.Context, sessionID int64) (*tokenscope.Scope, error) {
+	var row schemas.TokenScope
+	err := service.orm.WithContext(ctx).Where("session_id = ?", sessionID).Limit(1).Find(&row).Error
+	if err != nil {
+		return nil, errors.Internal("failed to read the token scope", err)
+	}
+	if row.SessionID == 0 {
+		return nil, nil
+	}
+
+	scope := &tokenscope.Scope{App: row.App, FacileIDs: row.SpaceFacileIDs}
+	if len(row.SpaceFacileIDs) > 0 {
+		err := service.orm.WithContext(ctx).Model(&schemas.Space{}).
+			Where("facile_id IN ?", row.SpaceFacileIDs).
+			Pluck("id", &scope.SpaceIDs).Error
+		if err != nil {
+			return nil, errors.Internal("failed to resolve the token spaces", err)
+		}
+	}
+	return scope, nil
+}
+
+// SaveScope restricts an issued token to the given spaces and stamps its app.
+func (service *Service) SaveScope(ctx context.Context, sessionID int64, app string, spaceFacileIDs []string) error {
+	row := schemas.TokenScope{SessionID: sessionID, App: app, SpaceFacileIDs: spaceFacileIDs}
+	if err := service.orm.WithContext(ctx).Create(&row).Error; err != nil {
+		return errors.Internal("failed to save the token scope", err)
+	}
+	return nil
+}

@@ -5,11 +5,13 @@ import (
 	stderrors "errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	portespaces "github.com/FacileStudio/porte/spaces"
 	"github.com/FacileStudio/tronc/errors"
@@ -69,6 +71,94 @@ func (s *Service) createSpace(ctx context.Context, userID int64, req CreateSpace
 	}
 
 	return space, nil
+}
+
+// ensureSpace finds or creates the space keyed on facileID and reports whether
+// this call created it. The bucket name derives from the id, so a caller never
+// chooses one. The insert is ON CONFLICT DO NOTHING on the unique facile_id
+// index: of any number of concurrent callers exactly one inserts the row and
+// becomes owner, and the others read it back and must already be members.
+func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string, req EnsureSpaceRequest) (*SpaceResponse, bool, error) {
+	if !tokenscope.ValidFacileID(facileID) {
+		return nil, false, errors.Invalid("facile_id must be fac_ followed by 24 hex characters")
+	}
+	if scope := tokenscope.From(ctx); scope != nil && !scope.AllowsFacileID(facileID) {
+		return nil, false, errors.Forbidden("this token cannot access this space")
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, false, errors.Invalid("name is required")
+	}
+
+	existing, err := s.findByFacileID(ctx, facileID)
+	if err != nil {
+		return nil, false, err
+	}
+	if existing != nil {
+		resp, err := s.memberView(ctx, userID, *existing)
+		return resp, false, err
+	}
+
+	bucket := s.storage.For(storage.SpaceBucket(facileID))
+	if err := bucket.EnsureBucket(ctx); err != nil {
+		return nil, false, errors.Internal("failed to create space storage", err)
+	}
+
+	space := schemas.Space{FacileID: facileID, Name: name, Description: req.Description}
+	created := false
+	err = s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "facile_id"}}, DoNothing: true}).Create(&space)
+		if result.Error != nil {
+			return errors.Internal("failed to create space", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+		created = true
+		if err := tx.Create(&schemas.SpaceMember{SpaceID: space.ID, UserID: userID, Role: "owner"}).Error; err != nil {
+			return errors.Internal("failed to add owner to space", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	if created {
+		resp := mapSpaceWithRole(space, "owner")
+		return &resp, true, nil
+	}
+
+	winner, err := s.findByFacileID(ctx, facileID)
+	if err != nil {
+		return nil, false, err
+	}
+	if winner == nil {
+		return nil, false, errors.Internal("failed to read space", stderrors.New("space vanished after conflict"))
+	}
+	resp, err := s.memberView(ctx, userID, *winner)
+	return resp, false, err
+}
+
+func (s *Service) findByFacileID(ctx context.Context, facileID string) (*schemas.Space, error) {
+	var space schemas.Space
+	err := s.orm.WithContext(ctx).Where("facile_id = ?", facileID).Limit(1).Find(&space).Error
+	if err != nil {
+		return nil, errors.Internal("failed to read space", err)
+	}
+	if space.ID == 0 {
+		return nil, nil
+	}
+	return &space, nil
+}
+
+func (s *Service) memberView(ctx context.Context, userID int64, space schemas.Space) (*SpaceResponse, error) {
+	role, err := s.getMemberRole(ctx, space.ID, userID)
+	if err != nil {
+		return nil, err
+	}
+	resp := mapSpaceWithRole(space, role)
+	return &resp, nil
 }
 
 func (s *Service) listSpaces(ctx context.Context, userID int64) ([]SpaceResponse, error) {
@@ -149,6 +239,17 @@ func (s *Service) deleteSpace(ctx context.Context, userID int64, spaceID int64) 
 	}
 
 	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var locked schemas.Space
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("id = ?", spaceID).First(&locked).Error; err != nil {
+			return errors.Internal("failed to lock space", err)
+		}
+		var held int64
+		if err := tx.Model(&schemas.File{}).Where("space_id = ?", spaceID).Count(&held).Error; err != nil {
+			return errors.Internal("failed to count space files", err)
+		}
+		if held > 0 {
+			return errors.Conflict("the space still holds files; delete them or empty the trash first")
+		}
 		if err := tx.Where("space_id = ?", spaceID).Delete(&schemas.SpaceMember{}).Error; err != nil {
 			return errors.Internal("failed to delete space members", err)
 		}

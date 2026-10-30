@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"strconv"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/porte/spaces"
 	"github.com/FacileStudio/tronc/errors"
 
@@ -19,11 +20,15 @@ import (
 // personal scope, which is the caller's own `spaceID == nil` branch and never
 // reaches the guard.
 func Require(ctx context.Context, orm *gorm.DB, spaceID int64, userID int64) error {
+	if err := tokenscope.RequireSpace(ctx, &spaceID); err != nil {
+		return err
+	}
 	_, err := NewGuard(orm).Resolve(ctx, strconv.FormatInt(userID, 10), strconv.FormatInt(spaceID, 10))
 	return Translate(err)
 }
 
-// MemberIDs lists the spaces the user belongs to.
+// MemberIDs lists the spaces the user belongs to, narrowed to the token's
+// spaces when the caller holds a restricted token.
 func MemberIDs(ctx context.Context, orm *gorm.DB, userID int64) ([]int64, error) {
 	members, err := NewGuard(orm).Spaces(ctx, strconv.FormatInt(userID, 10))
 	if err != nil {
@@ -35,6 +40,9 @@ func MemberIDs(ctx context.Context, orm *gorm.DB, userID int64) ([]int64, error)
 		id, err := strconv.ParseInt(member.SpaceID, 10, 64)
 		if err != nil {
 			return nil, errors.Internal("failed to list space memberships", err)
+		}
+		if scope := tokenscope.From(ctx); scope != nil && !scope.AllowsSpace(id) {
+			continue
 		}
 		ids = append(ids, id)
 	}

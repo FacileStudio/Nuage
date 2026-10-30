@@ -48,6 +48,38 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	httpjson.WriteJSON(w, http.StatusCreated, mapSpaceWithRole(*space, "owner"))
 }
 
+func (h *Handler) ensure(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authcontext.IdentityFromContext(r.Context())
+	if !ok {
+		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		return
+	}
+
+	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		return
+	}
+
+	var req EnsureSpaceRequest
+	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	space, created, err := h.service.ensureSpace(r.Context(), userID, chi.URLParam(r, "facileId"), req)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	httpjson.WriteJSON(w, status, space)
+}
+
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {

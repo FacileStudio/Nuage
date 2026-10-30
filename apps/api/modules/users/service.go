@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte"
@@ -32,6 +34,7 @@ type Service struct {
 type Auth interface {
 	Issue(ctx context.Context, userID int64, label string) (string, porte.Session, error)
 	Sessions() *session.Manager
+	SaveScope(ctx context.Context, sessionID int64, app string, spaceFacileIDs []string) error
 	SetPassword(ctx context.Context, userID int64, password string) error
 	ChangePassword(ctx context.Context, w http.ResponseWriter, r *http.Request, userID int64, current, next string) (string, int64, error)
 	VerifyPassword(ctx context.Context, email, password string) (int64, error)
@@ -325,14 +328,43 @@ func mapUser(record schemas.User) *User {
 // there is no second credential table and no second branch in the auth path.
 // porte hands out ids, which is what the delete route already addressed them
 // by.
-func (service *Service) createApiToken(ctx context.Context, userID string, name string) (string, *porte.Session, error) {
+//
+// A token minted with an app label or a list of space facile ids is restricted:
+// it reaches only those spaces, never personal files, and stamps its uploads
+// with the app label. If the scope cannot be saved the token is revoked, so a
+// restricted token never exists unrestricted.
+func (service *Service) createApiToken(ctx context.Context, userID string, req CreateApiTokenRequest) (string, *porte.Session, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return "", nil, errors.Internal("failed to parse user id", err)
 	}
-	rawToken, issued, err := service.tokens.Issue(ctx, id, name)
+	restricted := req.App != "" || len(req.SpaceFacileIDs) > 0
+	if restricted {
+		if req.App == "" || len(req.SpaceFacileIDs) == 0 {
+			return "", nil, errors.Invalid("app and space_facile_ids must be given together")
+		}
+		if !tokenscope.ValidApp(req.App) {
+			return "", nil, errors.Invalid("app must be 1 to 32 characters of a-z, 0-9 and hyphen")
+		}
+		if len(req.SpaceFacileIDs) > tokenscope.MaxScopedSpaces {
+			return "", nil, errors.Invalid(fmt.Sprintf("a token can name at most %d spaces", tokenscope.MaxScopedSpaces))
+		}
+		for _, facileID := range req.SpaceFacileIDs {
+			if !tokenscope.ValidFacileID(facileID) {
+				return "", nil, errors.Invalid("space_facile_ids must be fac_ followed by 24 hex characters")
+			}
+		}
+		req.SpaceFacileIDs = slices.Compact(slices.Sorted(slices.Values(req.SpaceFacileIDs)))
+	}
+	rawToken, issued, err := service.tokens.Issue(ctx, id, req.Name)
 	if err != nil {
 		return "", nil, err
+	}
+	if restricted {
+		if err := service.tokens.SaveScope(ctx, issued.ID, req.App, req.SpaceFacileIDs); err != nil {
+			_ = service.tokens.Sessions().Revoke(ctx, id, issued.ID)
+			return "", nil, err
+		}
 	}
 	return rawToken, &issued, nil
 }

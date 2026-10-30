@@ -62,7 +62,9 @@ type APITokenResponse struct {
 }
 
 type CreateAPITokenRequest struct {
-	Name string `json:"name" validate:"required"`
+	Name           string   `json:"name" validate:"required"`
+	App            string   `json:"app,omitempty"`
+	SpaceFacileIDs []string `json:"space_facile_ids,omitempty"`
 }
 
 type FileResponse struct {
@@ -225,6 +227,11 @@ type SpaceResponse struct {
 
 type CreateSpaceRequest struct {
 	Name string `json:"name" validate:"required"`
+}
+
+type EnsureSpaceRequest struct {
+	Name        string `json:"name" validate:"required"`
+	Description string `json:"description,omitempty"`
 }
 
 type UpdateSpaceRequest struct {
@@ -423,7 +430,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/users/me/api-token",
-							Summary:      "Create a new personal API token",
+							Summary:      "Create a personal API token. With app and space_facile_ids (given together) the token is restricted: it reaches only those spaces through /files and /spaces/by-facile-id, never personal files or other endpoints, and its uploads record app as origin_app.",
 							Auth:         "bearer",
 							RequestBody:  CreateAPITokenRequest{},
 							ResponseBody: APITokenResponse{},
@@ -700,6 +707,16 @@ func Reference() apiref.Config {
 							Summary:      "Create a new space",
 							Auth:         "bearer",
 							RequestBody:  CreateSpaceRequest{},
+							ResponseBody: SpaceResponse{},
+							Status:       http.StatusCreated,
+						},
+						{
+							Method:       "PUT",
+							Path:         "/spaces/by-facile-id/{facileId}",
+							Summary:      "Find or create a space by facile_id (fac_ + 24 hex). Idempotent. The caller becomes owner only when the space is created and the bucket is provisioned; an existing space answers 200 to members and 403 to everyone else. Restricted tokens may only name the facile ids they were minted for.",
+							Auth:         "bearer",
+							PathParams:   []Field{{Name: "facileId", Type: "string", Description: "Space facile_id"}},
+							RequestBody:  EnsureSpaceRequest{},
 							ResponseBody: SpaceResponse{},
 							Status:       http.StatusCreated,
 						},

@@ -250,11 +250,12 @@ func (controller *Controller) createApiToken(context context.Context, req *Creat
 	if !ok {
 		return nil, errors.Unauthorized("missing auth")
 	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		name = "CLI"
+	req.Name = strings.TrimSpace(req.Name)
+	req.App = strings.TrimSpace(req.App)
+	if req.Name == "" {
+		req.Name = "CLI"
 	}
-	rawToken, record, err := controller.service.createApiToken(context, identity.UserID, name)
+	rawToken, record, err := controller.service.createApiToken(context, identity.UserID, *req)
 	if err != nil {
 		return nil, err
 	}

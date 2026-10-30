@@ -14,7 +14,7 @@ import "gorm.io/gorm"
 // tokens and the passwords still move, because they are what keeps people
 // signed in and able to sign in again.
 func AdoptPorte(db *gorm.DB, issuer string) error {
-	statements := []string{porteSchema, carryLegacySessionsOver, carryAPITokensOver, adoptExistingPasswords}
+	statements := []string{porteSchema, tokenScopeSchema, carryLegacySessionsOver, carryAPITokensOver, adoptExistingPasswords}
 	for _, statement := range statements {
 		if err := db.Exec(statement).Error; err != nil {
 			return err

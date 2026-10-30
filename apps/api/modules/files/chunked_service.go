@@ -16,6 +16,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
 
@@ -38,6 +39,11 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 	if req.MimeType == "" {
 		req.MimeType = "application/octet-stream"
 	}
+
+	if err := tokenscope.RequireSpace(ctx, req.SpaceID); err != nil {
+		return nil, err
+	}
+	req.OriginApp = tokenscope.Origin(ctx, req.OriginApp)
 
 	if req.SpaceID != nil {
 		if err := spaceaccess.Require(ctx, s.orm, *req.SpaceID, userID); err != nil {
@@ -79,7 +85,7 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 
 func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID string, partNumber int, reader io.Reader, size int64) (*schemas.UploadChunk, error) {
 	var session schemas.UploadSession
-	if err := s.orm.WithContext(ctx).Where("id = ? AND user_id = ? AND status = 'pending'", sessionID, userID).First(&session).Error; err != nil {
+	if err := scopedSessions(ctx, s.orm.WithContext(ctx)).Where("id = ? AND user_id = ? AND status = 'pending'", sessionID, userID).First(&session).Error; err != nil {
 		return nil, errors.NotFound("upload session not found or already completed")
 	}
 
@@ -145,7 +151,7 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 }
 
 func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID string, targetFileID *int64) (*schemas.File, error) {
-	claim := s.orm.WithContext(ctx).Model(&schemas.UploadSession{}).
+	claim := scopedSessions(ctx, s.orm.WithContext(ctx)).Model(&schemas.UploadSession{}).
 		Where("id = ? AND user_id = ? AND status = 'pending' AND expires_at > ?", sessionID, userID, time.Now()).
 		Update("status", "assembling")
 	if claim.Error != nil {
@@ -284,6 +290,9 @@ func (s *Service) uploadTarget(ctx context.Context, userID int64, targetFileID *
 	if targetFileID == nil {
 		return nil, nil
 	}
+	if tokenscope.From(ctx) != nil {
+		return nil, errors.Forbidden("this token cannot replace an existing file")
+	}
 
 	var record schemas.File
 	if err := s.orm.WithContext(ctx).
@@ -359,7 +368,7 @@ func (s *Service) releaseSessionClaim(sessionID string) {
 
 func (s *Service) getUploadStatus(ctx context.Context, userID int64, sessionID string) (*schemas.UploadSession, []schemas.UploadChunk, error) {
 	var session schemas.UploadSession
-	if err := s.orm.WithContext(ctx).Where("id = ? AND user_id = ?", sessionID, userID).First(&session).Error; err != nil {
+	if err := scopedSessions(ctx, s.orm.WithContext(ctx)).Where("id = ? AND user_id = ?", sessionID, userID).First(&session).Error; err != nil {
 		return nil, nil, errors.NotFound("upload session not found")
 	}
 
@@ -373,7 +382,7 @@ func (s *Service) getUploadStatus(ctx context.Context, userID int64, sessionID s
 
 func (s *Service) abortUpload(ctx context.Context, userID int64, sessionID string) error {
 	var session schemas.UploadSession
-	if err := s.orm.WithContext(ctx).Where("id = ? AND user_id = ? AND status = 'pending'", sessionID, userID).First(&session).Error; err != nil {
+	if err := scopedSessions(ctx, s.orm.WithContext(ctx)).Where("id = ? AND user_id = ? AND status = 'pending'", sessionID, userID).First(&session).Error; err != nil {
 		return errors.NotFound("upload session not found")
 	}
 
@@ -454,4 +463,12 @@ func (s *Service) StartSessionSweeper(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func scopedSessions(ctx context.Context, query *gorm.DB) *gorm.DB {
+	scope := tokenscope.From(ctx)
+	if scope == nil {
+		return query
+	}
+	return query.Where("space_id IN ?", append([]int64{0}, scope.SpaceIDs...))
 }

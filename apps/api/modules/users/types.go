@@ -55,6 +55,12 @@ type ApiTokenListResponse struct {
 }
 
 // CreateApiTokenRequest is the body used to create an API token.
+//
+// App and SpaceFacileIDs restrict the token. Given together, the token reaches
+// only the listed spaces, cannot touch personal files or any other endpoint
+// family, and stamps every upload with App as its origin_app.
 type CreateApiTokenRequest struct {
-	Name string `json:"name"`
+	Name           string   `json:"name"`
+	App            string   `json:"app"`
+	SpaceFacileIDs []string `json:"space_facile_ids"`
 }

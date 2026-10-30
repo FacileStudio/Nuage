@@ -261,8 +261,7 @@ func run() int {
 	searchService := search.NewService(db)
 	spacesService := spaces.NewService(db, storageClient)
 	if err := spacesService.MigrateBuckets(context.Background()); err != nil {
-		appLogger.Error("failed to move space files to their own buckets", slog.Any("error", err))
-		return 1
+		appLogger.Error("failed to move space files to their own buckets; serving with the files still in the shared bucket", slog.Any("error", err))
 	}
 	activityService := activitymod.NewService(db)
 
