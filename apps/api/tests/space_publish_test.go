@@ -77,8 +77,8 @@ func TestProvisionTokenCannotReachForeignSpaces(t *testing.T) {
 
 	plume := mintProvisionToken(t, ts, user, "plume")
 
-	require.Equal(t, http.StatusForbidden, ensureSpace(ts, plume, userSpace.FacileID).StatusCode, "user-created space")
-	require.Equal(t, http.StatusForbidden, ensureSpace(ts, plume, otherSpace.FacileID).StatusCode, "another app's space")
+	require.Equal(t, http.StatusNotFound, ensureSpace(ts, plume, userSpace.FacileID).StatusCode, "user-created space")
+	require.Equal(t, http.StatusNotFound, ensureSpace(ts, plume, otherSpace.FacileID).StatusCode, "another app's space")
 	require.Equal(t, http.StatusForbidden, uploadFileToSpace(ts, plume, "x.txt", "x", userSpaceID).StatusCode)
 	require.Equal(t, http.StatusForbidden, uploadFileToSpace(ts, plume, "x.txt", "x", otherSpaceID).StatusCode)
 	require.Equal(t, http.StatusForbidden, doGet(ts, fmt.Sprintf("/files?space_id=%d", otherSpaceID), plume).StatusCode)

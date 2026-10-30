@@ -8,12 +8,18 @@ type InitUploadRequest struct {
 	FolderID  *int64 `json:"folder_id"`
 	OriginApp string `json:"origin_app"`
 	SpaceID   *int64 `json:"space_id"`
+	LinkedTo  string `json:"linked_to"`
 }
 
 // InitUploadResponse identifies a started chunked-upload session.
+//
+// When a restricted token's linked_to already names a live file of its app in
+// the space, no session is created: the response is 200 with ExistingFile set
+// and the client must not upload any bytes.
 type InitUploadResponse struct {
-	SessionID string `json:"session_id"`
-	ExpiresAt string `json:"expires_at"`
+	SessionID    string        `json:"session_id,omitempty"`
+	ExpiresAt    string        `json:"expires_at,omitempty"`
+	ExistingFile *FileResponse `json:"existing_file,omitempty"`
 }
 
 // ChunkResponse describes one uploaded chunk.

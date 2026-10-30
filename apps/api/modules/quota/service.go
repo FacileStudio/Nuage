@@ -9,6 +9,7 @@ import (
 	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const defaultQuotaBytes int64 = 50 * 1024 * 1024 * 1024
@@ -33,12 +34,18 @@ func (s *Service) getDefaultLimit() int64 {
 	return defaultQuotaBytes
 }
 
+// ensureQuota returns the user's quota row, creating it on first use. The
+// insert ignores a conflict on the primary key, so concurrent first requests
+// for one user all end up reading the same row; a find-then-create would let
+// the losers hit the unique constraint and fail with a 500.
 func (s *Service) ensureQuota(ctx context.Context, userID int64) (*schemas.UserQuota, error) {
+	db := s.orm.WithContext(ctx)
+	insert := db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "user_id"}}, DoNothing: true}).Create(&schemas.UserQuota{UserID: userID})
+	if insert.Error != nil {
+		return nil, errors.Internal("failed to load quota", insert.Error)
+	}
 	var quota schemas.UserQuota
-	if err := s.orm.WithContext(ctx).
-		Where(schemas.UserQuota{UserID: userID}).
-		Attrs(schemas.UserQuota{StorageUsed: 0, StorageLimit: 0}).
-		FirstOrCreate(&quota).Error; err != nil {
+	if err := db.Where("user_id = ?", userID).First(&quota).Error; err != nil {
 		return nil, errors.Internal("failed to load quota", err)
 	}
 	return &quota, nil

@@ -30,9 +30,14 @@ func (h *Handler) initUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.service.initUpload(r.Context(), userID, req)
+	session, existing, err := h.service.initUpload(r.Context(), userID, req)
 	if err != nil {
 		httpjson.WriteError(w, err)
+		return
+	}
+	if existing != nil {
+		file := mapFile(*existing)
+		httpjson.WriteJSON(w, http.StatusOK, InitUploadResponse{ExistingFile: &file})
 		return
 	}
 
@@ -98,13 +103,17 @@ func (h *Handler) completeUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	record, err := h.service.completeUpload(r.Context(), userID, sessionID, req.FileID)
+	record, created, err := h.service.completeUpload(r.Context(), userID, sessionID, req.FileID)
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
 	}
 
-	httpjson.WriteJSON(w, http.StatusCreated, CompleteUploadResponse{
+	status := http.StatusCreated
+	if !created {
+		status = http.StatusOK
+	}
+	httpjson.WriteJSON(w, status, CompleteUploadResponse{
 		File: mapFile(*record),
 	})
 }

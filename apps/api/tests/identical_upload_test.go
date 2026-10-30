@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"sync"
 	"testing"
@@ -63,11 +65,16 @@ func TestConcurrentIdenticalUploadsAreOneFile(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			resp := uploadFile(ts, token, "race.csv", "identical payload", nil)
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			var file struct {
 				ID int64 `json:"id"`
 			}
-			parseJSON(resp, &file)
+			_ = json.Unmarshal(body, &file)
 			ids[i] = file.ID
+			if file.ID == 0 {
+				t.Logf("upload %d: status %d body %s", i, resp.StatusCode, string(body))
+			}
 		}()
 	}
 	wg.Wait()

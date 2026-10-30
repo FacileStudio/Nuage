@@ -96,10 +96,7 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 		return nil, false, err
 	}
 	if existing != nil {
-		if scope != nil && !scope.AllowsExisting(facileID, existing.ProvisionedBy) {
-			return nil, false, errors.Forbidden("this token cannot access this space")
-		}
-		resp, err := s.memberView(ctx, userID, *existing)
+		resp, err := s.existingView(ctx, userID, *existing, scope)
 		return resp, false, err
 	}
 
@@ -143,11 +140,26 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 	if winner == nil {
 		return nil, false, errors.Internal("failed to read space", stderrors.New("space vanished after conflict"))
 	}
-	if scope != nil && !scope.AllowsExisting(facileID, winner.ProvisionedBy) {
-		return nil, false, errors.Forbidden("this token cannot access this space")
-	}
-	resp, err := s.memberView(ctx, userID, *winner)
+	resp, err := s.existingView(ctx, userID, *winner, scope)
 	return resp, false, err
+}
+
+// existingView answers a find-or-create that landed on an existing space. A
+// caller the token or the membership does not allow gets the same 404 as a
+// space that does not exist, so the error never confirms an id is taken.
+func (s *Service) existingView(ctx context.Context, userID int64, space schemas.Space, scope *tokenscope.Scope) (*SpaceResponse, error) {
+	if scope != nil && !scope.AllowsExisting(space.FacileID, space.ProvisionedBy) {
+		return nil, errors.NotFound("space not found")
+	}
+	resolved, err := s.guard.Resolve(ctx, strconv.FormatInt(userID, 10), strconv.FormatInt(space.ID, 10))
+	if stderrors.Is(err, portespaces.ErrNotMember) {
+		return nil, errors.NotFound("space not found")
+	}
+	if err != nil {
+		return nil, spaceaccess.Translate(err)
+	}
+	resp := mapSpaceWithRole(space, string(resolved.Role))
+	return &resp, nil
 }
 
 func (s *Service) findByFacileID(ctx context.Context, facileID string) (*schemas.Space, error) {

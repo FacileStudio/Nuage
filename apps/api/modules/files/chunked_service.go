@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
@@ -29,37 +30,53 @@ const (
 	sessionSweepInterval     = time.Hour
 )
 
-func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRequest) (*schemas.UploadSession, error) {
+// initUpload opens a chunked-upload session. A restricted token that passes
+// LinkedTo publishes idempotently: when its app already holds a live file under
+// that key in the space, that file is returned and no session is created.
+func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRequest) (*schemas.UploadSession, *schemas.File, error) {
 	if req.FileName == "" {
-		return nil, errors.Invalid("file_name is required")
+		return nil, nil, errors.Invalid("file_name is required")
 	}
 	if req.TotalSize <= 0 {
-		return nil, errors.Invalid("total_size must be positive")
+		return nil, nil, errors.Invalid("total_size must be positive")
 	}
 	if req.MimeType == "" {
 		req.MimeType = "application/octet-stream"
 	}
 
 	if err := tokenscope.RequireSpace(ctx, req.SpaceID); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req.OriginApp = tokenscope.Origin(ctx, req.OriginApp)
 
 	if req.SpaceID != nil {
 		if err := spaceaccess.Require(ctx, s.orm, *req.SpaceID, userID); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+	}
+
+	req.LinkedTo = strings.TrimSpace(req.LinkedTo)
+	if tokenscope.From(ctx) != nil && req.LinkedTo != "" {
+		if !validLinkedTo(req.LinkedTo) {
+			return nil, nil, errors.Invalid("linked_to must be printable and at most 200 characters")
+		}
+		existing, err := findPublished(s.orm.WithContext(ctx), *req.SpaceID, req.OriginApp, req.LinkedTo)
+		if err != nil || existing != nil {
+			return nil, existing, err
+		}
+	} else {
+		req.LinkedTo = ""
 	}
 
 	if req.FolderID != nil {
 		if err := s.requireWritableFolder(ctx, userID, *req.FolderID, req.SpaceID); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	if s.quota != nil {
 		if err := s.quota.CheckQuota(ctx, userID, req.TotalSize); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -69,6 +86,7 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 		MimeType:  req.MimeType,
 		FolderID:  req.FolderID,
 		OriginApp: req.OriginApp,
+		LinkedTo:  req.LinkedTo,
 		UserID:    userID,
 		TotalSize: req.TotalSize,
 		SpaceID:   req.SpaceID,
@@ -77,10 +95,10 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 	}
 
 	if err := s.orm.WithContext(ctx).Create(session).Error; err != nil {
-		return nil, errors.Internal("failed to create upload session", err)
+		return nil, nil, errors.Internal("failed to create upload session", err)
 	}
 
-	return session, nil
+	return session, nil, nil
 }
 
 func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID string, partNumber int, reader io.Reader, size int64) (*schemas.UploadChunk, error) {
@@ -150,32 +168,32 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 	return chunk, nil
 }
 
-func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID string, targetFileID *int64) (*schemas.File, error) {
+func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID string, targetFileID *int64) (*schemas.File, bool, error) {
 	claim := scopedSessions(ctx, s.orm.WithContext(ctx)).Model(&schemas.UploadSession{}).
 		Where("id = ? AND user_id = ? AND status = 'pending' AND expires_at > ?", sessionID, userID, time.Now()).
 		Update("status", "assembling")
 	if claim.Error != nil {
-		return nil, errors.Internal("failed to claim upload session", claim.Error)
+		return nil, false, errors.Internal("failed to claim upload session", claim.Error)
 	}
 	if claim.RowsAffected == 0 {
-		return nil, errors.NotFound("upload session not found, expired, or already completed")
+		return nil, false, errors.NotFound("upload session not found, expired, or already completed")
 	}
 
 	var session schemas.UploadSession
 	if err := s.orm.WithContext(ctx).Where("id = ?", sessionID).First(&session).Error; err != nil {
 		s.releaseSessionClaim(sessionID)
-		return nil, errors.Internal("failed to read upload session", err)
+		return nil, false, errors.Internal("failed to read upload session", err)
 	}
 
 	var chunks []schemas.UploadChunk
 	if err := s.orm.WithContext(ctx).Where("session_id = ?", sessionID).Order("part_number asc").Find(&chunks).Error; err != nil {
 		s.releaseSessionClaim(sessionID)
-		return nil, errors.Internal("failed to list chunks", err)
+		return nil, false, errors.Internal("failed to list chunks", err)
 	}
 
 	if len(chunks) == 0 {
 		s.releaseSessionClaim(sessionID)
-		return nil, errors.Failed("no chunks uploaded")
+		return nil, false, errors.Failed("no chunks uploaded")
 	}
 
 	var totalSize int64
@@ -183,7 +201,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	for i, c := range chunks {
 		if c.PartNumber != i+1 {
 			s.releaseSessionClaim(sessionID)
-			return nil, errors.Failed(fmt.Sprintf("missing chunk part %d", i+1))
+			return nil, false, errors.Failed(fmt.Sprintf("missing chunk part %d", i+1))
 		}
 		totalSize += c.Size
 		chunkKeys = append(chunkKeys, c.BucketKey)
@@ -191,25 +209,37 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 
 	if totalSize != session.TotalSize {
 		s.releaseSessionClaim(sessionID)
-		return nil, errors.Failed("uploaded chunks do not match the declared total_size")
+		return nil, false, errors.Failed("uploaded chunks do not match the declared total_size")
+	}
+
+	if session.LinkedTo != "" && session.SpaceID != nil {
+		existing, err := findPublished(s.orm.WithContext(ctx), *session.SpaceID, session.OriginApp, session.LinkedTo)
+		if err != nil {
+			s.releaseSessionClaim(sessionID)
+			return nil, false, err
+		}
+		if existing != nil {
+			s.finishSession(ctx, sessionID)
+			return existing, false, nil
+		}
 	}
 
 	if s.quota != nil {
 		if err := s.quota.CheckQuota(ctx, userID, totalSize); err != nil {
 			s.releaseSessionClaim(sessionID)
-			return nil, err
+			return nil, false, err
 		}
 	}
 
 	target, err := s.uploadTarget(ctx, userID, targetFileID)
 	if err != nil {
 		s.releaseSessionClaim(sessionID)
-		return nil, err
+		return nil, false, err
 	}
 	store, bucket, err := s.uploadStore(ctx, session.SpaceID, target)
 	if err != nil {
 		s.releaseSessionClaim(sessionID)
-		return nil, err
+		return nil, false, err
 	}
 	fileID := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s", userID, fileID)
@@ -217,18 +247,19 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	fileHash, err := store.AssembleChunks(ctx, s.storage, bucketKey, chunkKeys, totalSize, session.MimeType)
 	if err != nil {
 		s.releaseSessionClaim(sessionID)
-		return nil, errors.Internal("failed to assemble file", err)
+		return nil, false, errors.Internal("failed to assemble file", err)
 	}
 
 	info, err := store.StatObject(ctx, bucketKey)
 	if err != nil {
 		_ = store.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
-		return nil, errors.Internal("failed to verify assembled file", err)
+		return nil, false, errors.Internal("failed to verify assembled file", err)
 	}
 
 	if target != nil {
-		return s.finishVersionedUpload(ctx, store, userID, sessionID, target, bucketKey, fileHash, session.MimeType, info.Size)
+		versioned, err := s.finishVersionedUpload(ctx, store, userID, sessionID, target, bucketKey, fileHash, session.MimeType, info.Size)
+		return versioned, err == nil, err
 	}
 
 	record := &schemas.File{
@@ -240,20 +271,30 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		Bucket:     bucket,
 		FolderID:   session.FolderID,
 		OriginApp:  session.OriginApp,
+		LinkedTo:   session.LinkedTo,
 		UploadedBy: userID,
 		SpaceID:    session.SpaceID,
 	}
 
-	identical, err := s.saveNewFile(ctx, record, session.FileName)
+	var existing *schemas.File
+	if session.LinkedTo != "" && session.SpaceID != nil {
+		var created bool
+		existing, created, err = s.savePublished(ctx, record, session.FileName)
+		if created {
+			existing = nil
+		}
+	} else {
+		existing, err = s.saveNewFile(ctx, record, session.FileName)
+	}
 	if err != nil {
 		_ = store.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
-		return nil, err
+		return nil, false, err
 	}
-	if identical != nil {
+	if existing != nil {
 		_ = store.DeleteObject(ctx, bucketKey)
 		s.finishSession(ctx, sessionID)
-		return identical, nil
+		return existing, false, nil
 	}
 
 	s.finishSession(ctx, sessionID)
@@ -273,7 +314,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		})
 	}
 
-	return record, nil
+	return record, true, nil
 }
 
 // uploadStore picks the bucket the assembled bytes land in. A replacement keeps

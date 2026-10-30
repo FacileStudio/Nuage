@@ -120,7 +120,7 @@ func TestEnsureSpaceRefusesANonMember(t *testing.T) {
 	facileID := facile.NewID()
 
 	require.Equal(t, http.StatusCreated, ensureSpace(ts, owner, facileID).StatusCode)
-	require.Equal(t, http.StatusForbidden, ensureSpace(ts, outsider, facileID).StatusCode)
+	require.Equal(t, http.StatusNotFound, ensureSpace(ts, outsider, facileID).StatusCode)
 
 	var members int64
 	require.NoError(t, ts.db.Model(&schemas.SpaceMember{}).Count(&members).Error)

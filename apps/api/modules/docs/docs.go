@@ -122,11 +122,13 @@ type InitChunkedUploadRequest struct {
 	MimeType string `json:"mime_type,omitempty"`
 	FolderID string `json:"folder_id,omitempty"`
 	SpaceID  string `json:"space_id,omitempty"`
+	LinkedTo string `json:"linked_to,omitempty"`
 }
 
 type InitChunkedUploadResponse struct {
-	SessionID string `json:"session_id"`
-	ChunkSize int64  `json:"chunk_size"`
+	SessionID    string `json:"session_id,omitempty"`
+	ChunkSize    int64  `json:"chunk_size,omitempty"`
+	ExistingFile any    `json:"existing_file,omitempty"`
 }
 
 type UploadPartResponse struct {
@@ -462,7 +464,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/files",
-							Summary:      "Upload a single file (multipart). A restricted token may send linked_to (at most 200 printable characters) to publish idempotently: if its app already holds a live file with that linked_to in the space, that file is returned with 200 and nothing is stored; a new file answers 201. Chunked uploads are not idempotent.",
+							Summary:      "Upload a single file (multipart). A restricted token may send linked_to (at most 200 printable characters) to publish idempotently: if its app already holds a live file with that linked_to in the space, that file is returned with 200 and nothing is stored; a new file answers 201. Chunked uploads accept the same linked_to on init.",
 							Auth:         "bearer",
 							ResponseBody: FileResponse{},
 							Status:       http.StatusCreated,
@@ -552,7 +554,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/files/upload/init",
-							Summary:      "Initialize chunked multipart upload session",
+							Summary:      "Initialize chunked multipart upload session. A restricted token may send linked_to: if its app already holds a live file with that key in the space, the response is 200 with existing_file and no session, so a retry never re-uploads. Completing a keyed session returns 200 with the existing file when a concurrent upload won, else 201.",
 							Auth:         "bearer",
 							RequestBody:  InitChunkedUploadRequest{},
 							ResponseBody: InitChunkedUploadResponse{},

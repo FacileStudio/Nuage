@@ -71,13 +71,16 @@ func NewClient(cfg MinIOConfig) (*Client, error) {
 	return &Client{mc: mc, bucket: cfg.Bucket, ensured: &sync.Map{}}, nil
 }
 
+// EnsureBucket creates the bucket when missing. Losing a creation race to a
+// concurrent caller is success, since the bucket exists either way.
 func (c *Client) EnsureBucket(ctx context.Context) error {
 	exists, err := c.mc.BucketExists(ctx, c.bucket)
 	if err != nil {
 		return err
 	}
 	if !exists {
-		if err := c.mc.MakeBucket(ctx, c.bucket, minio.MakeBucketOptions{}); err != nil {
+		err := c.mc.MakeBucket(ctx, c.bucket, minio.MakeBucketOptions{})
+		if code := minio.ToErrorResponse(err).Code; err != nil && code != "BucketAlreadyOwnedByYou" && code != "BucketAlreadyExists" {
 			return err
 		}
 	}
