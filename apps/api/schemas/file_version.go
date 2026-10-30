@@ -8,6 +8,7 @@ type FileVersion struct {
 	FileID    int64     `json:"file_id" gorm:"index;not null"`
 	Version   int       `json:"version" gorm:"not null"`
 	BucketKey string    `json:"-" gorm:"not null"`
+	Bucket    string    `json:"-" gorm:"not null;default:''"`
 	Hash      string    `json:"hash"`
 	Size      int64     `json:"size"`
 	CreatedBy int64     `json:"created_by" gorm:"not null"`

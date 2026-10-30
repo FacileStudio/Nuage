@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
+	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -162,7 +163,7 @@ func (fs *NuageFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 				writable: true,
 			}, nil
 		}
-		rc, sErr := fs.storage.GetObject(ctx, file.BucketKey)
+		rc, sErr := fs.storage.For(file.Bucket).GetObject(ctx, file.BucketKey)
 		if sErr != nil {
 			return nil, sErr
 		}
@@ -323,12 +324,17 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 		return err
 	}
 
+	store, bucket, err := spacebucket.Open(ctx, fs.db, fs.storage, fs.scope.spaceID)
+	if err != nil {
+		return err
+	}
+
 	fid := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s/%s", fs.scope.userID, fid, name)
 
 	hasher := sha256.New()
 	tee := io.TeeReader(content, hasher)
-	if err := fs.storage.PutObject(ctx, bucketKey, tee, size, mimeType); err != nil {
+	if err := store.PutObject(ctx, bucketKey, tee, size, mimeType); err != nil {
 		return err
 	}
 
@@ -339,6 +345,7 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 		Size:       size,
 		Hash:       hex.EncodeToString(hasher.Sum(nil)),
 		BucketKey:  bucketKey,
+		Bucket:     bucket,
 		FolderID:   folderID,
 		UploadedBy: fs.scope.userID,
 		SpaceID:    fs.scope.spaceID,
@@ -373,7 +380,7 @@ func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, conten
 
 	hasher := sha256.New()
 	tee := io.TeeReader(content, hasher)
-	if err := fs.storage.PutObject(ctx, file.BucketKey, tee, size, mimeType); err != nil {
+	if err := fs.storage.For(file.Bucket).PutObject(ctx, file.BucketKey, tee, size, mimeType); err != nil {
 		return err
 	}
 

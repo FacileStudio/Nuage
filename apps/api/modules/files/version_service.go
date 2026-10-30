@@ -43,26 +43,27 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 		}
 	}
 
+	store := s.storage.For(record.Bucket)
 	newFacileID := facile.NewID()
 	newBucketKey := fmt.Sprintf("%d/%s/%s", userID, newFacileID, record.Name)
 
 	hasher := sha256.New()
 	tee := io.TeeReader(reader, hasher)
 
-	if err := s.storage.PutObject(ctx, newBucketKey, tee, size, mimeType); err != nil {
+	if err := store.PutObject(ctx, newBucketKey, tee, size, mimeType); err != nil {
 		return nil, errors.Internal("failed to upload new version", err)
 	}
 
 	fileHash := hex.EncodeToString(hasher.Sum(nil))
-	info, err := s.storage.StatObject(ctx, newBucketKey)
+	info, err := store.StatObject(ctx, newBucketKey)
 	if err != nil {
-		_ = s.storage.DeleteObject(ctx, newBucketKey)
+		_ = store.DeleteObject(ctx, newBucketKey)
 		return nil, errors.Internal("failed to stat new version", err)
 	}
 
 	oldSize, txErr := s.writeVersion(ctx, userID, id, newBucketKey, fileHash, mimeType, info.Size)
 	if txErr != nil {
-		_ = s.storage.DeleteObject(ctx, newBucketKey)
+		_ = store.DeleteObject(ctx, newBucketKey)
 		return nil, txErr
 	}
 
@@ -116,6 +117,7 @@ func (s *Service) writeVersion(ctx context.Context, userID int64, fileID int64, 
 			FileID:    current.ID,
 			Version:   maxVersion + 1,
 			BucketKey: current.BucketKey,
+			Bucket:    current.Bucket,
 			Hash:      current.Hash,
 			Size:      current.Size,
 			CreatedBy: userID,
@@ -206,14 +208,15 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 		return nil, errors.Internal("failed to read version", err)
 	}
 
+	store := s.storage.For(record.Bucket)
 	newBucketKey := fmt.Sprintf("%d/%s/%s", userID, facile.NewID(), record.Name)
-	if err := s.storage.CopyObject(ctx, version.BucketKey, newBucketKey); err != nil {
+	if err := store.CopyObject(ctx, version.BucketKey, newBucketKey); err != nil {
 		return nil, errors.Internal("failed to restore version from storage", err)
 	}
 
-	info, err := s.storage.StatObject(ctx, newBucketKey)
+	info, err := store.StatObject(ctx, newBucketKey)
 	if err != nil {
-		_ = s.storage.DeleteObject(ctx, newBucketKey)
+		_ = store.DeleteObject(ctx, newBucketKey)
 		return nil, errors.Internal("failed to stat restored file", err)
 	}
 
@@ -236,6 +239,7 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 			FileID:    current.ID,
 			Version:   maxVersion + 1,
 			BucketKey: current.BucketKey,
+			Bucket:    current.Bucket,
 			Hash:      current.Hash,
 			Size:      current.Size,
 			CreatedBy: userID,
@@ -257,7 +261,7 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 		return nil
 	})
 	if txErr != nil {
-		_ = s.storage.DeleteObject(ctx, newBucketKey)
+		_ = store.DeleteObject(ctx, newBucketKey)
 		return nil, txErr
 	}
 
@@ -313,7 +317,7 @@ func (s *Service) cleanOldVersions(fileID int64, userID int64) {
 			continue
 		}
 		if v.BucketKey != current.BucketKey {
-			if err := s.storage.DeleteObject(ctx, v.BucketKey); err != nil {
+			if err := s.storage.For(v.Bucket).DeleteObject(ctx, v.BucketKey); err != nil {
 				slog.Warn("versioning: failed to delete version from storage", slog.Any("error", err))
 			}
 		}

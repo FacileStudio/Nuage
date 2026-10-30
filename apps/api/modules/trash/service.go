@@ -196,7 +196,12 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 	return nil
 }
 
-func purgeFilesTx(ctx context.Context, tx *gorm.DB, files []schemas.File) ([]string, int64, error) {
+type storedObject struct {
+	bucket string
+	key    string
+}
+
+func purgeFilesTx(ctx context.Context, tx *gorm.DB, files []schemas.File) ([]storedObject, int64, error) {
 	if len(files) == 0 {
 		return nil, 0, nil
 	}
@@ -206,11 +211,11 @@ func purgeFilesTx(ctx context.Context, tx *gorm.DB, files []schemas.File) ([]str
 	}
 
 	fileIDs := make([]int64, len(files))
-	keys := make([]string, 0, len(files))
+	keys := make([]storedObject, 0, len(files))
 	var bytes int64
 	for i, f := range files {
 		fileIDs[i] = f.ID
-		keys = append(keys, f.BucketKey)
+		keys = append(keys, storedObject{f.Bucket, f.BucketKey})
 		bytes += f.Size
 	}
 
@@ -219,7 +224,7 @@ func purgeFilesTx(ctx context.Context, tx *gorm.DB, files []schemas.File) ([]str
 		return nil, 0, err
 	}
 	for _, v := range versions {
-		keys = append(keys, v.BucketKey)
+		keys = append(keys, storedObject{v.Bucket, v.BucketKey})
 		bytes += v.Size
 	}
 
@@ -271,10 +276,10 @@ func (s *Service) refundQuota(ctx context.Context, userID int64, bytes int64) {
 	}
 }
 
-func (s *Service) deleteObjects(ctx context.Context, keys []string) {
-	for _, key := range keys {
-		if err := s.storage.DeleteObject(ctx, key); err != nil {
-			slog.Warn("trash: failed to delete object from storage", slog.String("key", key), slog.Any("error", err))
+func (s *Service) deleteObjects(ctx context.Context, objects []storedObject) {
+	for _, object := range objects {
+		if err := s.storage.For(object.bucket).DeleteObject(ctx, object.key); err != nil {
+			slog.Warn("trash: failed to delete object from storage", slog.String("bucket", object.bucket), slog.String("key", object.key), slog.Any("error", err))
 		}
 	}
 }
@@ -294,7 +299,7 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 			}
 			return errors.Internal("failed to find file", err)
 		}
-		var keys []string
+		var keys []storedObject
 		var freed int64
 		err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			k, b, err := purgeFilesTx(ctx, tx, []schemas.File{record})
@@ -327,7 +332,7 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 		if err != nil {
 			return err
 		}
-		var keys []string
+		var keys []storedObject
 		var freed int64
 		err = s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			var files []schemas.File
@@ -361,7 +366,7 @@ func (s *Service) permanentDelete(ctx context.Context, userID int64, itemType st
 func (s *Service) emptyTrash(ctx context.Context, userID int64) (int64, error) {
 	var trashFiles []schemas.File
 	var trashFolders []schemas.Folder
-	var keys []string
+	var keys []storedObject
 	var freed int64
 
 	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

@@ -3,11 +3,13 @@ package spaces
 import (
 	"context"
 	stderrors "errors"
+	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
+	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	portespaces "github.com/FacileStudio/porte/spaces"
 	"github.com/FacileStudio/tronc/errors"
@@ -18,13 +20,15 @@ import (
 
 // Service manages spaces and their members.
 type Service struct {
-	orm   *gorm.DB
-	guard portespaces.Guard
+	orm     *gorm.DB
+	guard   portespaces.Guard
+	storage *storage.Client
 }
 
-// NewService builds a spaces Service over the given database connection.
-func NewService(orm *gorm.DB) *Service {
-	return &Service{orm: orm, guard: spaceaccess.NewGuard(orm)}
+// NewService builds a spaces Service over the given database connection and
+// object store. Each space owns a bucket in that store.
+func NewService(orm *gorm.DB, storageClient *storage.Client) *Service {
+	return &Service{orm: orm, guard: spaceaccess.NewGuard(orm), storage: storageClient}
 }
 
 func (s *Service) createSpace(ctx context.Context, userID int64, req CreateSpaceRequest) (*schemas.Space, error) {
@@ -36,6 +40,11 @@ func (s *Service) createSpace(ctx context.Context, userID int64, req CreateSpace
 		FacileID:    facile.NewID(),
 		Name:        req.Name,
 		Description: req.Description,
+	}
+
+	bucket := s.storage.For(storage.SpaceBucket(space.FacileID))
+	if err := bucket.EnsureBucket(ctx); err != nil {
+		return nil, errors.Internal("failed to create space storage", err)
 	}
 
 	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -55,6 +64,7 @@ func (s *Service) createSpace(ctx context.Context, userID int64, req CreateSpace
 		return nil
 	})
 	if err != nil {
+		_ = bucket.RemoveBucket(ctx)
 		return nil, err
 	}
 
@@ -130,7 +140,15 @@ func (s *Service) deleteSpace(ctx context.Context, userID int64, spaceID int64) 
 		return err
 	}
 
-	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	var space schemas.Space
+	if err := s.orm.WithContext(ctx).Select("facile_id").Where("id = ?", spaceID).First(&space).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.NotFound("space not found")
+		}
+		return errors.Internal("failed to get space", err)
+	}
+
+	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("space_id = ?", spaceID).Delete(&schemas.SpaceMember{}).Error; err != nil {
 			return errors.Internal("failed to delete space members", err)
 		}
@@ -139,6 +157,15 @@ func (s *Service) deleteSpace(ctx context.Context, userID int64, spaceID int64) 
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	bucket := storage.SpaceBucket(space.FacileID)
+	if err := s.storage.For(bucket).RemoveBucket(ctx); err != nil {
+		slog.Warn("spaces: failed to remove space bucket", slog.String("bucket", bucket), slog.Any("error", err))
+	}
+	return nil
 }
 
 func (s *Service) listMembers(ctx context.Context, userID int64, spaceID int64) ([]MemberResponse, error) {

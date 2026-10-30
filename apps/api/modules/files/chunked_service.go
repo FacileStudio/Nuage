@@ -14,6 +14,8 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
+	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
+	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
 
@@ -198,24 +200,29 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		s.releaseSessionClaim(sessionID)
 		return nil, err
 	}
+	store, bucket, err := s.uploadStore(ctx, session.SpaceID, target)
+	if err != nil {
+		s.releaseSessionClaim(sessionID)
+		return nil, err
+	}
 	fileID := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s", userID, fileID)
 
-	fileHash, err := s.storage.AssembleChunks(ctx, bucketKey, chunkKeys, totalSize, session.MimeType)
+	fileHash, err := store.AssembleChunks(ctx, s.storage, bucketKey, chunkKeys, totalSize, session.MimeType)
 	if err != nil {
 		s.releaseSessionClaim(sessionID)
 		return nil, errors.Internal("failed to assemble file", err)
 	}
 
-	info, err := s.storage.StatObject(ctx, bucketKey)
+	info, err := store.StatObject(ctx, bucketKey)
 	if err != nil {
-		_ = s.storage.DeleteObject(ctx, bucketKey)
+		_ = store.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
 		return nil, errors.Internal("failed to verify assembled file", err)
 	}
 
 	if target != nil {
-		return s.finishVersionedUpload(ctx, userID, sessionID, target, bucketKey, fileHash, session.MimeType, info.Size)
+		return s.finishVersionedUpload(ctx, store, userID, sessionID, target, bucketKey, fileHash, session.MimeType, info.Size)
 	}
 
 	record := &schemas.File{
@@ -224,6 +231,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		Size:       info.Size,
 		Hash:       fileHash,
 		BucketKey:  bucketKey,
+		Bucket:     bucket,
 		FolderID:   session.FolderID,
 		OriginApp:  session.OriginApp,
 		UploadedBy: userID,
@@ -231,7 +239,7 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	}
 
 	if err := s.saveNewFile(ctx, record, session.FileName); err != nil {
-		_ = s.storage.DeleteObject(ctx, bucketKey)
+		_ = store.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
 		return nil, err
 	}
@@ -254,6 +262,16 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	}
 
 	return record, nil
+}
+
+// uploadStore picks the bucket the assembled bytes land in. A replacement keeps
+// the bucket of the file it replaces; a new file goes to its space's bucket, or
+// the shared one in personal scope.
+func (s *Service) uploadStore(ctx context.Context, spaceID *int64, target *schemas.File) (*storage.Client, string, error) {
+	if target != nil {
+		return s.storage.For(target.Bucket), target.Bucket, nil
+	}
+	return spacebucket.Open(ctx, s.orm, s.storage, spaceID)
 }
 
 // uploadTarget resolves the existing file a completed session replaces, or nil
@@ -281,9 +299,9 @@ func (s *Service) uploadTarget(ctx context.Context, userID int64, targetFileID *
 
 // finishVersionedUpload commits assembled bytes into an existing file and closes
 // the session, the way reuploadFile closes a single-request replacement.
-func (s *Service) finishVersionedUpload(ctx context.Context, userID int64, sessionID string, target *schemas.File, bucketKey, fileHash, mimeType string, size int64) (*schemas.File, error) {
+func (s *Service) finishVersionedUpload(ctx context.Context, store *storage.Client, userID int64, sessionID string, target *schemas.File, bucketKey, fileHash, mimeType string, size int64) (*schemas.File, error) {
 	if err := s.commitUploadedVersion(ctx, userID, target.ID, bucketKey, fileHash, mimeType, size); err != nil {
-		_ = s.storage.DeleteObject(ctx, bucketKey)
+		_ = store.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
 		return nil, err
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
+	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -258,19 +259,24 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		}
 	}
 
+	store, bucket, err := spacebucket.Open(ctx, s.orm, s.storage, spaceID)
+	if err != nil {
+		return nil, err
+	}
+
 	facileID := facile.NewID()
 	bucketKey := fmt.Sprintf("%d/%s", userID, facileID)
 
 	hasher := sha256.New()
 	tee := io.TeeReader(reader, hasher)
 
-	if err := s.storage.PutObject(ctx, bucketKey, tee, -1, mimeType); err != nil {
+	if err := store.PutObject(ctx, bucketKey, tee, -1, mimeType); err != nil {
 		return nil, errors.Internal("failed to upload file", err)
 	}
 
 	fileHash := hex.EncodeToString(hasher.Sum(nil))
 
-	info, err := s.storage.StatObject(ctx, bucketKey)
+	info, err := store.StatObject(ctx, bucketKey)
 	if err != nil {
 		return nil, errors.Internal("failed to stat uploaded file", err)
 	}
@@ -281,6 +287,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		Size:       info.Size,
 		Hash:       fileHash,
 		BucketKey:  bucketKey,
+		Bucket:     bucket,
 		FolderID:   folderID,
 		OriginApp:  originApp,
 		UploadedBy: userID,
@@ -288,7 +295,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 	}
 
 	if err := s.saveNewFile(ctx, record, name); err != nil {
-		_ = s.storage.DeleteObject(ctx, bucketKey)
+		_ = store.DeleteObject(ctx, bucketKey)
 		return nil, err
 	}
 
@@ -375,7 +382,7 @@ func (s *Service) downloadFile(ctx context.Context, userID int64, fileID string)
 		return nil, nil, err
 	}
 
-	reader, err := s.storage.GetObject(ctx, record.BucketKey)
+	reader, err := s.storage.For(record.Bucket).GetObject(ctx, record.BucketKey)
 	if err != nil {
 		return nil, nil, errors.Internal("failed to read file from storage", err)
 	}
@@ -446,11 +453,6 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 		}
 	}
 
-	// A rename or a move is a create into the destination folder as far as names
-	// are concerned, so it takes that folder's name lock and deduplicates against
-	// it — excluding the row being moved, which is allowed to keep its own name.
-	// Without this, a move could leave two files holding one name in a folder, and
-	// the sync clients, which match by name, would then oscillate.
 	key := nameLockKey("file", current.UploadedBy, current.SpaceID, targetFolder)
 	if err := s.withNameLock(ctx, key, func(tx *gorm.DB) error {
 		reserved, err := deduplicateFileName(tx, current.UploadedBy, requestedName, targetFolder, current.SpaceID, current.ID)
@@ -742,7 +744,7 @@ func (s *Service) downloadPresigned(ctx context.Context, token string) (io.ReadS
 		return nil, nil, errors.Internal("failed to read file", err)
 	}
 
-	reader, err := s.storage.GetObject(ctx, record.BucketKey)
+	reader, err := s.storage.For(record.Bucket).GetObject(ctx, record.BucketKey)
 	if err != nil {
 		return nil, nil, errors.Internal("failed to read file from storage", err)
 	}

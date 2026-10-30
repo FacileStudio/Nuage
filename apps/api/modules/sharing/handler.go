@@ -159,7 +159,7 @@ func (h *Handler) downloadSharedFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reader, err := h.storageClient.GetObject(r.Context(), file.BucketKey)
+	reader, err := h.storageClient.For(file.Bucket).GetObject(r.Context(), file.BucketKey)
 	if err != nil {
 		httpjson.WriteError(w, errors.Internal("failed to read file", err))
 		return

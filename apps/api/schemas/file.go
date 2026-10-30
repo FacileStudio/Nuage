@@ -11,6 +11,7 @@ type File struct {
 	Size       int64      `json:"size"`
 	Hash       string     `json:"hash" gorm:"index"`
 	BucketKey  string     `json:"-" gorm:"not null"`
+	Bucket     string     `json:"-" gorm:"not null;default:''"`
 	FolderID   *int64     `json:"folder_id" gorm:"index"`
 	OriginApp  string     `json:"origin_app"`
 	LinkedTo   string     `json:"linked_to" gorm:"index"`
