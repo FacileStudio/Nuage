@@ -10,6 +10,33 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-30
+
+### Added
+
+- **Chunked uploads publish idempotently.** `POST /api/files/upload/init` takes `linked_to` for
+  a restricted token, and completion applies the same rule as a plain upload: when the app
+  already holds a live file under that key in the space, that file is returned (200) and
+  nothing is stored. If the key already exists at init, the answer is 200 with `existing_file`
+  and no session is created, so a large retry never re-sends the bytes.
+
+### Changed
+
+- **An existing space the caller cannot use answers 404** on `PUT /api/spaces/by-facile-id/{id}`
+  instead of 403, so the error no longer says that the id exists. A caller allowed to create
+  can still tell a free id (201) from a taken one (404).
+- A chunked completion that finds an identical file in the folder returns it with 200, like a
+  plain upload.
+
+### Fixed
+
+- **A new user's first concurrent requests no longer fail with 500.** The quota row was found
+  and then created, so two requests racing for a user's first quota both inserted and one hit
+  the unique constraint ("failed to load quota"). This showed up as sync clients losing the
+  first uploads of a fresh account.
+- Concurrent find-or-create of the same space no longer returns 500 when two calls both try to
+  create its bucket.
+
 ## [0.4.0] - 2026-10-30
 
 ### Added
