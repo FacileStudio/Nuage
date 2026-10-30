@@ -10,6 +10,29 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
+### Added
+
+- **Tokens can be minted with `provision`.** `POST /api/users/me/api-token` accepts
+  `provision: true` with `app`. Such a token may create spaces through
+  `PUT /api/spaces/by-facile-id/{facile_id}` and afterwards reaches every space that its app
+  created, plus any it lists. Spaces made by users or by another app stay out of reach even if
+  the token knows their id, and the acting user must still be a member. A new
+  `spaces.provisioned_by` column records which app created a space.
+- **Publishing is idempotent.** `POST /api/files` from a restricted token with a `linked_to`
+  key returns the existing file (200) when that app already holds a live file under that key in
+  the space, and stores nothing. Concurrent publishes of one key produce one file. Chunked
+  uploads are not idempotent yet.
+
+### Changed
+
+- **Uploading the same bytes under the same name twice gives one file.** When a folder or space
+  already holds a live file with that exact name and content hash, the upload returns it (200)
+  instead of creating `name (1)`. The check runs under the folder's name lock, so sync clients
+  that upload the same file at once no longer leave a copy behind. Same name with different
+  content still gets a `(1)` name.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
