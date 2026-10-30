@@ -58,7 +58,10 @@
 	}
 
 	function selectSpace(id: string | null) {
-		spaceStore.set(id === null ? null : (spaces.find((s) => String(s.id) === id) ?? null));
+		const next = id === null ? null : (spaces.find((s) => String(s.id) === id) ?? null);
+		if (next?.id === spaceStore.id) return;
+		spaceStore.set(next);
+		if (page.url.searchParams.has('folder')) void goto('/files', { replaceState: true });
 	}
 
 	setContext('app', {
