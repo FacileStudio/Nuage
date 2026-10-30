@@ -10,6 +10,35 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-30
+
+### Added
+
+- **Every space has its own MinIO bucket, `nuage-space-<facile_id>`.** Files, versions and
+  chunked uploads in a space are written there; personal files stay in the shared bucket. The
+  new `bucket` column on `files` and `file_versions` records where an object lives, and an
+  empty value means the shared bucket. At boot `MigrateBuckets` copies each existing space's
+  objects into its bucket, repoints the rows, then deletes the originals. It is safe to
+  re-run, and if it fails the API still starts and serves the files from the shared bucket.
+- **API tokens can be restricted to spaces.** `POST /api/users/me/api-token` accepts `app`
+  and `space_facile_ids` together. A restricted token may only use the file endpoints and the
+  find-or-create below, for those spaces. It cannot reach personal files, WebDAV, sharing,
+  trash or token management, cannot replace an existing file, and stamps `origin_app` with its
+  `app`. This is how Ardoise and other apps store files without a forwarded session.
+- **`PUT /api/spaces/by-facile-id/{facile_id}` finds or creates a space.** It answers 201 when
+  it creates the space and makes the caller owner, 200 for a member of an existing one, and 403
+  for anyone else. Concurrent calls produce one space.
+
+### Changed
+
+- **Deleting a space is refused with 409 while any file row, trashed ones included, still
+  points at it.** The foreign keys already blocked it with a generic 500.
+
+### Fixed
+
+- **Switching space while inside a subfolder returns to the root of the new space** instead of
+  opening the old folder id in the wrong space.
+
 ## [0.2.0] - 2026-10-01
 
 ### Added
