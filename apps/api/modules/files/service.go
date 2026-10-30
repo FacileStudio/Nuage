@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
@@ -75,10 +76,19 @@ func (s *Service) withNameLock(ctx context.Context, key string, fn func(tx *gorm
 }
 
 // saveNewFile reserves a name in the file's folder and inserts the record under
-// it, both under that folder's name lock.
-func (s *Service) saveNewFile(ctx context.Context, record *schemas.File, requested string) error {
+// it, both under that folder's name lock. When the folder already holds a live
+// file of that exact name and content it inserts nothing and returns that file:
+// two uploads of the same bytes that raced each other are one file, not a file
+// and a "(1)" copy of it.
+func (s *Service) saveNewFile(ctx context.Context, record *schemas.File, requested string) (*schemas.File, error) {
 	key := nameLockKey("file", record.UploadedBy, record.SpaceID, record.FolderID)
-	return s.withNameLock(ctx, key, func(tx *gorm.DB) error {
+	var identical *schemas.File
+	err := s.withNameLock(ctx, key, func(tx *gorm.DB) error {
+		found, err := findIdentical(tx, record, requested)
+		if err != nil || found != nil {
+			identical = found
+			return err
+		}
 		reserved, err := deduplicateFileName(tx, record.UploadedBy, requested, record.FolderID, record.SpaceID, 0)
 		if err != nil {
 			return err
@@ -89,6 +99,35 @@ func (s *Service) saveNewFile(ctx context.Context, record *schemas.File, request
 		}
 		return nil
 	})
+	return identical, err
+}
+
+// findIdentical returns the live file in the record's folder that has the
+// requested name and the record's content hash, or nil. It must run on the
+// transaction that holds the folder's name lock.
+func findIdentical(tx *gorm.DB, record *schemas.File, name string) (*schemas.File, error) {
+	if record.Hash == "" {
+		return nil, nil
+	}
+	query := tx.Where("name = ? AND hash = ? AND deleted_at IS NULL", name, record.Hash)
+	if record.SpaceID != nil {
+		query = query.Where("space_id = ?", *record.SpaceID)
+	} else {
+		query = query.Where("uploaded_by = ? AND space_id IS NULL", record.UploadedBy)
+	}
+	if record.FolderID != nil {
+		query = query.Where("folder_id = ?", *record.FolderID)
+	} else {
+		query = query.Where("folder_id IS NULL")
+	}
+	var found schemas.File
+	if err := query.Order("id asc").Limit(1).Find(&found).Error; err != nil {
+		return nil, errors.Internal("failed to check for an identical file", err)
+	}
+	if found.ID == 0 {
+		return nil, nil
+	}
+	return &found, nil
 }
 
 // saveNewFolder reserves a name under the folder's parent and inserts the record
@@ -230,21 +269,97 @@ func deduplicateFolderName(db *gorm.DB, userID int64, name string, parentID *int
 	return "", errors.Invalid("too many folders with this name")
 }
 
-func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string, spaceID *int64) (*schemas.File, error) {
+// maxLinkedToLength bounds the external key a restricted token publishes under.
+const maxLinkedToLength = 200
+
+// validLinkedTo reports whether key is a printable, bounded external key.
+func validLinkedTo(key string) bool {
+	if len(key) > maxLinkedToLength {
+		return false
+	}
+	for _, r := range key {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// findPublished returns the live file an app already published under linkedTo
+// in the space, or nil when there is none.
+func findPublished(db *gorm.DB, spaceID int64, originApp, linkedTo string) (*schemas.File, error) {
+	var existing schemas.File
+	err := db.Where("space_id = ? AND origin_app = ? AND linked_to = ? AND deleted_at IS NULL", spaceID, originApp, linkedTo).
+		Order("id asc").Limit(1).Find(&existing).Error
+	if err != nil {
+		return nil, errors.Internal("failed to look up the published file", err)
+	}
+	if existing.ID == 0 {
+		return nil, nil
+	}
+	return &existing, nil
+}
+
+// savePublished inserts the record unless a concurrent publish of the same key
+// won first. A per-key advisory lock serialises the check and the insert, so
+// the loser reads the winner back instead of storing a second row. It returns
+// the row that holds the key and whether it is the caller's.
+func (s *Service) savePublished(ctx context.Context, record *schemas.File, name string) (*schemas.File, bool, error) {
+	key := fmt.Sprintf("nuage:publish:%d:%s:%s", *record.SpaceID, record.OriginApp, record.LinkedTo)
+	var winner *schemas.File
+	err := s.withNameLock(ctx, key, func(tx *gorm.DB) error {
+		found, err := findPublished(tx, *record.SpaceID, record.OriginApp, record.LinkedTo)
+		if err != nil || found != nil {
+			winner = found
+			return err
+		}
+		identical, err := s.saveNewFile(ctx, record, name)
+		if identical != nil {
+			winner = identical
+		}
+		return err
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if winner != nil {
+		return winner, false, nil
+	}
+	return record, true, nil
+}
+
+// uploadFile stores a new file. A restricted token that passes linkedTo
+// publishes idempotently: when its app already holds a live file under that key
+// in the space, that file is returned with created false and nothing is stored.
+func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mimeType string, estimatedSize int64, reader io.Reader, folderID *int64, originApp string, spaceID *int64, linkedTo string) (*schemas.File, bool, error) {
 	if err := tokenscope.RequireSpace(ctx, spaceID); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	originApp = tokenscope.Origin(ctx, originApp)
 
 	if spaceID != nil {
 		if err := spaceaccess.Require(ctx, s.orm, *spaceID, userID); err != nil {
-			return nil, err
+			return nil, false, err
 		}
+	}
+
+	linkedTo = strings.TrimSpace(linkedTo)
+	publish := tokenscope.From(ctx) != nil && linkedTo != ""
+	if publish {
+		if !validLinkedTo(linkedTo) {
+			return nil, false, errors.Invalid("linked_to must be printable and at most 200 characters")
+		}
+		existing, err := findPublished(s.orm.WithContext(ctx), *spaceID, originApp, linkedTo)
+		if err != nil || existing != nil {
+			return existing, false, err
+		}
+	} else {
+		linkedTo = ""
 	}
 
 	if folderID != nil {
 		if err := s.requireWritableFolder(ctx, userID, *folderID, spaceID); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 
@@ -261,13 +376,13 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 					})
 				}
 			}
-			return nil, err
+			return nil, false, err
 		}
 	}
 
 	store, bucket, err := spacebucket.Open(ctx, s.orm, s.storage, spaceID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	facileID := facile.NewID()
@@ -277,14 +392,14 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 	tee := io.TeeReader(reader, hasher)
 
 	if err := store.PutObject(ctx, bucketKey, tee, -1, mimeType); err != nil {
-		return nil, errors.Internal("failed to upload file", err)
+		return nil, false, errors.Internal("failed to upload file", err)
 	}
 
 	fileHash := hex.EncodeToString(hasher.Sum(nil))
 
 	info, err := store.StatObject(ctx, bucketKey)
 	if err != nil {
-		return nil, errors.Internal("failed to stat uploaded file", err)
+		return nil, false, errors.Internal("failed to stat uploaded file", err)
 	}
 
 	record := &schemas.File{
@@ -296,13 +411,23 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		Bucket:     bucket,
 		FolderID:   folderID,
 		OriginApp:  originApp,
+		LinkedTo:   linkedTo,
 		UploadedBy: userID,
 		SpaceID:    spaceID,
 	}
 
-	if err := s.saveNewFile(ctx, record, name); err != nil {
-		_ = store.DeleteObject(ctx, bucketKey)
-		return nil, err
+	if publish {
+		saved, created, err := s.savePublished(ctx, record, name)
+		if err != nil || !created {
+			_ = store.DeleteObject(ctx, bucketKey)
+			return saved, false, err
+		}
+	} else {
+		identical, err := s.saveNewFile(ctx, record, name)
+		if err != nil || identical != nil {
+			_ = store.DeleteObject(ctx, bucketKey)
+			return identical, false, err
+		}
 	}
 
 	if s.quota != nil {
@@ -320,7 +445,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 		})
 	}
 
-	return record, nil
+	return record, true, nil
 }
 
 func (s *Service) listFiles(ctx context.Context, userID int64, folderID *int64, search string, linkedTo string, originApp string, spaceID *int64) ([]schemas.File, error) {

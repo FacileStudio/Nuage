@@ -65,6 +65,7 @@ type CreateAPITokenRequest struct {
 	Name           string   `json:"name" validate:"required"`
 	App            string   `json:"app,omitempty"`
 	SpaceFacileIDs []string `json:"space_facile_ids,omitempty"`
+	Provision      bool     `json:"provision,omitempty"`
 }
 
 type FileResponse struct {
@@ -430,7 +431,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/users/me/api-token",
-							Summary:      "Create a personal API token. With app and space_facile_ids (given together) the token is restricted: it reaches only those spaces through /files and /spaces/by-facile-id, never personal files or other endpoints, and its uploads record app as origin_app.",
+							Summary:      "Create a personal API token. With app plus space_facile_ids, provision, or both, the token is restricted: it reaches only the listed spaces through /files and /spaces/by-facile-id, never personal files or other endpoints, and its uploads record app as origin_app. provision: true also lets it create spaces for any well-formed fac_ id and reach every space its app created, never spaces made by users or other apps.",
 							Auth:         "bearer",
 							RequestBody:  CreateAPITokenRequest{},
 							ResponseBody: APITokenResponse{},
@@ -461,7 +462,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/files",
-							Summary:      "Upload a single file (multipart)",
+							Summary:      "Upload a single file (multipart). A restricted token may send linked_to (at most 200 printable characters) to publish idempotently: if its app already holds a live file with that linked_to in the space, that file is returned with 200 and nothing is stored; a new file answers 201. Chunked uploads are not idempotent.",
 							Auth:         "bearer",
 							ResponseBody: FileResponse{},
 							Status:       http.StatusCreated,

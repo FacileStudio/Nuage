@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func TestActivityPagination(t *testing.T) {
 	_, token := registerUser(ts, "paginate@example.com", "password12345")
 
 	for i := 0; i < 5; i++ {
-		uploadFile(ts, token, "file.txt", "data", nil)
+		uploadFile(ts, token, fmt.Sprintf("file-%d.txt", i), "data", nil)
 	}
 	time.Sleep(100 * time.Millisecond)
 

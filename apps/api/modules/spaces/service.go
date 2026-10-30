@@ -82,7 +82,8 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 	if !tokenscope.ValidFacileID(facileID) {
 		return nil, false, errors.Invalid("facile_id must be fac_ followed by 24 hex characters")
 	}
-	if scope := tokenscope.From(ctx); scope != nil && !scope.AllowsFacileID(facileID) {
+	scope := tokenscope.From(ctx)
+	if scope != nil && !scope.MayCreate(facileID) {
 		return nil, false, errors.Forbidden("this token cannot access this space")
 	}
 	name := strings.TrimSpace(req.Name)
@@ -95,6 +96,9 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 		return nil, false, err
 	}
 	if existing != nil {
+		if scope != nil && !scope.AllowsExisting(facileID, existing.ProvisionedBy) {
+			return nil, false, errors.Forbidden("this token cannot access this space")
+		}
 		resp, err := s.memberView(ctx, userID, *existing)
 		return resp, false, err
 	}
@@ -105,6 +109,9 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 	}
 
 	space := schemas.Space{FacileID: facileID, Name: name, Description: req.Description}
+	if scope != nil {
+		space.ProvisionedBy = scope.App
+	}
 	created := false
 	err = s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "facile_id"}}, DoNothing: true}).Create(&space)
@@ -135,6 +142,9 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 	}
 	if winner == nil {
 		return nil, false, errors.Internal("failed to read space", stderrors.New("space vanished after conflict"))
+	}
+	if scope != nil && !scope.AllowsExisting(facileID, winner.ProvisionedBy) {
+		return nil, false, errors.Forbidden("this token cannot access this space")
 	}
 	resp, err := s.memberView(ctx, userID, *winner)
 	return resp, false, err

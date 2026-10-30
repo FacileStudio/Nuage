@@ -166,21 +166,29 @@ func (service *Service) ScopeForSession(ctx context.Context, sessionID int64) (*
 		return nil, nil
 	}
 
-	scope := &tokenscope.Scope{App: row.App, FacileIDs: row.SpaceFacileIDs}
-	if len(row.SpaceFacileIDs) > 0 {
-		err := service.orm.WithContext(ctx).Model(&schemas.Space{}).
-			Where("facile_id IN ?", row.SpaceFacileIDs).
-			Pluck("id", &scope.SpaceIDs).Error
-		if err != nil {
-			return nil, errors.Internal("failed to resolve the token spaces", err)
-		}
+	scope := &tokenscope.Scope{App: row.App, Provision: row.Provision, FacileIDs: row.SpaceFacileIDs}
+	query := service.orm.WithContext(ctx).Model(&schemas.Space{})
+	provisioned := row.Provision && row.App != ""
+	switch {
+	case len(row.SpaceFacileIDs) > 0 && provisioned:
+		query = query.Where("facile_id IN ? OR provisioned_by = ?", row.SpaceFacileIDs, row.App)
+	case len(row.SpaceFacileIDs) > 0:
+		query = query.Where("facile_id IN ?", row.SpaceFacileIDs)
+	case provisioned:
+		query = query.Where("provisioned_by = ?", row.App)
+	default:
+		return scope, nil
+	}
+	if err := query.Pluck("id", &scope.SpaceIDs).Error; err != nil {
+		return nil, errors.Internal("failed to resolve the token spaces", err)
 	}
 	return scope, nil
 }
 
 // SaveScope restricts an issued token to the given spaces and stamps its app.
-func (service *Service) SaveScope(ctx context.Context, sessionID int64, app string, spaceFacileIDs []string) error {
-	row := schemas.TokenScope{SessionID: sessionID, App: app, SpaceFacileIDs: spaceFacileIDs}
+// With provision the token also reaches the spaces its app label creates.
+func (service *Service) SaveScope(ctx context.Context, sessionID int64, app string, provision bool, spaceFacileIDs []string) error {
+	row := schemas.TokenScope{SessionID: sessionID, App: app, Provision: provision, SpaceFacileIDs: spaceFacileIDs}
 	if err := service.orm.WithContext(ctx).Create(&row).Error; err != nil {
 		return errors.Internal("failed to save the token scope", err)
 	}

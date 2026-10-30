@@ -31,9 +31,12 @@ func ValidFacileID(id string) bool {
 }
 
 // Scope is what a restricted API token may reach. FacileIDs is what the token
-// was minted for; SpaceIDs is the subset of those that exist as spaces now.
+// was minted for. Provision lets it create spaces for ids it was not minted
+// for and reach the ones its app label created. SpaceIDs is everything the
+// token reaches that exists as a space now.
 type Scope struct {
 	App       string
+	Provision bool
 	FacileIDs []string
 	SpaceIDs  []int64
 }
@@ -59,6 +62,20 @@ func (s *Scope) AllowsSpace(spaceID int64) bool {
 // AllowsFacileID reports whether the token was minted for this space.
 func (s *Scope) AllowsFacileID(id string) bool {
 	return slices.Contains(s.FacileIDs, id)
+}
+
+// AllowsExisting reports whether the token may reach an existing space: it was
+// minted for it, or it holds the provision scope and its app created the space.
+func (s *Scope) AllowsExisting(facileID, provisionedBy string) bool {
+	if s.AllowsFacileID(facileID) {
+		return true
+	}
+	return s.Provision && s.App != "" && provisionedBy == s.App
+}
+
+// MayCreate reports whether the token may create the space facileID.
+func (s *Scope) MayCreate(facileID string) bool {
+	return s.Provision || s.AllowsFacileID(facileID)
 }
 
 // RequireSpace refuses personal scope and any space outside the token's set

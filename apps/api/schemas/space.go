@@ -4,12 +4,13 @@ import "time"
 
 // Space is a shared team workspace.
 type Space struct {
-	ID          int64     `json:"id" gorm:"primaryKey"`
-	FacileID    string    `json:"facile_id" gorm:"uniqueIndex;not null"`
-	Name        string    `json:"name" gorm:"not null"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID            int64     `json:"id" gorm:"primaryKey"`
+	FacileID      string    `json:"facile_id" gorm:"uniqueIndex;not null"`
+	Name          string    `json:"name" gorm:"not null"`
+	Description   string    `json:"description"`
+	ProvisionedBy string    `json:"-" gorm:"not null;default:''"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (Space) TableName() string { return "spaces" }

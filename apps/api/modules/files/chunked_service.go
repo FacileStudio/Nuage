@@ -244,10 +244,16 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		SpaceID:    session.SpaceID,
 	}
 
-	if err := s.saveNewFile(ctx, record, session.FileName); err != nil {
+	identical, err := s.saveNewFile(ctx, record, session.FileName)
+	if err != nil {
 		_ = store.DeleteObject(ctx, bucketKey)
 		s.releaseSessionClaim(sessionID)
 		return nil, err
+	}
+	if identical != nil {
+		_ = store.DeleteObject(ctx, bucketKey)
+		s.finishSession(ctx, sessionID)
+		return identical, nil
 	}
 
 	s.finishSession(ctx, sessionID)

@@ -34,7 +34,7 @@ type Service struct {
 type Auth interface {
 	Issue(ctx context.Context, userID int64, label string) (string, porte.Session, error)
 	Sessions() *session.Manager
-	SaveScope(ctx context.Context, sessionID int64, app string, spaceFacileIDs []string) error
+	SaveScope(ctx context.Context, sessionID int64, app string, provision bool, spaceFacileIDs []string) error
 	SetPassword(ctx context.Context, userID int64, password string) error
 	ChangePassword(ctx context.Context, w http.ResponseWriter, r *http.Request, userID int64, current, next string) (string, int64, error)
 	VerifyPassword(ctx context.Context, email, password string) (int64, error)
@@ -338,10 +338,13 @@ func (service *Service) createApiToken(ctx context.Context, userID string, req C
 	if err != nil {
 		return "", nil, errors.Internal("failed to parse user id", err)
 	}
-	restricted := req.App != "" || len(req.SpaceFacileIDs) > 0
+	restricted := req.App != "" || len(req.SpaceFacileIDs) > 0 || req.Provision
 	if restricted {
-		if req.App == "" || len(req.SpaceFacileIDs) == 0 {
-			return "", nil, errors.Invalid("app and space_facile_ids must be given together")
+		if req.App == "" {
+			return "", nil, errors.Invalid("app is required for a restricted token")
+		}
+		if len(req.SpaceFacileIDs) == 0 && !req.Provision {
+			return "", nil, errors.Invalid("a restricted token needs space_facile_ids or provision")
 		}
 		if !tokenscope.ValidApp(req.App) {
 			return "", nil, errors.Invalid("app must be 1 to 32 characters of a-z, 0-9 and hyphen")
@@ -354,14 +357,14 @@ func (service *Service) createApiToken(ctx context.Context, userID string, req C
 				return "", nil, errors.Invalid("space_facile_ids must be fac_ followed by 24 hex characters")
 			}
 		}
-		req.SpaceFacileIDs = slices.Compact(slices.Sorted(slices.Values(req.SpaceFacileIDs)))
+		req.SpaceFacileIDs = append([]string{}, slices.Compact(slices.Sorted(slices.Values(req.SpaceFacileIDs)))...)
 	}
 	rawToken, issued, err := service.tokens.Issue(ctx, id, req.Name)
 	if err != nil {
 		return "", nil, err
 	}
 	if restricted {
-		if err := service.tokens.SaveScope(ctx, issued.ID, req.App, req.SpaceFacileIDs); err != nil {
+		if err := service.tokens.SaveScope(ctx, issued.ID, req.App, req.Provision, req.SpaceFacileIDs); err != nil {
 			_ = service.tokens.Sessions().Revoke(ctx, id, issued.ID)
 			return "", nil, err
 		}

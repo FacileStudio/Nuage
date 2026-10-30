@@ -10,9 +10,9 @@ var Documentation = documentation.Module{
 			Method:       "POST",
 			Path:         "/files",
 			Summary:      "Upload a file",
-			Description:  "Uploads a file via multipart form data with optional metadata.",
+			Description:  "Uploads a file via multipart form data with optional metadata. With a restricted token, linked_to makes the upload idempotent per space and app: a repeat returns the existing file with 200 instead of 201.",
 			Auth:         "bearer token required",
-			RequestBody:  "multipart/form-data with file, folder_id, origin_app",
+			RequestBody:  "multipart/form-data with file, folder_id, space_id, origin_app, linked_to",
 			ResponseBody: "FileResponse",
 			Errors: []documentation.Error{
 				{Status: 400, Code: "invalid_argument", Description: "Missing file or invalid metadata."},

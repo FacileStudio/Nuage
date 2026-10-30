@@ -77,13 +77,17 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		spaceID = &id
 	}
 
-	record, err := h.service.uploadFile(r.Context(), userID, name, mimeType, header.Size, file, folderID, originApp, spaceID)
+	record, created, err := h.service.uploadFile(r.Context(), userID, name, mimeType, header.Size, file, folderID, originApp, spaceID, r.FormValue("linked_to"))
 	if err != nil {
 		httpjson.WriteError(w, err)
 		return
 	}
 
-	httpjson.WriteJSON(w, http.StatusCreated, mapFile(*record))
+	status := http.StatusCreated
+	if !created {
+		status = http.StatusOK
+	}
+	httpjson.WriteJSON(w, status, mapFile(*record))
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
