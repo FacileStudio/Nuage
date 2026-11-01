@@ -38,11 +38,12 @@ type PublicShareResponse struct {
 
 // PublicFile is a shared file as seen by an anonymous visitor.
 type PublicFile struct {
-	ID       int64  `json:"id"`
-	FacileID string `json:"facile_id"`
-	Name     string `json:"name"`
-	MimeType string `json:"mime_type"`
-	Size     int64  `json:"size"`
+	ID        int64  `json:"id"`
+	FacileID  string `json:"facile_id"`
+	Name      string `json:"name"`
+	MimeType  string `json:"mime_type"`
+	Size      int64  `json:"size"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // PublicFolder is a shared folder as seen by an anonymous visitor.

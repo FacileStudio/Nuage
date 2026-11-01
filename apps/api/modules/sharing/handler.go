@@ -124,13 +124,7 @@ func (h *Handler) getPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if record.File != nil {
-		resp.File = &PublicFile{
-			ID:       record.File.ID,
-			FacileID: record.File.FacileID,
-			Name:     record.File.Name,
-			MimeType: record.File.MimeType,
-			Size:     record.File.Size,
-		}
+		resp.File = publicFileRef(*record.File)
 	}
 	if record.Folder != nil {
 		sizes, _ := h.service.folderSizes(r.Context(), []int64{record.Folder.ID})
@@ -166,6 +160,7 @@ func (h *Handler) downloadSharedFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
+	w.Header().Set("Cache-Control", "private, no-cache")
 	if err := httpfile.Serve(w, r, file, reader); err != nil {
 		httpjson.WriteError(w, err)
 	}
@@ -196,10 +191,7 @@ func (h *Handler) listSharedFolder(w http.ResponseWriter, r *http.Request) {
 		Folders:    make([]PublicFolder, 0, len(folders)),
 	}
 	for _, f := range files {
-		resp.Files = append(resp.Files, PublicFile{
-			ID: f.ID, FacileID: f.FacileID, Name: f.Name,
-			MimeType: f.MimeType, Size: f.Size,
-		})
+		resp.Files = append(resp.Files, publicFile(f))
 	}
 	folderIDs := make([]int64, len(folders))
 	for i, f := range folders {
