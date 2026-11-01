@@ -493,6 +493,14 @@ func Reference() apiref.Config {
 							PathParams: []Field{{Name: "id", Type: "string", Description: "File ID"}},
 						},
 						{
+							Method:      "GET",
+							Path:        "/files/{id}/thumbnail",
+							Summary:     "Get a JPEG thumbnail of an image",
+							Auth:        "bearer",
+							PathParams:  []Field{{Name: "id", Type: "string", Description: "File ID"}},
+							QueryParams: []Field{{Name: "w", Type: "string", Description: "Width in pixels, 320 or 640"}},
+						},
+						{
 							Method:     "DELETE",
 							Path:       "/files/{id}",
 							Summary:    "Soft delete a file to trash",
@@ -689,6 +697,13 @@ func Reference() apiref.Config {
 							Path:       "/shared/{token}/download/{fileId}",
 							Summary:    "Download shared file from tokenized link",
 							PathParams: []Field{{Name: "token", Type: "string", Description: "Share Token"}, {Name: "fileId", Type: "string", Description: "File ID"}},
+						},
+						{
+							Method:      "GET",
+							Path:        "/shared/{token}/thumbnail/{fileId}",
+							Summary:     "Get a thumbnail of a shared image",
+							PathParams:  []Field{{Name: "token", Type: "string", Description: "Share Token"}, {Name: "fileId", Type: "string", Description: "File ID"}},
+							QueryParams: []Field{{Name: "w", Type: "string", Description: "Width in pixels, 320 or 640"}},
 						},
 						{
 							Method:       "GET",
