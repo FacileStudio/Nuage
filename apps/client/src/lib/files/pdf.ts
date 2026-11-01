@@ -1,3 +1,5 @@
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
 export type PdfEvents = {
 	onPage: (page: number) => void;
 	onScale: (scale: number) => void;
@@ -71,7 +73,7 @@ export async function openPdf(
 	events: PdfEvents
 ): Promise<PdfSession> {
 	const pdfjs = await import('pdfjs-dist');
-	pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+	pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 	(globalThis as any).pdfjsLib = pdfjs;
 	const web = await import('pdfjs-dist/web/pdf_viewer.mjs');
 	const doc = await pdfjs.getDocument({ url, rangeChunkSize: 1 << 20 }).promise;
