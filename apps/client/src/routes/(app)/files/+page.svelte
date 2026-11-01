@@ -629,6 +629,7 @@
 	<FileViewer
 		files={previewable}
 		startId={previewFile.id}
+		urlFor={(file) => backend.downloadUrl(file.id)}
 		onClose={() => (previewFile = null)}
 		onShare={(file) => (shareTarget = { type: 'file', id: file.id, name: file.name })}
 	/>

@@ -129,17 +129,34 @@ export type CompleteUploadResponse = {
 	file: NuageFile;
 };
 
+/** What an anonymous visitor sees of a shared file: no owner, no folder, no origin. */
+export type PublicFile = {
+	id: number;
+	facile_id: string;
+	name: string;
+	mime_type: string;
+	size: number;
+	updated_at: string;
+};
+
+export type PublicFolder = {
+	id: number;
+	facile_id: string;
+	name: string;
+	size: number;
+};
+
 export type PublicShareResponse = {
 	token: string;
 	permission: string;
-	file: NuageFile | null;
-	folder: Folder | null;
+	file: PublicFile | null;
+	folder: PublicFolder | null;
 };
 
 export type PublicShareFilesResponse = {
 	permission: string;
-	files: NuageFile[];
-	folders: Folder[];
+	files: PublicFile[];
+	folders: PublicFolder[];
 };
 
 export type ActivityEntry = {
