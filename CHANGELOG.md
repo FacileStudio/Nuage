@@ -10,6 +10,44 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-01
+
+### Added
+
+- **Server-side thumbnails.** The grid loads 320 or 640 px JPEGs instead of the originals:
+  51 phone photos of 3.8 MB come to 588 KiB instead of about 188 MB. JPEG, PNG, GIF and WebP
+  are supported, EXIF rotation is applied, and renders are cached in the file's own bucket and
+  deleted with the file. Public shares get the same through `GET /api/shared/{token}/thumbnail/{id}`.
+- **The trash empties itself.** Items deleted more than `trash_retention_days` ago (default 30,
+  0 turns it off, admins set it under Settings > Advanced) are purged hourly, and each
+  uploader's quota is refunded. The trash page shows when each item goes. **The first run after
+  this release permanently deletes everything already trashed for more than 30 days.**
+- **The public share page is rebuilt** on the file viewers: a shared file opens inline, a shared
+  folder is a card grid with thumbnails, a full-screen viewer and next and previous.
+- **Phone gestures:** swipe between files in the viewer, pinch to zoom images and PDFs, and a
+  bottom previous/next bar. Touch targets are 44 px and the viewers respect safe areas.
+
+### Changed
+
+- Files uploaded before v0.6.0 as `application/octet-stream` get their type from the extension
+  at startup (audio, video, image and PDF extensions only; specific types are never changed and
+  `updated_at` is left alone), so they preview.
+- The pdf.js worker is bundled with a hashed, immutable URL, and icons register before first
+  paint. Grid tiles render lazily in large folders.
+- On phones the grid actions button sits over the thumbnail, folders stack in one column, and
+  the trash row actions are icons.
+- WebDAV uploads use the same media-type table as the REST API.
+
+### Fixed
+
+- **Image zoom did nothing.** Every zoom reset to 100% at once; wheel, buttons, double-click and
+  pinch now work.
+- **A trashed file stayed downloadable through its share link.** A share of a trashed file or
+  folder now answers 404.
+- **Saving Advanced or Nook settings blanked them.** The settings page read the API response
+  wrongly and wrote empty values back, including the instance name and Nook configuration.
+- Video controls no longer wrap at 360 px.
+
 ## [0.6.0] - 2026-11-01
 
 ### Added
