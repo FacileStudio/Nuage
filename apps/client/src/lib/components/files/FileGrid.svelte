@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Card } from '@facile/muse';
+	import { SvelteMap } from 'svelte/reactivity';
 	import type { Folder } from '$lib/backend';
 	import type { BrowserEntry } from '$lib/files/entries';
 	import type { DragMove } from '$lib/files/dnd.svelte';
@@ -13,7 +14,7 @@
 		folders,
 		selection,
 		dnd,
-		thumbnailUrl,
+		thumbnail,
 		renamingKey = null,
 		renameValue = $bindable(''),
 		onOpen,
@@ -28,7 +29,7 @@
 		folders: Folder[];
 		selection: Selection;
 		dnd: DragMove;
-		thumbnailUrl: (entry: BrowserEntry) => string;
+		thumbnail: (entry: BrowserEntry) => { src: string; srcset?: string };
 		renamingKey?: string | null;
 		renameValue?: string;
 		onOpen: (entry: BrowserEntry) => void;
@@ -39,6 +40,18 @@
 		onRenameKeydown: (e: KeyboardEvent) => void;
 		onRenameCancel: () => void;
 	} = $props();
+
+	const THUMBNAIL_SIZES =
+		'(min-width: 1536px) 12vw, (min-width: 1024px) 18vw, (min-width: 640px) 28vw, 44vw';
+	const MAX_ATTEMPTS = 2;
+	const RETRY_DELAY_MS = 1500;
+	const failures = new SvelteMap<number, number>();
+
+	const failuresOf = (id: number) => failures.get(id) ?? 0;
+
+	function retryLater(id: number) {
+		setTimeout(() => failures.set(id, failuresOf(id) + 1), RETRY_DELAY_MS);
+	}
 
 	const key = (entry: BrowserEntry) => `${entry.type}:${entry.id}`;
 	const isDragged = (entry: BrowserEntry) =>
@@ -77,7 +90,11 @@
 				: selected
 					? 'bg-fc-surface outline-2 outline-fc-accent'
 					: 'hover:bg-fc-surface';
-		return `group relative flex flex-col p-0 transition-colors ${state} ${isDragged(entry) ? 'opacity-40' : ''}`;
+		const offscreen =
+			entry.type === 'folder'
+				? '[content-visibility:auto] [contain-intrinsic-size:auto_3.5rem]'
+				: '[content-visibility:auto] [contain-intrinsic-size:auto_14rem]';
+		return `group relative flex flex-col p-0 transition-colors ${offscreen} ${state} ${isDragged(entry) ? 'opacity-40' : ''}`;
 	}
 
 	function menuFromButton(e: MouseEvent, entry: BrowserEntry) {
@@ -147,13 +164,18 @@
 				onclick={(e) => (selection.mode ? onSelect(entry, index, e) : onOpen(entry))}
 				class="m-2 mb-0 block overflow-hidden rounded-fc-sm bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 			>
-				{#if entry.isImage}
+				{#if entry.isImage && failuresOf(entry.id) < MAX_ATTEMPTS}
+					{@const preview = thumbnail(entry)}
+					{@const retry = failuresOf(entry.id)}
 					<img
-						src={thumbnailUrl(entry)}
+						src={retry ? `${preview.src}&r=${retry}` : preview.src}
+						srcset={retry ? undefined : preview.srcset}
+						sizes={THUMBNAIL_SIZES}
 						alt=""
 						loading="lazy"
 						decoding="async"
 						draggable="false"
+						onerror={() => retryLater(entry.id)}
 						class="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
 					/>
 				{:else}

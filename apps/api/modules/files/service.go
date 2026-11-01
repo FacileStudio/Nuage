@@ -19,6 +19,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/internal/thumbnail"
 	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -36,12 +37,13 @@ type Service struct {
 	activity      *activity.Logger
 	quota         *quota.Service
 	presignSecret []byte
+	thumbs        *thumbnail.Generator
 }
 
 // NewService builds a files Service wired to storage, activity, nook and quota
 // services.
 func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier, actLogger *activity.Logger, quotaService *quota.Service, presignSecret []byte) *Service {
-	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret}
+	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret, thumbs: thumbnail.New(thumbnailConcurrency)}
 }
 
 const maxDeduplicationAttempts = 1000

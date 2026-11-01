@@ -429,7 +429,10 @@
 		return items;
 	});
 
-	const thumbnailUrl = (entry: BrowserEntry) => backend.thumbnailUrl(entry.raw as NuageFile);
+	const thumbnail = (entry: BrowserEntry) => {
+		const file = entry.raw as NuageFile;
+		return { src: backend.thumbnailUrl(file), srcset: backend.thumbnailSrcset(file) };
+	};
 	const renamingKey = $derived(renaming ? itemKey(renaming.type, renaming.id) : null);
 </script>
 
@@ -571,7 +574,7 @@
 				{folders}
 				{selection}
 				{dnd}
-				{thumbnailUrl}
+				{thumbnail}
 				{renamingKey}
 				bind:renameValue
 				onOpen={openEntry}

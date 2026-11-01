@@ -28,12 +28,15 @@ func RateLimitAPI(requests int, window time.Duration, prefix string, exempt func
 }
 
 // IsTransferPath reports whether path moves file bytes: chunked uploads,
-// downloads and presigned links. One large upload issues hundreds of chunk
-// requests and pdf.js reads a document as many Range requests, so counting them
-// against the request budget throttles ordinary use, not abuse.
+// downloads, thumbnails and presigned links. One large upload issues hundreds
+// of chunk requests, pdf.js reads a document as many Range requests, and a grid
+// of photos asks for one thumbnail per tile, so counting them against the
+// request budget throttles ordinary use, not abuse.
 func IsTransferPath(path string) bool {
 	return strings.HasPrefix(path, "/api/files/upload/") ||
 		strings.HasSuffix(path, "/download") ||
+		strings.HasSuffix(path, "/thumbnail") ||
+		strings.Contains(path, "/thumbnail/") ||
 		strings.Contains(path, "/download/") ||
 		strings.HasPrefix(path, "/api/presigned/")
 }

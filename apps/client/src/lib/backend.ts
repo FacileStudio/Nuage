@@ -266,6 +266,9 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, token?: stri
 	return JSON.parse(text) as T;
 }
 
+const isSvg = (file: NuageFile): boolean =>
+	file.mime_type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+
 export const backend = {
 	baseUrl: backendBaseUrl,
 
@@ -353,9 +356,20 @@ export const backend = {
 		return `${backendBaseUrl}/files/${id}/download`;
 	},
 
-	/** A cacheable URL for an `<img>`: it changes whenever the file does. */
-	thumbnailUrl(file: NuageFile): string {
-		return `${backendBaseUrl}/files/${file.id}/download?v=${encodeURIComponent(file.updated_at)}`;
+	/**
+	 * A cacheable `<img>` URL for a downscaled preview: it changes whenever the file does. An
+	 * SVG is already tiny and the server cannot rasterise it, so it is served as it is.
+	 */
+	thumbnailUrl(file: NuageFile, width: 320 | 640 = 320): string {
+		const version = encodeURIComponent(file.updated_at);
+		if (isSvg(file)) return `${backendBaseUrl}/files/${file.id}/download?v=${version}`;
+		return `${backendBaseUrl}/files/${file.id}/thumbnail?w=${width}&v=${version}`;
+	},
+
+	/** Both thumbnail widths for `<img srcset>`, or `undefined` where there is only one image. */
+	thumbnailSrcset(file: NuageFile): string | undefined {
+		if (isSvg(file)) return undefined;
+		return `${backend.thumbnailUrl(file, 320)} 320w, ${backend.thumbnailUrl(file, 640)} 640w`;
 	},
 
 	/** Moves a file or folder. The API reads a missing target as "unchanged" and `0` as the root. */
