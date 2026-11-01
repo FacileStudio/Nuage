@@ -22,7 +22,7 @@
 		Tabs,
 		toast
 	} from '@facile/muse';
-	import { backend, type ApiToken, type Space, type UserProfile } from '$lib/backend';
+	import { ApiError, backend, type ApiToken, type Space, type UserProfile } from '$lib/backend';
 	import { theme, type ThemePreference } from '$lib/theme.svelte';
 	import { formatDate } from '$lib/format';
 	import { icons, nuage } from '$lib/icons';
@@ -70,6 +70,8 @@
 	let revoking = $state<ApiToken | null>(null);
 
 	let instanceName = $state('');
+	let isAdmin = $state(false);
+	let trashRetention = $state('30');
 	let nookWebhookUrl = $state('');
 	let nookSecret = $state('');
 	let nookEnabled = $state(false);
@@ -91,8 +93,10 @@
 			nookWebhookUrl = settings.nook_webhook_url ?? '';
 			nookSecret = settings.nook_webhook_secret ?? '';
 			nookEnabled = settings.nook_enabled === 'true';
-		} catch {
-			toast.danger('Could not load instance settings.');
+			trashRetention = settings.trash_retention_days ?? '30';
+			isAdmin = true;
+		} catch (e) {
+			if (!(e instanceof ApiError && e.status === 403)) toast.danger('Could not load instance settings.');
 		}
 	}
 
@@ -189,12 +193,14 @@
 	async function saveSettings() {
 		settingsSaving = true;
 		try {
-			await backend.updateSettings(app.token, {
+			const values: Record<string, string> = {
 				instance_name: instanceName,
 				nook_webhook_url: nookWebhookUrl,
-				nook_webhook_secret: nookSecret,
-				nook_enabled: String(nookEnabled)
-			});
+				nook_enabled: String(nookEnabled),
+				trash_retention_days: trashRetention.trim()
+			};
+			if (!nookSecret.startsWith('*')) values.nook_webhook_secret = nookSecret;
+			await backend.updateSettings(app.token, values);
 			toast.success('Settings saved.');
 		} catch (e) {
 			toast.danger(message(e, 'Could not save settings.'));
@@ -459,6 +465,25 @@
 					<Input bind:value={instanceName} placeholder="My Nuage" />
 				</Field>
 			</SettingsRow>
+			{#if isAdmin}
+				<SettingsRow
+					label="Trash retention"
+					description="Days a deleted item stays in the trash before it is removed for good and its storage is given back. 0 keeps items until someone empties the trash."
+					stacked
+				>
+					<Field>
+						<Input
+							bind:value={trashRetention}
+							type="number"
+							min="0"
+							max="3650"
+							step="1"
+							inputmode="numeric"
+							aria-label="Trash retention in days"
+						/>
+					</Field>
+				</SettingsRow>
+			{/if}
 			<SettingsRow>
 				<Button icon={icons.check} disabled={settingsSaving} onclick={saveSettings}>
 					{settingsSaving ? 'Saving…' : 'Save'}
