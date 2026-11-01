@@ -10,6 +10,41 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-01
+
+### Added
+
+- **Full-screen file viewer** with next and previous across the folder (arrow keys too),
+  file details, Share and Download in the top bar.
+- Images zoom with the wheel, pinch or double-click, pan by dragging, and rotate.
+- **PDFs scroll continuously** through pdf.js's own viewer, with selectable text, find in
+  document, a page jump field, zoom and fit to width.
+- Audio and video get custom controls: seek with buffered progress, skip 10 seconds, speed,
+  volume, full screen, and keyboard shortcuts (space or k, j, l, m, f).
+- **Move to a folder** from the context menu or the selection toolbar, through a folder
+  picker. "Move to <parent>" moves items up one level. The up button beside the breadcrumbs
+  navigates up and accepts drops. Dragging a selected item moves the whole selection.
+
+### Changed
+
+- The grid view uses muse cards, groups folders above files, and keeps an actions button
+  on every tile, visible without hover on touch screens.
+- **Rate limiting covers `/api/*` only**, at 600 requests a minute per IP, and no longer
+  counts uploads, downloads or presigned links. Opening a folder of photos or a long PDF
+  used to answer 429.
+- Thumbnails load from a versioned URL the browser caches for a day.
+- An upload sent as `application/octet-stream` takes its type from the extension for common
+  image, audio, video and PDF formats, so it can be previewed.
+- Space members can rename and move a teammate's file, as they could already delete it.
+
+### Fixed
+
+- Moving an item to the root (drop on "Files", undo of a move out of the root) did nothing.
+- A folder could be moved into its own subfolder over the API or WebDAV, which made the whole
+  branch vanish.
+- A file could be moved into a folder of another space, or into a trashed folder.
+- The app no longer calls the removed `/api/auth/sync-profile` endpoint on every load.
+
 ## [0.5.0] - 2026-10-30
 
 ### Added
