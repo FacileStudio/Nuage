@@ -275,7 +275,7 @@ func run() int {
 		},
 	})
 	router.Use(middleware.SecurityHeaders)
-	router.Use(middleware.RateLimitExcept(100, time.Minute, "/api/files/upload", "/webdav"))
+	router.Use(middleware.RateLimitAPI(600, time.Minute, apiPrefix+"/", middleware.IsTransferPath))
 	router.Use(middleware.RateLimitPaths(10, time.Minute, "/api/auth/login", "/api/auth/register"))
 
 	health.Mount(router, health.DB(sqlDB), func(ctx context.Context) error {

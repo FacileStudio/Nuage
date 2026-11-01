@@ -50,10 +50,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	name := header.Filename
-	mimeType := header.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	mimeType := resolveMime(name, header.Header.Get("Content-Type"))
 
 	var folderID *int64
 	if raw := r.FormValue("folder_id"); raw != "" {
@@ -176,9 +173,21 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
+	w.Header().Set("Cache-Control", downloadCacheControl(r))
 	if err := httpfile.Serve(w, r, record, reader); err != nil {
 		httpjson.WriteError(w, err)
 	}
+}
+
+// downloadCacheControl lets the browser keep a download it fetched through a
+// versioned URL. The client adds `v` (the file's update stamp) to thumbnails, so
+// a new upload changes the URL rather than serving a stale cached body; a bare
+// URL is revalidated against the ETag every time.
+func downloadCacheControl(r *http.Request) string {
+	if r.URL.Query().Has("v") {
+		return "private, max-age=86400"
+	}
+	return "private, no-cache"
 }
 
 func (h *Handler) presign(w http.ResponseWriter, r *http.Request) {

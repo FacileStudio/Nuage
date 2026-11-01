@@ -40,9 +40,7 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 	if req.TotalSize <= 0 {
 		return nil, nil, errors.Invalid("total_size must be positive")
 	}
-	if req.MimeType == "" {
-		req.MimeType = "application/octet-stream"
-	}
+	req.MimeType = resolveMime(req.FileName, req.MimeType)
 
 	if err := tokenscope.RequireSpace(ctx, req.SpaceID); err != nil {
 		return nil, nil, err

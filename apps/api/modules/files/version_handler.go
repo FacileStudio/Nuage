@@ -35,10 +35,7 @@ func (h *Handler) reupload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	mimeType := header.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	mimeType := resolveMime(header.Filename, header.Header.Get("Content-Type"))
 
 	record, err := h.service.reuploadFile(r.Context(), userID, chi.URLParam(r, "id"), file, header.Size, mimeType)
 	if err != nil {
