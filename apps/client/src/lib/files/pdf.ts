@@ -35,8 +35,8 @@ export class PdfSession {
 		else this.#viewer.decreaseScale();
 	}
 
-	zoomBy(factor: number): void {
-		this.#viewer.currentScale = Math.min(10, Math.max(0.25, this.#viewer.currentScale * factor));
+	zoomBy(factor: number, origin?: [number, number]): void {
+		this.#viewer.updateScale({ scaleFactor: factor, drawingDelay: 120, origin });
 	}
 
 	fitWidth(): void {

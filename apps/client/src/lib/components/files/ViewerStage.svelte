@@ -6,13 +6,17 @@
 	import MediaPlayer from './MediaPlayer.svelte';
 	import PdfViewer from './PdfViewer.svelte';
 
-	let { file, url }: { file: ViewerFile; url: string } = $props();
+	let {
+		file,
+		url,
+		zoomed = $bindable(false)
+	}: { file: ViewerFile; url: string; zoomed?: boolean } = $props();
 
 	const kind = $derived(previewKind(file.name, file.mime_type));
 </script>
 
 {#if kind === 'image'}
-	<ImageViewer {url} name={file.name} />
+	<ImageViewer {url} name={file.name} bind:zoomed />
 {:else if kind === 'pdf'}
 	<div class="h-full w-full max-w-5xl"><PdfViewer {url} /></div>
 {:else if kind === 'video' || kind === 'audio'}

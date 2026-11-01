@@ -77,7 +77,7 @@
 				type="button"
 				disabled={i === path.length - 1}
 				onclick={() => (path = path.slice(0, i + 1))}
-				class="truncate rounded-fc-sm px-1.5 py-0.5 text-fc-fg-muted transition-colors hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring disabled:font-medium disabled:text-fc-fg"
+				class="truncate rounded-fc-sm px-1.5 py-0.5 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:px-2 text-fc-fg-muted transition-colors hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring disabled:font-medium disabled:text-fc-fg"
 			>
 				{crumb.name}
 			</button>
@@ -119,8 +119,13 @@
 
 	{#snippet footer()}
 		<div class="flex items-center justify-end gap-2">
-			<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-			<Button icon={nuage.move} disabled={!here || unchanged} onclick={confirm}>
+			<Button variant="ghost" class="[@media(pointer:coarse)]:h-11" onclick={() => (open = false)}>Cancel</Button>
+			<Button
+				icon={nuage.move}
+				class="[@media(pointer:coarse)]:h-11"
+				disabled={!here || unchanged}
+				onclick={confirm}
+			>
 				{unchanged ? 'Already here' : `Move to ${here?.name ?? ''}`}
 			</Button>
 		</div>
