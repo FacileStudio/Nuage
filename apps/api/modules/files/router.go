@@ -24,6 +24,7 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 		r.Get("/", handler.list)
 		r.Get("/{id}", handler.get)
 		r.Get("/{id}/download", handler.download)
+		r.Get("/{id}/thumbnail", handler.thumbnail)
 		r.Delete("/{id}", handler.deleteFile)
 		r.Put("/{id}", handler.updateFile)
 		r.Post("/{id}/link", handler.linkFile)

@@ -196,11 +196,6 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 	return nil
 }
 
-type storedObject struct {
-	bucket string
-	key    string
-}
-
 func purgeFilesTx(ctx context.Context, tx *gorm.DB, files []schemas.File) ([]storedObject, int64, error) {
 	if len(files) == 0 {
 		return nil, 0, nil
@@ -215,7 +210,7 @@ func purgeFilesTx(ctx context.Context, tx *gorm.DB, files []schemas.File) ([]sto
 	var bytes int64
 	for i, f := range files {
 		fileIDs[i] = f.ID
-		keys = append(keys, storedObject{f.Bucket, f.BucketKey})
+		keys = append(keys, fileObjects(f)...)
 		bytes += f.Size
 	}
 
@@ -224,7 +219,7 @@ func purgeFilesTx(ctx context.Context, tx *gorm.DB, files []schemas.File) ([]sto
 		return nil, 0, err
 	}
 	for _, v := range versions {
-		keys = append(keys, storedObject{v.Bucket, v.BucketKey})
+		keys = append(keys, storedObject{bucket: v.Bucket, key: v.BucketKey})
 		bytes += v.Size
 	}
 
@@ -273,14 +268,6 @@ func (s *Service) refundQuota(ctx context.Context, userID int64, bytes int64) {
 	}
 	if err := s.quota.UpdateUsage(ctx, userID, -bytes); err != nil {
 		slog.Warn("trash: failed to refund quota", slog.Int64("user_id", userID), slog.Any("error", err))
-	}
-}
-
-func (s *Service) deleteObjects(ctx context.Context, objects []storedObject) {
-	for _, object := range objects {
-		if err := s.storage.For(object.bucket).DeleteObject(ctx, object.key); err != nil {
-			slog.Warn("trash: failed to delete object from storage", slog.String("bucket", object.bucket), slog.String("key", object.key), slog.Any("error", err))
-		}
 	}
 }
 
