@@ -27,6 +27,8 @@ var allowedKeys = map[string]bool{
 	"nook_event_types":    true,
 	"nook_batch_enabled":  true,
 	"instance_name":       true,
+
+	schemas.TrashRetentionKey: true,
 }
 
 // Service exposes application settings and Nook delivery history.
@@ -110,6 +112,10 @@ func (s *Service) updateSettings(ctx context.Context, values map[string]string) 
 		if isPrivateAddress(parsed.Host) {
 			return nil, errors.Invalid("nook_webhook_url must not point to a private or internal address")
 		}
+	}
+
+	if err := validateTrashRetention(values); err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
