@@ -1,32 +1,30 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Button } from '@facile/muse';
-	import { backend, type NuageFile } from '$lib/backend';
 	import { formatSize, relativeTime } from '$lib/format';
 	import { fileIcon, fileTypeLabel, icons, nuage } from '$lib/icons';
-	import ImageViewer from './ImageViewer.svelte';
-	import MediaPlayer from './MediaPlayer.svelte';
-	import PdfViewer from './PdfViewer.svelte';
-	import { previewKind } from '$lib/files/entries';
+	import type { ViewerFile } from '$lib/files/entries';
+	import ViewerStage from './ViewerStage.svelte';
 
 	let {
 		files,
 		startId,
+		urlFor,
 		onClose,
 		onShare
 	}: {
-		files: NuageFile[];
+		files: ViewerFile[];
 		startId: number;
+		urlFor: (file: ViewerFile) => string;
 		onClose: () => void;
-		onShare?: (file: NuageFile) => void;
+		onShare?: (file: ViewerFile) => void;
 	} = $props();
 
 	let dialog = $state<HTMLDialogElement | null>(null);
 	let index = $state(0);
 
 	const file = $derived(files[index]);
-	const url = $derived(file ? backend.downloadUrl(file.id) : '');
-	const kind = $derived(file ? previewKind(file.name, file.mime_type) : null);
+	const url = $derived(file ? urlFor(file) : '');
 
 	$effect.pre(() => {
 		const found = files.findIndex((f) => f.id === startId);
@@ -68,7 +66,9 @@
 				<div class="min-w-0 flex-1">
 					<h2 class="truncate text-fc-sm font-semibold sm:text-fc-md" title={file.name}>{file.name}</h2>
 					<p class="truncate text-fc-xs text-fc-fg-muted">
-						{fileTypeLabel(file.name, file.mime_type)} · {formatSize(file.size)} · {relativeTime(file.updated_at)}
+						{fileTypeLabel(file.name, file.mime_type)} · {formatSize(file.size)}{file.updated_at
+							? ` · ${relativeTime(file.updated_at)}`
+							: ''}
 					</p>
 				</div>
 				{#if files.length > 1}
@@ -87,13 +87,7 @@
 
 			<div class="relative flex min-h-0 flex-1 items-center justify-center bg-fc-surface p-2 sm:p-6">
 				{#key file.id}
-					{#if kind === 'image'}
-						<ImageViewer {url} name={file.name} />
-					{:else if kind === 'pdf'}
-						<div class="h-full w-full max-w-5xl"><PdfViewer {url} /></div>
-					{:else if kind === 'video' || kind === 'audio'}
-						<MediaPlayer {url} {kind} name={file.name} />
-					{/if}
+					<ViewerStage {file} {url} />
 				{/key}
 
 				{#if files.length > 1}

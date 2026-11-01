@@ -50,6 +50,15 @@ export function toEntries(folders: Folder[], files: NuageFile[]): BrowserEntry[]
 	return [...folders.map(folderEntry), ...files.map(fileEntry)];
 }
 
+/** The slice of a file the viewer needs, so owned files and public shares both fit. */
+export type ViewerFile = {
+	id: number;
+	name: string;
+	mime_type: string;
+	size: number;
+	updated_at?: string;
+};
+
 export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf';
 
 const PREVIEW_EXTENSIONS: Record<string, PreviewKind> = {

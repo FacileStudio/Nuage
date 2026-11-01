@@ -230,6 +230,12 @@ func (s *Service) getByToken(ctx context.Context, token string) (*schemas.Share,
 	if record.ExpiresAt != nil && record.ExpiresAt.Before(time.Now()) {
 		return nil, errors.NotFound("share has expired")
 	}
+	if record.File != nil && record.File.DeletedAt != nil {
+		return nil, errors.NotFound("share not found")
+	}
+	if record.Folder != nil && record.Folder.DeletedAt != nil {
+		return nil, errors.NotFound("share not found")
+	}
 
 	return &record, nil
 }
@@ -400,13 +406,7 @@ func mapShare(record schemas.Share) ShareResponse {
 		resp.ExpiresAt = &formatted
 	}
 	if record.File != nil {
-		resp.File = &PublicFile{
-			ID:       record.File.ID,
-			FacileID: record.File.FacileID,
-			Name:     record.File.Name,
-			MimeType: record.File.MimeType,
-			Size:     record.File.Size,
-		}
+		resp.File = publicFileRef(*record.File)
 	}
 	if record.Folder != nil {
 		resp.Folder = &PublicFolder{
