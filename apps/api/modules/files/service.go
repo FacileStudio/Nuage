@@ -549,18 +549,11 @@ func (s *Service) deleteFile(ctx context.Context, userID int64, fileID string) e
 }
 
 func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, name *string, folderID *int64) (*schemas.File, error) {
-	id, err := strconv.ParseInt(fileID, 10, 64)
+	found, err := s.getFile(ctx, userID, fileID)
 	if err != nil {
-		return nil, errors.Invalid("invalid file id")
+		return nil, err
 	}
-
-	var current schemas.File
-	if err := s.orm.WithContext(ctx).Where("id = ? AND uploaded_by = ?", id, userID).First(&current).Error; err != nil {
-		if stderrors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.NotFound("file not found")
-		}
-		return nil, errors.Internal("failed to read file", err)
-	}
+	current := *found
 
 	if name == nil && folderID == nil {
 		return nil, errors.Invalid("at least one field must be provided")
@@ -576,12 +569,8 @@ func (s *Service) updateFile(ctx context.Context, userID int64, fileID string, n
 		if *folderID == 0 {
 			targetFolder = nil
 		} else {
-			var folder schemas.Folder
-			if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *folderID, userID).First(&folder).Error; err != nil {
-				if stderrors.Is(err, gorm.ErrRecordNotFound) {
-					return nil, errors.NotFound("folder not found")
-				}
-				return nil, errors.Internal("failed to verify folder", err)
+			if err := s.moveTarget(ctx, userID, *folderID, current.SpaceID); err != nil {
+				return nil, err
 			}
 			targetFolder = folderID
 		}
@@ -741,26 +730,24 @@ func (s *Service) updateFolder(ctx context.Context, userID int64, folderID strin
 		return nil, errors.Invalid("invalid folder id")
 	}
 
+	var current schemas.Folder
+	if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ? AND deleted_at IS NULL", id, userID).First(&current).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.NotFound("folder not found")
+		}
+		return nil, errors.Internal("failed to read folder", err)
+	}
+
 	updates := map[string]any{}
 	if name != nil {
 		updates["name"] = *name
 	}
 	if parentID != nil {
-		if *parentID == 0 {
-			updates["parent_id"] = nil
-		} else {
-			if *parentID == id {
-				return nil, errors.Invalid("folder cannot be its own parent")
-			}
-			var parent schemas.Folder
-			if err := s.orm.WithContext(ctx).Where("id = ? AND owner_id = ?", *parentID, userID).First(&parent).Error; err != nil {
-				if stderrors.Is(err, gorm.ErrRecordNotFound) {
-					return nil, errors.NotFound("parent folder not found")
-				}
-				return nil, errors.Internal("failed to verify parent folder", err)
-			}
-			updates["parent_id"] = *parentID
+		parent, err := s.folderParent(ctx, userID, &current, *parentID)
+		if err != nil {
+			return nil, err
 		}
+		updates["parent_id"] = parent
 	}
 
 	if len(updates) == 0 {

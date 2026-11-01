@@ -264,6 +264,9 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 	if folder != nil && !fs.scope.ownsFolder(folder) {
 		return os.ErrPermission
 	}
+	if folder != nil && strings.HasPrefix(newName, oldName+"/") {
+		return os.ErrInvalid
+	}
 
 	newBase := path.Base(newName)
 	var newParentID *int64
