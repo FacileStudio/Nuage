@@ -1,8 +1,13 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Spinner } from '@facile/muse';
 	import { nuage } from '$lib/icons';
 
-	let { url, name }: { url: string; name: string } = $props();
+	let {
+		url,
+		name,
+		zoomed = $bindable(false)
+	}: { url: string; name: string; zoomed?: boolean } = $props();
 
 	let scale = $state(1);
 	let x = $state(0);
@@ -19,9 +24,17 @@
 	const MAX = 8;
 
 	$effect(() => {
+		zoomed = scale > 1;
+	});
+
+	$effect(() => {
 		void url;
-		zoomTo(1);
-		rotation = 0;
+		untrack(() => {
+			scale = 1;
+			x = 0;
+			y = 0;
+			rotation = 0;
+		});
 		loaded = false;
 		failed = false;
 	});
@@ -123,7 +136,7 @@
 	</div>
 
 	<div
-		class="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-fc-pill border border-fc-border bg-fc-component/90 p-1 text-fc-fg shadow-lg backdrop-blur"
+		class="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-fc-pill border border-fc-border bg-fc-component/90 p-1 text-fc-fg shadow-lg backdrop-blur"
 	>
 		<button type="button" class="viewer-tool" aria-label="Zoom out" disabled={scale <= MIN} onclick={() => zoomTo(scale / 1.5)}>
 			<iconify-icon icon={nuage.zoomOut} width="18" height="18" class="block"></iconify-icon>

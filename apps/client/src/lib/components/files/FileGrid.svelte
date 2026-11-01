@@ -53,6 +53,9 @@
 		setTimeout(() => failures.set(id, failuresOf(id) + 1), RETRY_DELAY_MS);
 	}
 
+	const OVERLAY =
+		'[@media(pointer:coarse)]:absolute [@media(pointer:coarse)]:top-3 [@media(pointer:coarse)]:right-3 [@media(pointer:coarse)]:z-10 [@media(pointer:coarse)]:flex [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:rounded-fc-pill [@media(pointer:coarse)]:bg-fc-component/90 [@media(pointer:coarse)]:shadow-md [@media(pointer:coarse)]:backdrop-blur';
+
 	const key = (entry: BrowserEntry) => `${entry.type}:${entry.id}`;
 	const isDragged = (entry: BrowserEntry) =>
 		dnd.item?.type === entry.type && dnd.item?.id === entry.id;
@@ -124,6 +127,7 @@
 {/snippet}
 
 {#snippet actions(entry: BrowserEntry)}
+	<span class={entry.type === 'file' ? OVERLAY : ''}>
 	{#if selection.mode}
 		<SelectToggle
 			checked={selection.has(entry.type, entry.id)}
@@ -138,11 +142,12 @@
 			type="button"
 			aria-label="Actions for {entry.name}"
 			onclick={(e) => menuFromButton(e, entry)}
-			class="inline-flex size-8 shrink-0 items-center justify-center rounded-fc-pill text-fc-fg-muted transition hover:bg-fc-bg hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+			class="inline-flex size-8 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill text-fc-fg-muted transition hover:bg-fc-bg hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
 		>
 			<iconify-icon icon={nuage.more} width="16" height="16" class="block"></iconify-icon>
 		</button>
 	{/if}
+	</span>
 {/snippet}
 
 {#snippet tile(entry: BrowserEntry)}
@@ -185,7 +190,7 @@
 				{/if}
 			</button>
 		{/if}
-		<div class="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
+		<div class="flex min-h-11 min-w-0 items-center gap-2.5 px-3 py-2.5">
 			{#if entry.type === 'folder'}
 				<button
 					type="button"
@@ -198,7 +203,7 @@
 				icon={entry.icon}
 				width="20"
 				height="20"
-				class="pointer-events-none relative block shrink-0 text-fc-fg-muted"
+				class="pointer-events-none relative block shrink-0 text-fc-fg-muted {entry.type === 'file' ? 'max-sm:hidden' : ''}"
 			></iconify-icon>
 			<div class="pointer-events-none relative min-w-0 flex-1 [&_input]:pointer-events-auto">
 				{@render name(entry)}
@@ -208,7 +213,9 @@
 					</span>
 				{/if}
 			</div>
-			<div class="relative">{@render actions(entry)}</div>
+			<div class="relative {entry.type === 'file' ? '[@media(pointer:coarse)]:contents' : ''}">
+				{@render actions(entry)}
+			</div>
 		</div>
 	</Card>
 {/snippet}
@@ -217,7 +224,7 @@
 	{#if folderEntries.length > 0}
 		<section class="flex flex-col gap-3" aria-label="Folders">
 			<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">Folders</h2>
-			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+			<div class="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
 				{#each folderEntries as entry (key(entry))}
 					{@render tile(entry)}
 				{/each}

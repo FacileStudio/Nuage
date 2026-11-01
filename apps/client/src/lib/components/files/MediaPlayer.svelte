@@ -68,20 +68,28 @@
 <svelte:document onfullscreenchange={() => (fullscreen = document.fullscreenElement === wrapper)} />
 
 {#snippet controls()}
-	<div class="flex flex-col gap-2">
-		<div class="relative h-1.5 w-full rounded-fc-pill bg-fc-border">
-			<div class="absolute inset-y-0 left-0 rounded-fc-pill bg-fc-fg-muted/40" style="width: {loaded}%"></div>
-			<div class="absolute inset-y-0 left-0 rounded-fc-pill bg-fc-accent" style="width: {played}%"></div>
-			<input
-				type="range"
-				min="0"
-				max={duration || 0}
-				step="0.1"
-				bind:value={currentTime}
-				aria-label="Seek"
-				aria-valuetext="{formatDuration(currentTime)} of {formatDuration(duration)}"
-				class="absolute -inset-y-2 inset-x-0 w-full cursor-pointer opacity-0"
-			/>
+	<div class="flex flex-col gap-1 sm:gap-2">
+		<div class="flex items-center gap-2">
+			<span class="w-10 shrink-0 text-right text-fc-xs text-fc-fg-muted tabular-nums sm:hidden">
+				{formatDuration(currentTime)}
+			</span>
+			<div class="relative h-1.5 min-w-0 flex-1 rounded-fc-pill bg-fc-border">
+				<div class="absolute inset-y-0 left-0 rounded-fc-pill bg-fc-fg-muted/40" style="width: {loaded}%"></div>
+				<div class="absolute inset-y-0 left-0 rounded-fc-pill bg-fc-accent" style="width: {played}%"></div>
+				<input
+					type="range"
+					min="0"
+					max={duration || 0}
+					step="0.1"
+					bind:value={currentTime}
+					aria-label="Seek"
+					aria-valuetext="{formatDuration(currentTime)} of {formatDuration(duration)}"
+					class="absolute -inset-y-2 inset-x-0 w-full cursor-pointer opacity-0 [@media(pointer:coarse)]:-inset-y-4"
+				/>
+			</div>
+			<span class="w-10 shrink-0 text-fc-xs text-fc-fg-muted tabular-nums sm:hidden">
+				{formatDuration(duration)}
+			</span>
 		</div>
 		<div class="flex items-center gap-1 text-fc-fg">
 			<button type="button" class="viewer-tool" aria-label="Back 10 seconds" onclick={() => skip(-10)}>
@@ -98,11 +106,11 @@
 			<button type="button" class="viewer-tool" aria-label="Forward 10 seconds" onclick={() => skip(10)}>
 				<iconify-icon icon={nuage.forward10} width="20" height="20" class="block"></iconify-icon>
 			</button>
-			<span class="ml-2 text-fc-xs text-fc-fg-muted tabular-nums">
+			<span class="ml-2 hidden shrink-0 whitespace-nowrap text-fc-xs text-fc-fg-muted tabular-nums sm:inline">
 				{formatDuration(currentTime)} / {formatDuration(duration)}
 			</span>
-			<div class="flex-1"></div>
-			<button type="button" class="viewer-tool w-auto px-2 text-fc-xs font-medium tabular-nums" aria-label="Playback speed" onclick={cycleRate}>
+			<div class="min-w-0 flex-1"></div>
+			<button type="button" class="viewer-tool w-auto px-2 text-fc-xs font-medium whitespace-nowrap tabular-nums" aria-label="Playback speed" onclick={cycleRate}>
 				{playbackRate}×
 			</button>
 			<button type="button" class="viewer-tool" aria-label={muted ? 'Unmute' : 'Mute'} onclick={() => (muted = !muted)}>
@@ -170,7 +178,7 @@
 			</button>
 		{/if}
 		<div
-			class="absolute inset-x-3 bottom-3 rounded-fc-lg border border-fc-border bg-fc-component/90 px-3 pt-3 pb-1.5 shadow-lg backdrop-blur transition-opacity duration-300 {hideChrome
+			class="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] rounded-fc-lg border border-fc-border bg-fc-component/90 px-3 pt-3 pb-1.5 shadow-lg backdrop-blur transition-opacity duration-300 {hideChrome
 				? 'pointer-events-none opacity-0'
 				: 'opacity-100'}"
 		>
@@ -184,9 +192,9 @@
 		aria-label="Audio player: {name}"
 		tabindex="0"
 		onkeydown={onKeydown}
-		class="flex w-full max-w-md flex-col gap-6 rounded-fc-lg bg-fc-component p-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+		class="flex w-full max-w-md flex-col gap-4 rounded-fc-lg bg-fc-component p-4 sm:gap-6 sm:p-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 	>
-		<div class="flex aspect-square w-full items-center justify-center rounded-fc-md bg-fc-surface text-fc-fg-muted">
+		<div class="flex aspect-square max-h-[45dvh] w-full items-center justify-center rounded-fc-md bg-fc-surface text-fc-fg-muted">
 			<iconify-icon
 				icon={fileIcon(name, 'audio/')}
 				width="96"

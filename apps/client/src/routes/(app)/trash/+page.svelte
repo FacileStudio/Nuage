@@ -113,7 +113,13 @@
 	<PageHeader title="Trash" {description}>
 		{#snippet actions()}
 			{#if !loading && items.length > 0}
-				<Button variant="danger" icon={icons.remove} disabled={busy} onclick={() => (emptying = true)}>
+				<Button
+					variant="danger"
+					icon={icons.remove}
+					class="[@media(pointer:coarse)]:h-11"
+					disabled={busy}
+					onclick={() => (emptying = true)}
+				>
 					Empty trash
 				</Button>
 			{/if}
@@ -170,10 +176,11 @@
 									variant="ghost"
 									size="sm"
 									icon={nuage.restore}
+									class="max-sm:size-11 max-sm:px-0 [@media(pointer:coarse)]:h-11"
 									disabled={busy}
 									onclick={() => restoreItem(item)}
 								>
-									Restore
+									<span class="max-sm:sr-only">Restore</span>
 								</Button>
 								<!-- ghost-danger, not danger: a column of permanently red buttons turns a
 								     list into a hazard sign (CHARTE §2). -->
@@ -181,10 +188,11 @@
 									variant="ghost-danger"
 									size="sm"
 									icon={icons.remove}
+									class="max-sm:size-11 max-sm:px-0 [@media(pointer:coarse)]:h-11"
 									disabled={busy}
 									onclick={() => (deleteTarget = item)}
 								>
-									Delete
+									<span class="max-sm:sr-only">Delete</span>
 								</Button>
 							</div>
 						</td>

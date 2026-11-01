@@ -486,7 +486,7 @@
 						aria-label="Search files"
 						bind:value={searchQuery}
 						oninput={onSearchInput}
-						class="h-9 w-full rounded-fc-md border border-fc-border bg-fc-bg pr-3 pl-9 text-fc-sm text-fc-fg placeholder:text-fc-fg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring lg:w-56"
+						class="h-9 [@media(pointer:coarse)]:h-11 w-full rounded-fc-md border border-fc-border bg-fc-bg pr-3 pl-9 text-fc-sm text-fc-fg placeholder:text-fc-fg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring lg:w-56"
 					/>
 				</div>
 
@@ -497,7 +497,7 @@
 							aria-label={option.label}
 							aria-pressed={viewMode === option.mode}
 							onclick={() => (viewMode = option.mode as 'grid' | 'list')}
-							class="flex size-9 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {viewMode ===
+							class="flex size-9 [@media(pointer:coarse)]:size-11 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {viewMode ===
 							option.mode
 								? 'bg-fc-accent text-fc-accent-fg'
 								: 'text-fc-fg-muted hover:bg-fc-surface hover:text-fc-fg'}"
@@ -511,17 +511,19 @@
 
 		<div class="flex flex-wrap items-center gap-2">
 			{#if selection.mode}
-				<Button variant="ghost" icon={icons.close} onclick={() => selection.exit()}>Done</Button>
+				<Button variant="ghost" icon={icons.close} class="[@media(pointer:coarse)]:h-11" onclick={() => selection.exit()}>Done</Button>
 				<span class="text-fc-sm text-fc-fg-muted">{selection.count} selected</span>
 				<div class="flex-1"></div>
 				<Button
 					variant="outline"
+					class="[@media(pointer:coarse)]:h-11"
 					onclick={() => (selection.all ? selection.clear() : selection.selectAll())}
 				>
 					{selection.all ? 'Deselect all' : 'Select all'}
 				</Button>
 				<Button
 					variant="outline"
+					class="[@media(pointer:coarse)]:h-11"
 					icon={nuage.move}
 					disabled={selection.count === 0}
 					onclick={() => requestMove(null)}
@@ -530,6 +532,7 @@
 				</Button>
 				<Button
 					variant="danger"
+					class="[@media(pointer:coarse)]:h-11"
 					icon={icons.remove}
 					disabled={selection.count === 0}
 					onclick={() => requestDelete(null)}
@@ -537,11 +540,11 @@
 					Move to trash
 				</Button>
 			{:else}
-				<Button icon={icons.upload} onclick={() => fileInput?.click()}>Upload</Button>
-				<Button variant="outline" icon={nuage.newFolder} onclick={() => (newFolderOpen = true)}>
+				<Button icon={icons.upload} class="[@media(pointer:coarse)]:h-11" onclick={() => fileInput?.click()}>Upload</Button>
+				<Button variant="outline" icon={nuage.newFolder} class="[@media(pointer:coarse)]:h-11" onclick={() => (newFolderOpen = true)}>
 					New folder
 				</Button>
-				<Button variant="ghost" icon={icons.check} onclick={() => selection.enter()}>Select</Button>
+				<Button variant="ghost" icon={icons.check} class="[@media(pointer:coarse)]:h-11" onclick={() => selection.enter()}>Select</Button>
 			{/if}
 		</div>
 
@@ -565,7 +568,7 @@
 					: 'Drop files anywhere on this page, or use the buttons above.'}
 			>
 				{#if !searchQuery}
-					<Button icon={icons.upload} onclick={() => fileInput?.click()}>Upload files</Button>
+					<Button icon={icons.upload} class="[@media(pointer:coarse)]:h-11" onclick={() => fileInput?.click()}>Upload files</Button>
 				{/if}
 			</EmptyState>
 		{:else if viewMode === 'grid'}
@@ -673,8 +676,8 @@
 
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button variant="ghost" onclick={() => (newFolderOpen = false)}>Cancel</Button>
-			<Button icon={icons.plus} disabled={!newFolderName.trim()} onclick={createFolder}>
+			<Button variant="ghost" class="[@media(pointer:coarse)]:h-11" onclick={() => (newFolderOpen = false)}>Cancel</Button>
+			<Button icon={icons.plus} class="[@media(pointer:coarse)]:h-11" disabled={!newFolderName.trim()} onclick={createFolder}>
 				Create
 			</Button>
 		</div>

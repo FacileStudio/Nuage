@@ -3,6 +3,7 @@
 	import { Spinner } from '@facile/muse';
 	import { icons, nuage } from '$lib/icons';
 	import { openPdf, type PdfSession } from '$lib/files/pdf';
+	import { pinch } from '$lib/files/pinch';
 	import './pdf-viewer.css';
 
 	let { url }: { url: string } = $props();
@@ -88,7 +89,7 @@
 		const handler = (e: WheelEvent) => {
 			if (!e.ctrlKey && !e.metaKey) return;
 			e.preventDefault();
-			session?.zoomBy(Math.exp(-e.deltaY * 0.01));
+			session?.zoomBy(Math.exp(-e.deltaY * 0.01), [e.clientX, e.clientY]);
 		};
 		node.addEventListener('wheel', handler, { passive: false });
 		return { destroy: () => node.removeEventListener('wheel', handler) };
@@ -112,7 +113,7 @@
 				onchange={() => goTo(Number(pageInput))}
 				inputmode="numeric"
 				aria-label="Page number"
-				class="h-8 w-12 rounded-fc-sm border border-fc-border bg-fc-bg text-center text-fc-sm tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+				class="h-8 w-12 rounded-fc-sm [@media(pointer:coarse)]:h-11 border border-fc-border bg-fc-bg text-center text-fc-sm tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 			/>
 			<span class="text-fc-fg-muted tabular-nums">/ {totalPages || '–'}</span>
 			<button type="button" class="viewer-tool" aria-label="Next page" disabled={pageNum >= totalPages} onclick={() => goTo(pageNum + 1)}>
@@ -132,7 +133,7 @@
 					type="search"
 					placeholder="Find in document"
 					aria-label="Find in document"
-					class="h-8 w-36 rounded-fc-sm border border-fc-border bg-fc-bg px-2 text-fc-sm sm:w-48 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+					class="h-8 w-36 rounded-fc-sm [@media(pointer:coarse)]:h-11 border border-fc-border bg-fc-bg px-2 text-fc-sm sm:w-48 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 				/>
 				{#if query}
 					<span class="text-fc-xs text-fc-fg-muted tabular-nums">{matches.current}/{matches.total}</span>
@@ -167,7 +168,12 @@
 	</div>
 
 	<div class="relative min-h-0 flex-1">
-		<div bind:this={container} use:wheel class="absolute inset-0 overflow-auto px-3">
+		<div
+			bind:this={container}
+			use:wheel
+			use:pinch={{ onPinch: (factor, x, y) => session?.zoomBy(factor, [x, y]) }}
+			class="absolute inset-0 touch-pan-x touch-pan-y overflow-auto overscroll-contain px-3"
+		>
 			<div bind:this={viewerEl} class="pdfViewer"></div>
 		</div>
 		{#if loading}

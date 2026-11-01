@@ -3,7 +3,8 @@
 	import { Button } from '@facile/muse';
 	import { formatSize, relativeTime } from '$lib/format';
 	import { fileIcon, fileTypeLabel, icons, nuage } from '$lib/icons';
-	import type { ViewerFile } from '$lib/files/entries';
+	import { previewKind, type ViewerFile } from '$lib/files/entries';
+	import { swipe } from '$lib/files/swipe';
 	import ViewerStage from './ViewerStage.svelte';
 
 	let {
@@ -22,9 +23,11 @@
 
 	let dialog = $state<HTMLDialogElement | null>(null);
 	let index = $state(0);
+	let zoomed = $state(false);
 
 	const file = $derived(files[index]);
 	const url = $derived(file ? urlFor(file) : '');
+	const kind = $derived(file ? previewKind(file.name, file.mime_type) : null);
 
 	$effect.pre(() => {
 		const found = files.findIndex((f) => f.id === startId);
@@ -40,6 +43,8 @@
 		if (files.length > 1) index = (index + delta + files.length) % files.length;
 	};
 
+	const canSwipe = () => kind !== 'pdf' && !(kind === 'image' && zoomed);
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.target instanceof HTMLInputElement) return;
 		if (e.key === 'ArrowLeft') step(-1);
@@ -52,10 +57,12 @@
 	aria-label={file?.name ?? 'File preview'}
 	onclose={onClose}
 	onkeydown={onKeydown}
-	class="m-0 h-dvh max-h-none w-full max-w-none bg-fc-page p-0 text-fc-fg backdrop:bg-fc-scrim"
+	class="m-0 h-dvh max-h-none w-full max-w-none overflow-hidden overscroll-none bg-fc-page p-0 text-fc-fg backdrop:bg-fc-scrim"
 >
 	{#if file}
-		<div class="flex h-full flex-col">
+		<div
+			class="flex h-full flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+		>
 			<header class="flex items-center gap-3 border-b border-fc-border bg-fc-component px-2 py-2 sm:px-4">
 				<button type="button" class="viewer-tool size-11" aria-label="Close preview" onclick={() => dialog?.close()}>
 					<iconify-icon icon={icons.close} width="20" height="20" class="block"></iconify-icon>
@@ -85,9 +92,12 @@
 				</a>
 			</header>
 
-			<div class="relative flex min-h-0 flex-1 items-center justify-center bg-fc-surface p-2 sm:p-6">
+			<div
+				use:swipe={{ onSwipe: (direction) => step(direction), enabled: canSwipe }}
+				class="relative flex min-h-0 flex-1 touch-pan-y items-center justify-center bg-fc-surface p-2 sm:p-6"
+			>
 				{#key file.id}
-					<ViewerStage {file} {url} />
+					<ViewerStage {file} {url} bind:zoomed />
 				{/key}
 
 				{#if files.length > 1}
@@ -109,6 +119,21 @@
 					</button>
 				{/if}
 			</div>
+
+			{#if files.length > 1}
+				<nav
+					aria-label="Files in this folder"
+					class="flex items-center justify-between border-t border-fc-border bg-fc-component px-2 sm:hidden"
+				>
+					<button type="button" class="viewer-tool" aria-label="Previous file" onclick={() => step(-1)}>
+						<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>
+					</button>
+					<span class="text-fc-xs text-fc-fg-muted tabular-nums">{index + 1} / {files.length}</span>
+					<button type="button" class="viewer-tool" aria-label="Next file" onclick={() => step(1)}>
+						<iconify-icon icon={nuage.next} width="22" height="22" class="block"></iconify-icon>
+					</button>
+				</nav>
+			{/if}
 		</div>
 	{/if}
 </dialog>

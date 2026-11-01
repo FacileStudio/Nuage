@@ -96,7 +96,7 @@
 			type="button"
 			role="menuitem"
 			onclick={() => choose(item)}
-			class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-fc-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {item.tone ===
+			class="flex min-h-9 [@media(pointer:coarse)]:min-h-11 w-full items-center gap-2.5 px-3 py-2 text-left text-fc-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {item.tone ===
 			'danger'
 				? 'text-fc-fg-muted hover:bg-fc-danger/10 hover:text-fc-danger'
 				: 'text-fc-fg hover:bg-fc-surface'}"

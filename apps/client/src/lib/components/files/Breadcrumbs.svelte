@@ -59,7 +59,7 @@
 		aria-label="Up to {parent.name}"
 		title="Up to {parent.name} — drop here to move"
 		onclick={() => onNavigate(parent.id)}
-		class="mr-1 inline-flex size-9 shrink-0 items-center justify-center rounded-fc-pill border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {isDropping(
+		class="mr-1 inline-flex size-9 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {isDropping(
 			parent.id
 		)
 			? 'border-fc-accent bg-fc-accent text-fc-accent-fg'

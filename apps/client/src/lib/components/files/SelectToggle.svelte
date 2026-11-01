@@ -26,7 +26,7 @@
 	aria-checked={indeterminate ? 'mixed' : checked}
 	aria-label={label}
 	onclick={onToggle}
-	class="flex size-5 shrink-0 items-center justify-center rounded-fc-pill border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {checked ||
+	class="relative flex size-5 shrink-0 items-center justify-center rounded-fc-pill border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring [@media(pointer:coarse)]:before:absolute [@media(pointer:coarse)]:before:-inset-3.5 [@media(pointer:coarse)]:before:content-[''] {checked ||
 	indeterminate
 		? 'border-fc-accent bg-fc-accent text-fc-accent-fg'
 		: 'border-fc-border bg-fc-bg text-transparent hover:border-fc-fg-muted'}"

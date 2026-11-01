@@ -131,7 +131,7 @@
 							     unreachable by keyboard, which is how every row in this table shipped. -->
 							<button
 								type="button"
-								class="min-w-0 flex-1 truncate text-left font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+								class="min-w-0 flex-1 truncate text-left font-medium [@media(pointer:coarse)]:min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 								onclick={(e) => (selection.mode ? onSelect(entry, i, e) : onOpen(entry))}
 							>
 								{entry.name}
@@ -151,7 +151,7 @@
 							e.stopPropagation();
 							onMenu(e, entry);
 						}}
-						class="inline-flex size-8 items-center justify-center rounded-fc-md text-fc-fg-muted transition hover:bg-fc-surface hover:text-fc-fg [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+						class="inline-flex size-8 [@media(pointer:coarse)]:size-11 items-center justify-center rounded-fc-md text-fc-fg-muted transition hover:bg-fc-surface hover:text-fc-fg [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 					>
 						<iconify-icon icon={nuage.more} width="16" height="16" class="block"></iconify-icon>
 					</button>
