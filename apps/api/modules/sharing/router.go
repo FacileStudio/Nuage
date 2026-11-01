@@ -23,5 +23,6 @@ func RegisterRoutes(router chi.Router, service *Service, authService *auth.Servi
 
 	router.Get("/shared/{token}", handler.getPublic)
 	router.Get("/shared/{token}/download/{fileId}", handler.downloadSharedFile)
+	router.Get("/shared/{token}/thumbnail/{fileId}", handler.thumbnailSharedFile)
 	router.Get("/shared/{token}/files", handler.listSharedFolder)
 }

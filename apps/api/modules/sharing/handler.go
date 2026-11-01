@@ -7,6 +7,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpfile"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
+	"github.com/FacileStudio/Nuage/apps/api/internal/thumbnail"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
 
@@ -17,10 +18,11 @@ import (
 type Handler struct {
 	service       *Service
 	storageClient *storage.Client
+	thumbs        *thumbnail.Store
 }
 
 func newHandler(service *Service, storageClient *storage.Client) *Handler {
-	return &Handler{service: service, storageClient: storageClient}
+	return &Handler{service: service, storageClient: storageClient, thumbs: thumbnail.NewStore(storageClient)}
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +164,27 @@ func (h *Handler) downloadSharedFile(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "private, no-cache")
 	if err := httpfile.Serve(w, r, file, reader); err != nil {
+		httpjson.WriteError(w, err)
+	}
+}
+
+func (h *Handler) thumbnailSharedFile(w http.ResponseWriter, r *http.Request) {
+	fileID, err := strconv.ParseInt(chi.URLParam(r, "fileId"), 10, 64)
+	if err != nil {
+		httpjson.WriteError(w, errors.Invalid("invalid file id"))
+		return
+	}
+	width, err := thumbnail.Width(r)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+	file, _, err := h.service.getSharedFile(r.Context(), chi.URLParam(r, "token"), fileID)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+	if err := h.thumbs.Serve(w, r, file, width, "private, no-cache"); err != nil {
 		httpjson.WriteError(w, err)
 	}
 }

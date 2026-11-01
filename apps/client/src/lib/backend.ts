@@ -266,7 +266,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, token?: stri
 	return JSON.parse(text) as T;
 }
 
-const isSvg = (file: NuageFile): boolean =>
+const isSvg = (file: { name: string; mime_type: string }): boolean =>
 	file.mime_type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
 
 export const backend = {
@@ -633,6 +633,18 @@ export const backend = {
 		if (folderId != null) qs.set('folder_id', String(folderId));
 		const query = qs.size ? `?${qs}` : '';
 		return apiFetch<PublicShareFilesResponse>(`/shared/${shareToken}/files${query}`);
+	},
+
+	/** Downscaled preview of a shared image; an SVG is already small and is served as it is. */
+	publicThumbnailUrl(shareToken: string, file: PublicFile, width: 320 | 640 = 320): string {
+		if (isSvg(file)) return `${backendBaseUrl}/shared/${shareToken}/download/${file.id}`;
+		const version = encodeURIComponent(file.updated_at ?? '');
+		return `${backendBaseUrl}/shared/${shareToken}/thumbnail/${file.id}?w=${width}&v=${version}`;
+	},
+
+	publicThumbnailSrcset(shareToken: string, file: PublicFile): string | undefined {
+		if (isSvg(file)) return undefined;
+		return `${backend.publicThumbnailUrl(shareToken, file, 320)} 320w, ${backend.publicThumbnailUrl(shareToken, file, 640)} 640w`;
 	},
 
 	publicDownloadUrl(shareToken: string, fileId: number): string {

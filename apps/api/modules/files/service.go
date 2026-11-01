@@ -37,13 +37,13 @@ type Service struct {
 	activity      *activity.Logger
 	quota         *quota.Service
 	presignSecret []byte
-	thumbs        *thumbnail.Generator
+	thumbs        *thumbnail.Store
 }
 
 // NewService builds a files Service wired to storage, activity, nook and quota
 // services.
 func NewService(orm *gorm.DB, storageClient *storage.Client, notifier *nook.Notifier, actLogger *activity.Logger, quotaService *quota.Service, presignSecret []byte) *Service {
-	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret, thumbs: thumbnail.New(thumbnailConcurrency)}
+	return &Service{orm: orm, storage: storageClient, notifier: notifier, activity: actLogger, quota: quotaService, presignSecret: presignSecret, thumbs: thumbnail.NewStore(storageClient)}
 }
 
 const maxDeduplicationAttempts = 1000

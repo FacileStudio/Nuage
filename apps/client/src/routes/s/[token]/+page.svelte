@@ -69,9 +69,12 @@
 
 	const urlFor = (file: { id: number }) => backend.publicDownloadUrl(token, file.id);
 
-	function shareThumb(file: PublicFile): string | null {
+	function shareThumb(file: PublicFile): { src: string; srcset?: string } | null {
 		if (previewKind(file.name, file.mime_type) !== 'image' || brokenThumbs[file.id]) return null;
-		return urlFor(file);
+		return {
+			src: backend.publicThumbnailUrl(token, file),
+			srcset: backend.publicThumbnailSrcset(token, file)
+		};
 	}
 </script>
 
@@ -90,10 +93,12 @@
 {/snippet}
 
 {#snippet thumb(file: PublicFile)}
-	{@const src = shareThumb(file)}
-	{#if src}
+	{@const preview = shareThumb(file)}
+	{#if preview}
 		<img
-			{src}
+			src={preview.src}
+			srcset={preview.srcset}
+			sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
 			alt=""
 			loading="lazy"
 			decoding="async"
