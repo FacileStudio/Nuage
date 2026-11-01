@@ -3,7 +3,9 @@ package schemas
 import (
 	"context"
 	stderrors "errors"
+	"strings"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 
 	"gorm.io/gorm"
@@ -65,6 +67,9 @@ func migrateSchema(db *gorm.DB) error {
 	if err := backfillAvatarUploadPath(db); err != nil {
 		return err
 	}
+	if err := backfillMimeTypes(db); err != nil {
+		return err
+	}
 	return ensureAdmin(db)
 }
 
@@ -116,6 +121,34 @@ func backfillAvatarUploadPath(db *gorm.DB) error {
 	}
 
 	return db.Exec(`UPDATE users SET avatar_upload_path = '' WHERE avatar_upload_path IS NULL`).Error
+}
+
+// backfillMimeTypes gives files stored as application/octet-stream the media
+// type their extension implies, so uploads from before the API inferred types
+// become previewable.
+//
+// It rewrites only rows whose type is empty or generic, so a specific type is
+// never overwritten, and it runs as raw SQL so updated_at keeps its value:
+// bumping it would make every sync client re-fetch each fixed file and change
+// the versioned thumbnail URL for no byte-level reason. The statement matches
+// nothing once the rows are fixed, which makes running it at every boot cheap.
+func backfillMimeTypes(db *gorm.DB) error {
+	table := mimetype.Extensions()
+	if len(table) == 0 {
+		return nil
+	}
+	rows := make([]string, 0, len(table))
+	args := make([]any, 0, len(table)*2+1)
+	for ext, mediaType := range table {
+		rows = append(rows, "(?, ?)")
+		args = append(args, ext, mediaType)
+	}
+	args = append(args, mimetype.Generic)
+	return db.Exec(
+		`UPDATE files SET mime_type = known.media_type
+		 FROM (VALUES `+strings.Join(rows, ", ")+`) AS known(ext, media_type)
+		 WHERE lower(substring(files.name from '\.[^./]*$')) = known.ext
+		   AND coalesce(files.mime_type, '') IN ('', ?)`, args...).Error
 }
 
 // ensureAdmin promotes the earliest account when no administrator exists, so a
