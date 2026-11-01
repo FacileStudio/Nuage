@@ -120,18 +120,15 @@ func main() {
 	os.Exit(run())
 }
 
-// startTombstonePruner keeps the sync deletion-marker table bounded by dropping
-// markers older than the retention window clients are allowed to lag behind.
-func startTombstonePruner(ctx context.Context, db *gorm.DB, appLogger *slog.Logger) {
+// startMaintenance runs the hourly housekeeping: it drops sync deletion markers
+// older than the window clients are allowed to lag behind, and deletes for good
+// the trashed items that outlived the trash retention.
+func startMaintenance(ctx context.Context, db *gorm.DB, trashService *trash.Service, appLogger *slog.Logger) {
 	go func() {
-		ticker := time.NewTicker(12 * time.Hour)
+		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for {
-			if removed, err := tombstone.Prune(ctx, db); err != nil {
-				appLogger.Error("failed to prune deletion markers", slog.Any("error", err))
-			} else if removed > 0 {
-				appLogger.Info("pruned deletion markers", slog.Int64("count", removed))
-			}
+			runMaintenance(ctx, db, trashService, appLogger)
 			select {
 			case <-ctx.Done():
 				return
@@ -139,6 +136,19 @@ func startTombstonePruner(ctx context.Context, db *gorm.DB, appLogger *slog.Logg
 			}
 		}
 	}()
+}
+
+func runMaintenance(ctx context.Context, db *gorm.DB, trashService *trash.Service, appLogger *slog.Logger) {
+	if removed, err := tombstone.Prune(ctx, db); err != nil {
+		appLogger.Error("failed to prune deletion markers", slog.Any("error", err))
+	} else if removed > 0 {
+		appLogger.Info("pruned deletion markers", slog.Int64("count", removed))
+	}
+	if purged, err := trashService.PurgeExpired(ctx, time.Now()); err != nil {
+		appLogger.Error("failed to purge expired trash", slog.Any("error", err))
+	} else if purged > 0 {
+		appLogger.Info("purged expired trash", slog.Int("count", purged))
+	}
 }
 
 // registerVersionRoute answers /version and /api/version with the version of
@@ -332,7 +342,7 @@ func run() int {
 	defer stop()
 
 	fileService.StartSessionSweeper(shutdownSignal)
-	startTombstonePruner(shutdownSignal, db, appLogger)
+	startMaintenance(shutdownSignal, db, trashService, appLogger)
 
 	appLogger.Info("server starting", slog.String("addr", addr))
 	select {

@@ -153,10 +153,15 @@ credentials.
 - `PRESIGN_SECRET` is required: the API refuses to boot without it, because presigned download links are unauthenticated and forgeable if the signing key is guessable.
 - Sync clients feed the previous response's `server_time` back as `since`. That cursor is intentionally dated slightly in the past, so a small window of changes is redelivered — clients must apply changes idempotently by `id`.
 - Permanent deletions are recorded in a `tombstones` table (90-day retention) so clients whose cursor predates the purge still learn the file is gone instead of re-uploading it.
-- **Nothing expires the trash.** The only scheduled job is the tombstone pruner, which is a
-  different table; trashed files sit there until someone empties the trash, and their bytes keep
-  counting against quota because the refund happens on permanent delete. The UI used to promise
-  "deleted after 30 days" — do not put that claim back without writing the job.
+- **The trash expires.** `startMaintenance` runs hourly and calls `trash.Service.PurgeExpired`,
+  which deletes for good every trashed file and folder whose `deleted_at` is older than the
+  `trash_retention_days` setting (default 30, `0` = never, admin-only via `PUT /api/settings`,
+  max 3650). It reuses `purgeFilesTx`/`purgeFoldersTx`, so tombstones are recorded and stored
+  objects removed. Quota is refunded per *uploader* (`files.uploaded_by`), not to whoever trashed
+  the file, and versions are refunded to that same uploader. Batches of 500 run under a Postgres
+  advisory lock with `FOR UPDATE`, so two instances cannot double-refund. A retention change
+  applies to items already in the trash: lowering it purges them on the next hourly run.
+  `GET /api/trash` returns `retention_days` and a per-item `expires_at`.
 - `/login` and `/` are the **suite reference implementations** of the shared auth/landing
   convention (see `~/.mycelium/memory/conventions/facile-auth-screen.md`): raw elements, zero
   component imports, four class constants that are byte-identical across 16 repos. They are

@@ -78,6 +78,7 @@
 		'file.versioned': { icon: nuage.versions, label: 'New version', tone: 'info' },
 		'file.restored': { icon: nuage.restore, label: 'Restored', tone: 'success' },
 		'file.permanently_deleted': { icon: icons.remove, label: 'Permanently deleted', tone: 'danger' },
+		'file.expired': { icon: icons.remove, label: 'Expired from trash', tone: 'danger' },
 		'folder.created': { icon: nuage.newFolder, label: 'Created folder', tone: 'success' },
 		'folder.updated': { icon: nuage.rename, label: 'Updated folder', tone: 'info' },
 		'folder.deleted': { icon: icons.remove, label: 'Deleted folder', tone: 'warning' },
@@ -87,6 +88,7 @@
 			label: 'Permanently deleted folder',
 			tone: 'danger'
 		},
+		'folder.expired': { icon: icons.remove, label: 'Expired folder from trash', tone: 'danger' },
 		'share.created': { icon: nuage.share, label: 'Shared', tone: 'info' },
 		'share.revoked': { icon: nuage.shareOff, label: 'Revoked share', tone: 'warning' }
 	};

@@ -11,6 +11,7 @@
 	const spaceStore = getSpaceStore();
 
 	let items = $state<TrashItem[]>([]);
+	let retentionDays = $state(0);
 	let loading = $state(true);
 	let busy = $state(false);
 	let emptying = $state(false);
@@ -26,6 +27,7 @@
 		try {
 			const res = await backend.listTrash(app.token, { space_id: spaceStore.id });
 			items = res.items ?? [];
+			retentionDays = res.retention_days ?? 0;
 		} catch {
 			items = [];
 			toast.danger('Could not load the trash.');
@@ -76,17 +78,31 @@
 	const itemIcon = (item: TrashItem) =>
 		item.type === 'folder' ? icons.folder : fileIcon(item.name, item.mime_type ?? '');
 
-	/*
-	 * Since nothing expires the trash and quota is only refunded on permanent delete, the one
-	 * number that matters here is how much space emptying it would give back. Saying "still
-	 * counts against your storage" without saying how much leaves the user to guess.
-	 *
-	 * Folder rows carry no size — the API only reports bytes for files — so this is a floor,
-	 * not a total, and it is worded as one.
-	 */
 	const reclaimable = $derived(
 		items.reduce((sum, item) => sum + (item.type === 'file' ? (item.size ?? 0) : 0), 0)
 	);
+
+	const DAY_MS = 86_400_000;
+
+	const daysLeft = (item: TrashItem): number | null =>
+		item.expires_at
+			? Math.max(0, Math.ceil((Date.parse(item.expires_at) - Date.now()) / DAY_MS))
+			: null;
+
+	const expiryLabel = (days: number) =>
+		days === 0
+			? 'Removed for good within the hour'
+			: `Removed for good in ${days} ${days === 1 ? 'day' : 'days'}`;
+
+	const description = $derived.by(() => {
+		const keep =
+			retentionDays > 0
+				? `Deleted items are removed for good after ${retentionDays} ${retentionDays === 1 ? 'day' : 'days'}.`
+				: 'Deleted items stay here until you remove them.';
+		return reclaimable > 0
+			? `${keep} Emptying the trash would give back at least ${formatSize(reclaimable)}.`
+			: `${keep} Until then they still count against your storage.`;
+	});
 </script>
 
 <svelte:head>
@@ -94,18 +110,7 @@
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
-	<!--
-	  The old copy promised deletion "after 30 days". Nothing purges the trash — the only
-	  scheduled job on the API is the 90-day pruner for sync *tombstones*, which is a different
-	  table — and quota is refunded on permanent delete only. So the promise was false in both
-	  halves: nothing expired, and the space was never coming back on its own.
-	-->
-	<PageHeader
-		title="Trash"
-		description={reclaimable > 0
-			? `Deleted items stay here until you remove them. Emptying the trash would give back at least ${formatSize(reclaimable)}.`
-			: 'Deleted items stay here until you remove them, and they still count against your storage.'}
-	>
+	<PageHeader title="Trash" {description}>
 		{#snippet actions()}
 			{#if !loading && items.length > 0}
 				<Button variant="danger" icon={icons.remove} disabled={busy} onclick={() => (emptying = true)}>
@@ -144,7 +149,15 @@
 									height="18"
 									class="block shrink-0 text-fc-fg-muted"
 								></iconify-icon>
-								<span class="truncate font-medium">{item.name}</span>
+								<div class="min-w-0">
+									<span class="block truncate font-medium">{item.name}</span>
+									{#if daysLeft(item) !== null}
+										{@const left = daysLeft(item) as number}
+										<span class="block text-fc-xs {left <= 3 ? 'text-fc-warning' : 'text-fc-fg-muted'}">
+											{expiryLabel(left)}
+										</span>
+									{/if}
+								</div>
 							</div>
 						</td>
 						<td class="hidden text-fc-fg-muted sm:table-cell">

@@ -94,10 +94,12 @@ export type TrashItem = {
 	mime_type?: string;
 	size?: number;
 	deleted_at: string;
+	expires_at?: string;
 };
 
 export type TrashResponse = {
 	items: TrashItem[];
+	retention_days: number;
 };
 
 export type ApiToken = {
@@ -436,8 +438,9 @@ export const backend = {
 		return apiFetch<{}>(`/shares/${id}`, { method: 'DELETE' }, token);
 	},
 
-	getSettings(token: string) {
-		return apiFetch<Record<string, string>>('/settings', {}, token);
+	async getSettings(token: string): Promise<Record<string, string>> {
+		const res = await apiFetch<{ settings?: { key: string; value: string }[] }>('/settings', {}, token);
+		return Object.fromEntries((res.settings ?? []).map((setting) => [setting.key, setting.value]));
 	},
 
 	updateSettings(token: string, data: Record<string, string>) {

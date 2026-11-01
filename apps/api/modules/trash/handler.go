@@ -50,7 +50,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpjson.WriteJSON(w, http.StatusOK, TrashListResponse{Items: items})
+	items, retention, err := h.service.withExpiry(r.Context(), items)
+	if err != nil {
+		httpjson.WriteError(w, err)
+		return
+	}
+
+	httpjson.WriteJSON(w, http.StatusOK, TrashListResponse{Items: items, RetentionDays: retention})
 }
 
 func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
