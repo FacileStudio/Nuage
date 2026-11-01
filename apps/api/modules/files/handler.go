@@ -9,6 +9,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/httpfile"
+	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
 
@@ -50,7 +51,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	name := header.Filename
-	mimeType := resolveMime(name, header.Header.Get("Content-Type"))
+	mimeType := mimetype.Resolve(name, header.Header.Get("Content-Type"))
 
 	var folderID *int64
 	if raw := r.FormValue("folder_id"); raw != "" {

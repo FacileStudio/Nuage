@@ -13,6 +13,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
+	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spaceaccess"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
@@ -40,7 +41,7 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 	if req.TotalSize <= 0 {
 		return nil, nil, errors.Invalid("total_size must be positive")
 	}
-	req.MimeType = resolveMime(req.FileName, req.MimeType)
+	req.MimeType = mimetype.Resolve(req.FileName, req.MimeType)
 
 	if err := tokenscope.RequireSpace(ctx, req.SpaceID); err != nil {
 		return nil, nil, err

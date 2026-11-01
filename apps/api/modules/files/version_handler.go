@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
 
@@ -35,7 +36,7 @@ func (h *Handler) reupload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	mimeType := resolveMime(header.Filename, header.Header.Get("Content-Type"))
+	mimeType := mimetype.Resolve(header.Filename, header.Header.Get("Content-Type"))
 
 	record, err := h.service.reuploadFile(r.Context(), userID, chi.URLParam(r, "id"), file, header.Size, mimeType)
 	if err != nil {

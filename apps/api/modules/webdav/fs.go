@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
+	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
@@ -322,10 +323,11 @@ func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath strin
 		}
 	}
 
-	mimeType, err := detectMimeType(content)
+	sniffed, err := detectMimeType(content)
 	if err != nil {
 		return err
 	}
+	mimeType := mimetype.Resolve(name, sniffed)
 
 	store, bucket, err := spacebucket.Open(ctx, fs.db, fs.storage, fs.scope.spaceID)
 	if err != nil {
@@ -376,10 +378,11 @@ func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, conten
 		}
 	}
 
-	mimeType, err := detectMimeType(content)
+	sniffed, err := detectMimeType(content)
 	if err != nil {
 		return err
 	}
+	mimeType := mimetype.Resolve(file.Name, sniffed)
 
 	hasher := sha256.New()
 	tee := io.TeeReader(content, hasher)
