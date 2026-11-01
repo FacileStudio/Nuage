@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/Nuage/apps/api/internal/thumbnail"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
@@ -58,7 +59,7 @@ func thumbnailKey(record *schemas.File, width int) (key, etag string) {
 }
 
 func isThumbnailable(record *schemas.File) bool {
-	mime := resolveMime(record.Name, record.MimeType)
+	mime := mimetype.Resolve(record.Name, record.MimeType)
 	return strings.HasPrefix(mime, "image/") && mime != "image/svg+xml" &&
 		record.Size <= thumbnail.MaxBytes
 }
