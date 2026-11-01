@@ -21,20 +21,24 @@ export const isInternalDrag = (e: DragEvent): boolean =>
  */
 export class DragMove {
 	item = $state<Entry | null>(null);
+	/** Everything the drop moves: the dragged entry plus the rest of the selection it belongs to. */
+	group = $state<Entry[]>([]);
 	target = $state<DropTarget>(null);
 
 	#depth: Record<string, number> = {};
 
-	start(e: DragEvent, type: ItemType, id: number, name: string): void {
+	start(e: DragEvent, type: ItemType, id: number, name: string, group: Entry[] = []): void {
 		this.item = { type, id };
+		this.group = group.length > 0 ? group : [{ type, id }];
 		if (!e.dataTransfer) return;
 		e.dataTransfer.effectAllowed = 'move';
 		e.dataTransfer.setData(MOVE_TYPE, JSON.stringify({ type, id }));
-		e.dataTransfer.setData('text/plain', name);
+		e.dataTransfer.setData('text/plain', this.group.length > 1 ? `${this.group.length} items` : name);
 	}
 
 	end(): void {
 		this.item = null;
+		this.group = [];
 		this.target = null;
 		this.#depth = {};
 	}
@@ -55,8 +59,9 @@ export class DragMove {
 	 * tested without a rune runtime.
 	 */
 	wouldOrphan(targetFolderId: number, folders: Folder[]): boolean {
-		if (this.item?.type !== 'folder') return false;
-		return isSelfOrDescendant(targetFolderId, this.item.id, folders);
+		return this.group.some(
+			(entry) => entry.type === 'folder' && isSelfOrDescendant(targetFolderId, entry.id, folders)
+		);
 	}
 
 	/** True when this folder is a legal drop for whatever is currently being dragged. */

@@ -2,6 +2,7 @@ import { icons, toast } from '@facile/muse';
 
 export type UndoAction = {
 	label: string;
+	icon?: string;
 	execute: () => Promise<void>;
 };
 
@@ -24,7 +25,7 @@ export function pushUndo(action: UndoAction) {
 
 	current = action;
 	toastId = toast.neutral(action.label, {
-		icon: icons.remove,
+		icon: action.icon ?? icons.remove,
 		duration: UNDO_WINDOW_MS,
 		action: { label: 'Undo', onClick: () => void undoLast() },
 		onDismiss: () => {

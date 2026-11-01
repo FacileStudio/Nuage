@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DragMove, DropTarget } from '$lib/files/dnd.svelte';
-	import { icons } from '$lib/icons';
+	import { icons, nuage } from '$lib/icons';
 
 	let {
 		crumbs,
@@ -29,8 +29,8 @@
 	const accepts = (id: number | null, isLast: boolean) =>
 		dnd.item !== null && !isLast && !(dnd.item.type === 'folder' && dnd.item.id === id);
 
-	function dragProps(id: number | null, isLast: boolean) {
-		const key = `crumb:${id ?? 'root'}`;
+	function dragProps(id: number | null, isLast: boolean, slot = 'crumb') {
+		const key = `${slot}:${id ?? 'root'}`;
 		return {
 			ondragover: (e: DragEvent) => {
 				if (!accepts(id, isLast)) return;
@@ -53,7 +53,29 @@
 	}
 </script>
 
+{#snippet up(parent: { id: number | null; name: string })}
+	<button
+		type="button"
+		aria-label="Up to {parent.name}"
+		title="Up to {parent.name} — drop here to move"
+		onclick={() => onNavigate(parent.id)}
+		class="mr-1 inline-flex size-9 shrink-0 items-center justify-center rounded-fc-pill border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {isDropping(
+			parent.id
+		)
+			? 'border-fc-accent bg-fc-accent text-fc-accent-fg'
+			: dnd.item
+				? 'border-dashed border-fc-accent text-fc-fg'
+				: 'border-fc-border text-fc-fg-muted hover:bg-fc-surface hover:text-fc-fg'}"
+		{...dragProps(parent.id, false, 'up')}
+	>
+		<iconify-icon icon={nuage.parent} width="18" height="18" class="block"></iconify-icon>
+	</button>
+{/snippet}
+
 <nav class="flex min-w-0 flex-wrap items-center gap-1 text-fc-sm" aria-label="Breadcrumb">
+	{#if crumbs.length > 1}
+		{@render up(crumbs[crumbs.length - 2])}
+	{/if}
 	{#each crumbs as crumb, i (crumb.id ?? 'root')}
 		{@const isLast = i === crumbs.length - 1}
 		{#if i > 0}

@@ -24,8 +24,11 @@
 	import Breadcrumbs from '$lib/components/files/Breadcrumbs.svelte';
 	import ContextMenu, { type MenuItem } from '$lib/components/files/ContextMenu.svelte';
 	import FileGrid from '$lib/components/files/FileGrid.svelte';
-	import FilePreview from '$lib/components/files/FilePreview.svelte';
+	import FileViewer from '$lib/components/files/FileViewer.svelte';
 	import FileTable from '$lib/components/files/FileTable.svelte';
+	import MoveDialog from '$lib/components/files/MoveDialog.svelte';
+	import { moveEntries } from '$lib/files/moves';
+	import type { Entry } from '$lib/files/selection.svelte';
 	import ShareModal from '$lib/components/files/ShareModal.svelte';
 
 	const app = getContext<{ token: string; refreshQuota: () => void }>('app');
@@ -58,6 +61,10 @@
 	let newFolderOpen = $state(false);
 	let newFolderName = $state('');
 	let pendingDelete = $state<BrowserEntry[] | null>(null);
+	let moveTargets = $state<BrowserEntry[] | null>(null);
+
+	const previewable = $derived(files.filter(isPreviewable));
+	const parentCrumb = $derived(breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2] : null);
 
 	const folderFromUrl = $derived.by(() => {
 		const raw = page.url.searchParams.get('folder');
@@ -154,7 +161,7 @@
 			return;
 		}
 		const file = entry.raw as NuageFile;
-		if (isPreviewable(file.mime_type)) previewFile = file;
+		if (isPreviewable(file)) previewFile = file;
 		else window.open(backend.downloadUrl(file.id), '_blank');
 	}
 
@@ -260,35 +267,49 @@
 		if (e.key === 'Escape') cancelRename();
 	}
 
+	const selectedEntries = () => {
+		const keys = new Set(selection.keys);
+		return entries.filter((e) => keys.has(itemKey(e.type, e.id)));
+	};
+
+	function startDrag(e: DragEvent, entry: BrowserEntry) {
+		const group = selection.has(entry.type, entry.id) && selection.count > 1 ? selectedEntries() : [];
+		dnd.start(e, entry.type, entry.id, entry.name, group);
+	}
+
 	async function moveInto(targetFolderId: number | null) {
-		const moving = dnd.item;
+		const group = dnd.group;
 		dnd.end();
-		if (!moving || targetFolderId === currentFolderId) return;
+		await moveTo(group, targetFolderId, null);
+	}
 
-		const { type, id } = moving;
+	async function moveTo(items: Entry[], target: number | null, targetName: string | null) {
+		if (items.length === 0 || target === currentFolderId) return;
 		const origin = currentFolderId;
-		try {
-			if (type === 'file') await backend.updateFile(app.token, id, { folder_id: targetFolderId });
-			else await backend.updateFolder(app.token, id, { parent_id: targetFolderId });
-
+		const { moved, failed } = await moveEntries(app.token, items, target);
+		if (failed > 0) toast.danger(`${failed} ${failed === 1 ? 'item' : 'items'} could not be moved.`);
+		if (moved.length > 0) {
+			const where = targetName ?? (target === null ? 'Files' : 'folder');
 			pushUndo({
-				label: 'Item moved',
+				label: moved.length === 1 ? `Moved to ${where}` : `${moved.length} items moved to ${where}`,
+				icon: nuage.move,
 				async execute() {
-					if (type === 'file') await backend.updateFile(app.token, id, { folder_id: origin });
-					else await backend.updateFolder(app.token, id, { parent_id: origin });
+					await moveEntries(app.token, moved, origin);
 					await loadContents();
 				}
 			});
-			await loadContents();
-		} catch {
-			toast.danger('Could not move that.');
 		}
+		if (selection.mode) selection.exit();
+		await loadContents();
+	}
+
+	function requestMove(entry: BrowserEntry | null) {
+		moveTargets = selection.count > 1 || !entry ? selectedEntries() : [entry];
 	}
 
 	function requestDelete(entry: BrowserEntry | null) {
 		if (selection.count > 1) {
-			const keys = new Set(selection.keys);
-			pendingDelete = entries.filter((e) => keys.has(itemKey(e.type, e.id)));
+			pendingDelete = selectedEntries();
 		} else if (entry) {
 			pendingDelete = [entry];
 		}
@@ -336,7 +357,7 @@
 
 	function onGlobalKeydown(e: KeyboardEvent) {
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-		if (previewFile || newFolderOpen || pendingDelete || shareTarget) return;
+		if (previewFile || newFolderOpen || pendingDelete || shareTarget || moveTargets) return;
 
 		const mod = isMac ? e.metaKey : e.ctrlKey;
 		if (mod && e.key === 'a' && selection.mode) {
@@ -386,6 +407,20 @@
 			});
 		}
 		items.push({
+			label: many ? `Move ${selection.count} items…` : 'Move to…',
+			icon: nuage.move,
+			onSelect: () => requestMove(entry)
+		});
+		if (parentCrumb) {
+			const parent = parentCrumb;
+			items.push({
+				label: `Move to ${parent.name}`,
+				icon: nuage.parent,
+				onSelect: () =>
+					void moveTo(many ? selectedEntries() : [entry], parent.id, parent.name)
+			});
+		}
+		items.push({
 			label: many ? `Move ${selection.count} items to trash` : 'Move to trash',
 			icon: icons.remove,
 			tone: 'danger',
@@ -394,7 +429,7 @@
 		return items;
 	});
 
-	const thumbnailUrl = (entry: BrowserEntry) => backend.downloadUrl(entry.id);
+	const thumbnailUrl = (entry: BrowserEntry) => backend.thumbnailUrl(entry.raw as NuageFile);
 	const renamingKey = $derived(renaming ? itemKey(renaming.type, renaming.id) : null);
 </script>
 
@@ -483,6 +518,14 @@
 					{selection.all ? 'Deselect all' : 'Select all'}
 				</Button>
 				<Button
+					variant="outline"
+					icon={nuage.move}
+					disabled={selection.count === 0}
+					onclick={() => requestMove(null)}
+				>
+					Move
+				</Button>
+				<Button
 					variant="danger"
 					icon={icons.remove}
 					disabled={selection.count === 0}
@@ -534,6 +577,7 @@
 				onOpen={openEntry}
 				{onSelect}
 				onMenu={openMenu}
+				onDragStart={startDrag}
 				onDrop={moveInto}
 				{onRenameKeydown}
 				onRenameCancel={cancelRename}
@@ -549,6 +593,7 @@
 				onOpen={openEntry}
 				{onSelect}
 				onMenu={openMenu}
+				onDragStart={startDrag}
 				onDrop={moveInto}
 				{onRenameKeydown}
 				onRenameCancel={cancelRename}
@@ -581,10 +626,23 @@
 {/if}
 
 {#if previewFile}
-	<FilePreview
-		file={previewFile}
-		url={backend.downloadUrl(previewFile.id)}
+	<FileViewer
+		files={previewable}
+		startId={previewFile.id}
 		onClose={() => (previewFile = null)}
+		onShare={(file) => (shareTarget = { type: 'file', id: file.id, name: file.name })}
+	/>
+{/if}
+
+{#if moveTargets}
+	<MoveDialog
+		token={app.token}
+		spaceId={spaceStore.id}
+		items={moveTargets}
+		originId={currentFolderId}
+		trail={breadcrumbs}
+		onMove={(target, name) => moveTargets && void moveTo(moveTargets, target, name)}
+		onClose={() => (moveTargets = null)}
 	/>
 {/if}
 

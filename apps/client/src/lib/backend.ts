@@ -334,11 +334,24 @@ export const backend = {
 		return `${backendBaseUrl}/files/${id}/download`;
 	},
 
+	/** A cacheable URL for an `<img>`: it changes whenever the file does. */
+	thumbnailUrl(file: NuageFile): string {
+		return `${backendBaseUrl}/files/${file.id}/download?v=${encodeURIComponent(file.updated_at)}`;
+	},
+
+	/** Moves a file or folder. The API reads a missing target as "unchanged" and `0` as the root. */
+	moveItem(token: string, type: 'file' | 'folder', id: number, folderId: number | null) {
+		const target = folderId ?? 0;
+		return type === 'file'
+			? apiFetch<NuageFile>(`/files/${id}`, { method: 'PUT', body: JSON.stringify({ folder_id: target }) }, token)
+			: apiFetch<FolderResponse>(`/folders/${id}`, { method: 'PUT', body: JSON.stringify({ parent_id: target }) }, token);
+	},
+
 	deleteFile(token: string, id: number) {
 		return apiFetch<{ deleted: boolean }>(`/files/${id}`, { method: 'DELETE' }, token);
 	},
 
-	updateFile(token: string, id: number, data: { name?: string; folder_id?: number | null }) {
+	updateFile(token: string, id: number, data: { name: string }) {
 		return apiFetch<NuageFile>(`/files/${id}`, {
 			method: 'PUT',
 			body: JSON.stringify(data)
@@ -371,7 +384,7 @@ export const backend = {
 		return apiFetch<FolderDetailResponse>(`/folders/${id}`, {}, token);
 	},
 
-	updateFolder(token: string, id: number, data: { name?: string; parent_id?: number | null }) {
+	updateFolder(token: string, id: number, data: { name: string }) {
 		return apiFetch<FolderResponse>(`/folders/${id}`, {
 			method: 'PUT',
 			body: JSON.stringify(data)
@@ -590,10 +603,6 @@ export const backend = {
 
 	publicDownloadUrl(shareToken: string, fileId: number): string {
 		return `${backendBaseUrl}/shared/${shareToken}/download/${fileId}`;
-	},
-
-	syncProfile(token: string) {
-		return apiFetch<{ synced: boolean }>('/auth/sync-profile', { method: 'POST' }, token);
 	},
 
 	/**

@@ -106,9 +106,6 @@
 				loaded = true;
 				refreshQuota();
 				loadSpaces();
-				backend.syncProfile(stored).then(({ synced }) => {
-					if (synced) backend.me(stored).then((r) => { user = r.user; });
-				}).catch(() => {});
 			} catch (error) {
 				if (isAuthError(error)) { goto('/login'); return; }
 				failure = error instanceof Error && error.message ? error.message : 'Could not reach Nuage.';

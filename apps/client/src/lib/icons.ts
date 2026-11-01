@@ -28,7 +28,23 @@ export const nuage = {
 	login: 'solar:login-3-linear',
 	lock: 'solar:lock-linear',
 	memberAdd: 'solar:user-plus-linear',
-	personal: 'solar:user-circle-linear'
+	personal: 'solar:user-circle-linear',
+	move: 'solar:move-to-folder-linear',
+	parent: 'solar:arrow-left-up-linear',
+	play: 'solar:play-bold',
+	pause: 'solar:pause-bold',
+	back10: 'solar:rewind-10-seconds-back-linear',
+	forward10: 'solar:rewind-10-seconds-forward-linear',
+	volume: 'solar:volume-loud-linear',
+	muted: 'solar:volume-cross-linear',
+	zoomIn: 'solar:magnifer-zoom-in-linear',
+	zoomOut: 'solar:magnifer-zoom-out-linear',
+	fitWidth: 'solar:maximize-square-minimalistic-linear',
+	rotate: 'solar:refresh-linear',
+	exitFullscreen: 'solar:quit-full-screen-linear',
+	pip: 'solar:pip-2-linear',
+	next: 'mdi:chevron-right',
+	previous: 'mdi:chevron-left'
 } as const;
 
 /** File-type glyphs, keyed by the family `fileIcon` resolves a MIME type into. */
@@ -46,6 +62,26 @@ const FILE_TYPES = {
 } as const;
 
 const EXTENSION_TYPES: Record<string, keyof typeof FILE_TYPES> = {
+	jpg: 'image',
+	jpeg: 'image',
+	png: 'image',
+	gif: 'image',
+	webp: 'image',
+	avif: 'image',
+	svg: 'image',
+	heic: 'image',
+	mp4: 'video',
+	m4v: 'video',
+	mov: 'video',
+	webm: 'video',
+	mkv: 'video',
+	mp3: 'audio',
+	m4a: 'audio',
+	wav: 'audio',
+	ogg: 'audio',
+	flac: 'audio',
+	aac: 'audio',
+	pdf: 'pdf',
 	zip: 'archive',
 	rar: 'archive',
 	'7z': 'archive',

@@ -47,3 +47,29 @@
 	--radius-lg: var(--radius-fc-lg);
 	--radius-xl: var(--radius-fc-lg);
 }
+
+@layer components {
+	/* Compact icon control shared by the file viewers' toolbars and the media player. */
+	.viewer-tool {
+		display: inline-flex;
+		height: 2.25rem;
+		min-width: 2.25rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-fc-pill);
+		color: inherit;
+		transition: background-color 150ms;
+	}
+	.viewer-tool:hover:not(:disabled) {
+		background: var(--color-fc-surface);
+	}
+	.viewer-tool:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+	.viewer-tool:focus-visible {
+		outline: 2px solid var(--color-fc-ring);
+		outline-offset: 2px;
+	}
+}

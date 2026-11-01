@@ -18,6 +18,7 @@
 		onOpen,
 		onSelect,
 		onMenu,
+		onDragStart,
 		onDrop,
 		onRenameKeydown,
 		onRenameCancel
@@ -31,6 +32,7 @@
 		onOpen: (entry: BrowserEntry) => void;
 		onSelect: (entry: BrowserEntry, index: number, e: MouseEvent) => void;
 		onMenu: (e: MouseEvent, entry: BrowserEntry) => void;
+		onDragStart: (e: DragEvent, entry: BrowserEntry) => void;
 		onDrop: (target: number) => void;
 		onRenameKeydown: (e: KeyboardEvent) => void;
 		onRenameCancel: () => void;
@@ -73,7 +75,7 @@
 						? 'bg-fc-surface'
 						: 'hover:bg-fc-surface'} {isDragged(entry) ? 'opacity-40' : ''}"
 				draggable={!selection.mode}
-				ondragstart={(e) => dnd.start(e, entry.type, entry.id, entry.name)}
+				ondragstart={(e) => onDragStart(e, entry)}
 				ondragend={() => dnd.end()}
 				ondragover={(e) => {
 					if (entry.type !== 'folder' || !dnd.canDropOn(entry.id, folders)) return;
@@ -149,7 +151,7 @@
 							e.stopPropagation();
 							onMenu(e, entry);
 						}}
-						class="inline-flex size-8 items-center justify-center rounded-fc-md text-fc-fg-muted opacity-0 transition hover:bg-fc-surface hover:text-fc-fg group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+						class="inline-flex size-8 items-center justify-center rounded-fc-md text-fc-fg-muted transition hover:bg-fc-surface hover:text-fc-fg [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 					>
 						<iconify-icon icon={nuage.more} width="16" height="16" class="block"></iconify-icon>
 					</button>

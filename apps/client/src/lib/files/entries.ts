@@ -41,7 +41,7 @@ const fileEntry = (file: NuageFile): BrowserEntry => ({
 	size: file.size,
 	date: file.updated_at,
 	mime: file.mime_type,
-	isImage: file.mime_type.startsWith('image/'),
+	isImage: previewKind(file.name, file.mime_type) === 'image',
 	raw: file
 });
 
@@ -50,8 +50,26 @@ export function toEntries(folders: Folder[], files: NuageFile[]): BrowserEntry[]
 	return [...folders.map(folderEntry), ...files.map(fileEntry)];
 }
 
-export const isPreviewable = (mime: string): boolean =>
-	mime.startsWith('image/') ||
-	mime.startsWith('video/') ||
-	mime.startsWith('audio/') ||
-	mime === 'application/pdf';
+export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf';
+
+const PREVIEW_EXTENSIONS: Record<string, PreviewKind> = {
+	jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', avif: 'image', svg: 'image',
+	mp4: 'video', m4v: 'video', mov: 'video', webm: 'video', ogv: 'video',
+	mp3: 'audio', m4a: 'audio', aac: 'audio', wav: 'audio', ogg: 'audio', oga: 'audio', opus: 'audio', flac: 'audio',
+	pdf: 'pdf'
+};
+
+/**
+ * Which viewer can show a file, from its MIME type or, when the type is the generic
+ * `application/octet-stream` older uploads were stored with, from its extension.
+ */
+export function previewKind(name: string, mime: string): PreviewKind | null {
+	if (mime.startsWith('image/')) return 'image';
+	if (mime.startsWith('video/')) return 'video';
+	if (mime.startsWith('audio/')) return 'audio';
+	if (mime === 'application/pdf') return 'pdf';
+	return PREVIEW_EXTENSIONS[name.split('.').pop()?.toLowerCase() ?? ''] ?? null;
+}
+
+export const isPreviewable = (file: { name: string; mime_type: string }): boolean =>
+	previewKind(file.name, file.mime_type) !== null;
