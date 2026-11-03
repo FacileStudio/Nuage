@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-03
+
 ### Added
 
 - **Delegated access for suite services.** With `OIDC_MACHINE_AUDIENCE` set to Nuage's client
