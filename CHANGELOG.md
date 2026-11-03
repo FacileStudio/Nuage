@@ -10,6 +10,14 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-11-03
+
+### Fixed
+
+- **The desktop sidebar drops the Spaces entry.** The space switcher at the top of the sidebar
+  already lists spaces and links to "Manage spaces", so the bottom nav row was a duplicate. The
+  mobile bar keeps it, since it has no switcher.
+
 ## [0.10.2] - 2026-11-03
 
 ### Fixed
