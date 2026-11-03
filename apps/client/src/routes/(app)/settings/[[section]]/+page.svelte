@@ -54,12 +54,8 @@
 	let profileName = $state('');
 	let profileSaving = $state(false);
 
-	let avatarUploading = $state(false);
-	let avatarInput = $state<HTMLInputElement | null>(null);
-	// avatar_url arrives ready to use, whether it points at a file this instance serves or
-	// straight at the SSO photo. Never prefix it with the API base URL.
+	const ACCOUNT_URL = 'https://sso.facile.studio/account';
 	let avatarUrl = $derived(app.user?.avatar_url ?? '');
-	let avatarFromSSO = $derived(app.user?.avatar_source === 'oidc');
 
 	let apiTokens = $state<ApiToken[]>([]);
 	let spaces = $state<Space[]>([]);
@@ -128,36 +124,6 @@
 			toast.danger(message(e, 'Could not update your profile.'));
 		}
 		profileSaving = false;
-	}
-
-	async function handleAvatarUpload(e: Event) {
-		const input = e.target as HTMLInputElement;
-		if (!input.files?.length) return;
-		avatarUploading = true;
-		try {
-			const formData = new FormData();
-			formData.set('avatar', input.files[0]);
-			// The response is the whole profile: avatar_url is derived server-side, so
-			// picking it apart here would be a second place for the rule to drift.
-			const res = await backend.uploadAvatar(app.token, formData);
-			app.setUser(res.user);
-			toast.success('Picture updated.');
-		} catch (e) {
-			toast.danger(message(e, 'Could not upload that picture.'));
-		}
-		avatarUploading = false;
-		input.value = '';
-	}
-
-	async function removeAvatar() {
-		avatarUploading = true;
-		try {
-			const res = await backend.deleteAvatar(app.token);
-			app.setUser(res.user);
-		} catch (e) {
-			toast.danger(message(e, 'Could not remove your picture.'));
-		}
-		avatarUploading = false;
 	}
 
 	function openTokenDrawer() {
@@ -272,52 +238,22 @@
 	<div class="flex flex-col gap-4">
 		<h1 class="text-fc-2xl font-semibold text-fc-fg">Settings</h1>
 		<Tabs items={tabs} value={section} label="Settings sections" />
-		<Divider class="my-0" />
+		<Divider />
 	</div>
 
 	{#if section === 'profile'}
 		<SettingsSection title="Picture" description="Shown next to your name across the app.">
 			<div class="flex flex-wrap items-center gap-4">
 				<Avatar name={profileName || app.user?.email || ''} src={avatarUrl} size="lg" />
-				<!-- Uploading is the fallback, not a second option: when SSO supplies a photo
-				     it is the one shown everywhere, so offering a file picker here would take
-				     an upload the user would never see. Say where the photo lives instead. -->
-				{#if avatarFromSSO}
-					<div class="flex min-w-0 flex-col gap-1">
-						<p class="text-fc-sm text-fc-fg">Your picture comes from single sign-on.</p>
-						<p class="text-fc-xs text-fc-fg-muted">
-							Change it on the login portal and it updates here within a few minutes.
-						</p>
-					</div>
-				{:else}
-					<div class="flex flex-wrap gap-2">
-						<Button
-							variant="outline"
-							icon={nuage.camera}
-							disabled={avatarUploading}
-							onclick={() => avatarInput?.click()}
-						>
-							{avatarUploading ? 'Uploading…' : 'Change'}
-						</Button>
-						{#if avatarUrl}
-							<Button
-								variant="ghost-danger"
-								icon={icons.remove}
-								disabled={avatarUploading}
-								onclick={removeAvatar}
-							>
-								Remove
-							</Button>
-						{/if}
-						<input
-							bind:this={avatarInput}
-							type="file"
-							accept="image/*"
-							class="hidden"
-							onchange={handleAvatarUpload}
-						/>
-					</div>
-				{/if}
+				<div class="flex min-w-0 flex-1 flex-col gap-1">
+					<p class="text-fc-sm text-fc-fg">Your picture comes from your Facile account.</p>
+					<p class="text-fc-xs text-fc-fg-muted">
+						Change it there and it shows here on your next page load.
+					</p>
+				</div>
+				<Button variant="outline" icon={nuage.camera} href={ACCOUNT_URL} target="_blank" rel="noopener">
+					Change picture
+				</Button>
 			</div>
 		</SettingsSection>
 

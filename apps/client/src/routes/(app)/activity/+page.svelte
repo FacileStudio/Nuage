@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
-	import { Button, EmptyState, Spinner, toast } from '@facile/muse';
+	import { Avatar, Button, EmptyState, Spinner, toast } from '@facile/muse';
 	import { backend, type ActivityEntry } from '$lib/backend';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { relativeTime } from '$lib/format';
@@ -163,6 +163,7 @@
 									<iconify-icon icon={event.icon} width="16" height="16" class="block"></iconify-icon>
 								</span>
 								<p class="min-w-0 flex-1 truncate text-fc-sm text-fc-fg">
+									{#if entry.actor}<span class="text-fc-fg-muted">{entry.actor.name || entry.actor.email} · </span>{/if}
 									<span class="font-medium">{event.label}</span>
 									{#if entry.resource_name}<span class="text-fc-fg-muted"> — {entry.resource_name}</span>{/if}
 								</p>
@@ -173,6 +174,13 @@
 								>
 									{relativeTime(entry.created_at)}
 								</time>
+								{#if entry.actor}
+									<Avatar
+										name={entry.actor.name || entry.actor.email}
+										src={entry.actor.avatar_url || undefined}
+										size="sm"
+									/>
+								{/if}
 							</div>
 						{/each}
 					</div>

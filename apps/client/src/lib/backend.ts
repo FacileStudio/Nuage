@@ -26,7 +26,6 @@ export type UserProfile = {
 	email: string;
 	name: string;
 	avatar_url: string;
-	avatar_source: string;
 	color: string;
 	created_at: string;
 };
@@ -170,6 +169,7 @@ export type ActivityEntry = {
 	resource_name: string;
 	metadata: string;
 	created_at: string;
+	actor?: { id: number; name: string; email: string; avatar_url: string };
 };
 
 export type ActivityListResponse = {
@@ -503,33 +503,6 @@ export const backend = {
 			method: 'PATCH',
 			body: JSON.stringify(data)
 		}, token);
-	},
-
-	uploadAvatar(token: string, formData: FormData) {
-		const headers = new Headers();
-		headers.set(csrfHeader, '1');
-		if (token) headers.set('Authorization', `Bearer ${token}`);
-		return fetch(`${backendBaseUrl}/users/me/avatar`, {
-			method: 'POST',
-			body: formData,
-			credentials: 'same-origin',
-			headers
-		}).then(async (r) => {
-			if (!r.ok) {
-				let payload: ApiErrorPayload | undefined;
-				try {
-					payload = (await r.json()) as ApiErrorPayload;
-				} catch {
-					payload = undefined;
-				}
-				throw new Error(payload?.error?.message || `Upload failed with status ${r.status}`);
-			}
-			return (await r.json()) as MeResponse;
-		});
-	},
-
-	deleteAvatar(token: string) {
-		return apiFetch<MeResponse>('/users/me/avatar', { method: 'DELETE' }, token);
 	},
 
 	getApiToken(token: string) {

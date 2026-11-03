@@ -1,6 +1,10 @@
 package schemas
 
-import "gorm.io/gorm"
+import (
+	"strings"
+
+	"gorm.io/gorm"
+)
 
 // AdoptPorte moves Nuage's credentials onto porte's tables.
 //
@@ -23,8 +27,38 @@ func AdoptPorte(db *gorm.DB, issuer string) error {
 	if issuer == "" {
 		return nil
 	}
-	return db.Exec(adoptOIDCSubjects, issuer).Error
+	if err := db.Exec(adoptOIDCSubjects, issuer).Error; err != nil {
+		return err
+	}
+	return backfillPictureURLs(db, issuer)
 }
+
+// backfillPictureURLs points every SSO account at its Registre picture without
+// waiting for a sign-in.
+//
+// Registre serves each person's current picture at the stable URL
+// <issuer>/avatars/<subject> and answers 404 when there is none, which the
+// client renders as initials. Accounts that last signed in before the claim
+// existed hold nothing, or a copy from an earlier identity provider, so they
+// showed initials until their next login. The URL is derived from the
+// (provider, subject) row porte already keeps, so the update is idempotent and
+// a row already on the right URL is left alone. A non-https issuer is skipped,
+// matching oidcavatar.PhotoURL.
+func backfillPictureURLs(db *gorm.DB, issuer string) error {
+	base := strings.TrimRight(issuer, "/")
+	if !strings.HasPrefix(strings.ToLower(base), "https://") {
+		return nil
+	}
+	return db.Exec(pictureURLBackfill, base, issuer, base).Error
+}
+
+const pictureURLBackfill = `
+UPDATE users SET oidc_picture_url = ? || '/avatars/' || i.subject
+  FROM porte_identities i
+ WHERE i.user_id = users.id
+   AND i.provider = ?
+   AND coalesce(users.oidc_picture_url, '') NOT LIKE ? || '/avatars/%';
+`
 
 // porteSchema is porte/pg's Schema with its porte_users table left out and the
 // foreign keys repointed at Nuage's own users.

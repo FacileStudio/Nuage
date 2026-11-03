@@ -178,3 +178,63 @@ func TestBackfillAvatarUploadPath(t *testing.T) {
 		t.Errorf("a data: placeholder must not count as an SSO photo, origin = %q", placeholder.AvatarOrigin())
 	}
 }
+
+// The backfill must point an SSO account at its Registre picture, replace a copy left by an
+// earlier provider, leave an already-correct row alone, and never touch a password-only
+// account. Running it twice proves it is idempotent.
+func TestBackfillPictureURLs(t *testing.T) {
+	orm := openTestDatabase(t)
+	if err := orm.Exec(porteSchema).Error; err != nil {
+		t.Fatalf("porte schema: %v", err)
+	}
+
+	const issuer = "https://sso.facile.studio/"
+	rows := []pictureRow{
+		{"never-signed-in@example.com", "", issuer, "sub-a", "https://sso.facile.studio/avatars/sub-a"},
+		{"old-provider@example.com", "https://porte.facile.studio/media/user-avatars/a.png", issuer, "sub-b", "https://sso.facile.studio/avatars/sub-b"},
+		{"current@example.com", "https://sso.facile.studio/avatars/sub-c", issuer, "sub-c", "https://sso.facile.studio/avatars/sub-c"},
+		{"password-only@example.com", "", "local", "", ""},
+	}
+	for _, row := range rows {
+		seedIdentity(t, orm, row)
+	}
+
+	for range 2 {
+		if err := backfillPictureURLs(orm, issuer); err != nil {
+			t.Fatalf("backfill: %v", err)
+		}
+	}
+
+	for _, row := range rows {
+		var got User
+		if err := orm.Where("email = ?", row.email).First(&got).Error; err != nil {
+			t.Fatalf("read %s: %v", row.email, err)
+		}
+		if got.OIDCPictureURL != row.want {
+			t.Errorf("%s: oidc_picture_url = %q, want %q", row.email, got.OIDCPictureURL, row.want)
+		}
+	}
+}
+
+// pictureRow is one account in the picture backfill test: what it stores, the identity it
+// holds, and the URL the backfill must leave on it.
+type pictureRow struct {
+	email, stored, provider, subject, want string
+}
+
+// seedIdentity creates a user and its porte identity row. An empty subject stands for a
+// local account, whose subject is the user id.
+func seedIdentity(t *testing.T, orm *gorm.DB, row pictureRow) {
+	t.Helper()
+	user := User{Email: row.email, OIDCPictureURL: row.stored}
+	if err := orm.Create(&user).Error; err != nil {
+		t.Fatalf("seed %s: %v", row.email, err)
+	}
+	subject := row.subject
+	if subject == "" {
+		subject = fmt.Sprint(user.ID)
+	}
+	if err := orm.Exec(`INSERT INTO porte_identities (user_id, provider, subject) VALUES (?, ?, ?)`, user.ID, row.provider, subject).Error; err != nil {
+		t.Fatalf("seed identity %s: %v", row.email, err)
+	}
+}

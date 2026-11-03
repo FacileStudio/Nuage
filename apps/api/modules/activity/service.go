@@ -80,7 +80,7 @@ func (s *Service) List(ctx context.Context, params ListParams) ([]schemas.Activi
 
 	var records []schemas.ActivityLog
 	offset := (params.Page - 1) * params.PerPage
-	if err := query.Order("created_at desc").Offset(offset).Limit(params.PerPage).Find(&records).Error; err != nil {
+	if err := query.Preload("User", selectActor).Order("created_at desc").Offset(offset).Limit(params.PerPage).Find(&records).Error; err != nil {
 		return nil, 0, errors.Internal("failed to list activity", err)
 	}
 
@@ -118,8 +118,14 @@ func (s *Service) ForFile(ctx context.Context, userID int64, fileID int64, page,
 	})
 }
 
+// selectActor narrows the preloaded actor to the columns its avatar and initials come from,
+// so the session tokens on the users row never leave the database for an activity page.
+func selectActor(db *gorm.DB) *gorm.DB {
+	return db.Select("id", "name", "email", "oidc_picture_url", "avatar_upload_path")
+}
+
 func mapActivity(record schemas.ActivityLog) ActivityResponse {
-	return ActivityResponse{
+	resp := ActivityResponse{
 		ID:           record.ID,
 		UserID:       record.UserID,
 		EventType:    record.EventType,
@@ -129,4 +135,13 @@ func mapActivity(record schemas.ActivityLog) ActivityResponse {
 		Metadata:     record.Metadata,
 		CreatedAt:    record.CreatedAt.UTC().Format(time.RFC3339),
 	}
+	if record.User.ID != 0 {
+		resp.Actor = &ActivityActor{
+			ID:        record.User.ID,
+			Name:      record.User.Name,
+			Email:     record.User.Email,
+			AvatarURL: record.User.Avatar(),
+		}
+	}
+	return resp
 }

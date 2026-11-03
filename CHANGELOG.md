@@ -17,10 +17,20 @@ tag records what shipped rather than triggering the deploy.
   service (Bulle) opens the API for the signed-in user it names. `nuage.read` allows GET, HEAD
   and OPTIONS; anything that changes data needs `nuage.write`. A delegated token never holds the
   admin role. Both variables are empty by default, which leaves behaviour unchanged.
+- **Registre profile pictures for everyone, without signing in again.** At boot, every SSO
+  account is pointed at `<OIDC_ISSUER>/avatars/<subject>`, the stable URL Registre serves the
+  current picture from. A picture changed in Registre shows on the next page load, and a person
+  without one sees initials.
+- **The activity feed names who did what.** Each event carries an `actor` with `name`, `email`
+  and `avatar_url`, and the feed shows that person's picture or initials.
 
 ### Changed
 
 - porte v0.5.2 to v0.7.0.
+- @facile/muse v0.5.0 to v0.6.5.
+- **Pictures are set in Registre.** Settings links to `https://sso.facile.studio/account`
+  instead of offering an upload. Uploaded pictures stay stored and still show for an account
+  with no Registre picture URL. `POST` and `DELETE /api/users/me/avatar` are unchanged.
 
 ## [0.7.0] - 2026-11-01
 

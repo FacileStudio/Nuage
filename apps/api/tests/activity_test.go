@@ -23,9 +23,10 @@ func TestActivityLogOnUpload(t *testing.T) {
 
 	var result struct {
 		Activities []struct {
-			EventType    string `json:"event_type"`
-			ResourceType string `json:"resource_type"`
-			ResourceName string `json:"resource_name"`
+			EventType    string                  `json:"event_type"`
+			ResourceType string                  `json:"resource_type"`
+			ResourceName string                  `json:"resource_name"`
+			Actor        *struct{ Email string } `json:"actor"`
 		} `json:"activities"`
 		Total int64 `json:"total"`
 	}
@@ -38,6 +39,7 @@ func TestActivityLogOnUpload(t *testing.T) {
 			found = true
 			assert.Equal(t, "file", a.ResourceType)
 			assert.Equal(t, "tracked.txt", a.ResourceName)
+			assert.Equal(t, &struct{ Email string }{"activity@example.com"}, a.Actor)
 		}
 	}
 	assert.True(t, found, "expected file.uploaded activity")
