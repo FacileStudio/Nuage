@@ -490,7 +490,7 @@
 					/>
 				</div>
 
-				<div class="flex overflow-hidden rounded-fc-md border border-fc-border">
+				<div class="flex overflow-hidden rounded-fc-md bg-fc-surface">
 					{#each [{ mode: 'list', icon: nuage.list, label: 'List view' }, { mode: 'grid', icon: nuage.grid, label: 'Grid view' }] as option (option.mode)}
 						<button
 							type="button"

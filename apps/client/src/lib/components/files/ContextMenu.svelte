@@ -67,13 +67,13 @@
 	}
 </script>
 
-<!-- A floating surface, so it pairs its border with a shadow (CHARTE §5). Clicks inside must
+<!-- A floating surface, so a shadow separates it from the page (CHARTE §5). Clicks inside must
      not reach the document listener that closes it. -->
 <div
 	bind:this={menu}
 	role="menu"
 	tabindex="-1"
-	class="fixed z-40 min-w-48 rounded-fc-md border border-fc-border bg-fc-component py-1 shadow-lg {position
+	class="fixed z-40 min-w-48 rounded-fc-md bg-fc-component py-1 shadow-lg {position
 		? ''
 		: 'invisible'}"
 	style="left: {position?.left ?? 0}px; top: {position?.top ?? 0}px"

@@ -122,11 +122,10 @@
 					{/if}
 				</div>
 
-				<!-- One container, rows separated by their own rule. A border per row would draw a
-				     box around every person (CHARTE §5). -->
+				<!-- One container, rows separated by spacing. -->
 				<Card class="flex flex-col p-0">
 					{#each members as member (member.id)}
-						<div class="flex items-center gap-3 border-t border-fc-border p-4 first:border-t-0">
+						<div class="flex items-center gap-3 p-4">
 							<MemberAvatar
 								name={memberName(member)}
 								src={member.user?.avatar_url}

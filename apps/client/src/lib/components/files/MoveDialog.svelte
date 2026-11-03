@@ -84,7 +84,7 @@
 		{/each}
 	</nav>
 
-	<div class="h-72 overflow-y-auto rounded-fc-md border border-fc-border">
+	<div class="h-72 overflow-y-auto rounded-fc-md bg-fc-surface">
 		{#if loading}
 			<div class="flex h-full items-center justify-center"><Spinner /></div>
 		{:else if folders.length === 0}

@@ -114,7 +114,7 @@
 {/snippet}
 
 <div class="flex h-dvh flex-col bg-fc-page text-fc-fg">
-	<header class="flex items-center gap-3 border-b border-fc-border bg-fc-component px-4 py-2 sm:px-6">
+	<header class="flex items-center gap-3 bg-fc-component px-4 py-2 sm:px-6">
 		{@render brand()}
 
 		{#if share?.file}

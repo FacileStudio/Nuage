@@ -199,7 +199,7 @@
 		<Card class="flex flex-col p-0">
 			{#each members as member (member.id)}
 				<div
-					class="flex flex-wrap items-center gap-3 border-t border-fc-border p-4 first:border-t-0"
+					class="flex flex-wrap items-center gap-3 p-4"
 				>
 					<MemberAvatar
 						name={memberName(member)}
@@ -282,7 +282,7 @@
 						aria-checked={selected}
 						tabindex={selected || (!picked && candidate.id === candidates[0].id) ? 0 : -1}
 						onclick={() => (picked = candidate)}
-						class="flex items-center gap-3 border-t border-fc-border p-3 text-left transition-colors first:border-t-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {selected
+						class="flex items-center gap-3 p-3 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {selected
 							? 'bg-fc-accent text-fc-accent-fg'
 							: 'hover:bg-fc-component'}"
 					>

@@ -46,7 +46,7 @@
 
 {#if !redirecting}
 <div class="min-h-screen bg-background text-foreground">
-	<header class="border-b border-border">
+	<header class="bg-muted">
 		<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
 			<div class="flex h-14 items-center gap-3">
 				<iconify-icon icon="solar:cloud-bold-duotone" width="28" class="text-foreground"></iconify-icon>
@@ -96,8 +96,8 @@
 
 		<section class="mx-auto max-w-5xl px-6 py-20">
 			<div class="grid gap-6 md:grid-cols-3">
-				<div class="rounded-lg border border-border p-6">
-					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border">
+				<div class="rounded-lg bg-muted p-6">
+					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-background">
 						<iconify-icon icon="solar:upload-linear" width="20"></iconify-icon>
 					</div>
 					<h3 class="text-base font-semibold">Upload anything</h3>
@@ -106,8 +106,8 @@
 					</p>
 				</div>
 
-				<div class="rounded-lg border border-border p-6">
-					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border">
+				<div class="rounded-lg bg-muted p-6">
+					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-background">
 						<iconify-icon icon="solar:folder-linear" width="20"></iconify-icon>
 					</div>
 					<h3 class="text-base font-semibold">Organize with folders</h3>
@@ -116,8 +116,8 @@
 					</p>
 				</div>
 
-				<div class="rounded-lg border border-border p-6">
-					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border">
+				<div class="rounded-lg bg-muted p-6">
+					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-background">
 						<iconify-icon icon="solar:lock-linear" width="20"></iconify-icon>
 					</div>
 					<h3 class="text-base font-semibold">Self-hosted</h3>
@@ -146,7 +146,7 @@
 		</section>
 	</main>
 
-	<footer class="border-t border-border text-center text-muted">
+	<footer class="text-center text-muted">
 		<div class="mx-auto max-w-5xl px-6 py-6 text-sm text-muted-foreground">
 			&copy; {new Date().getFullYear()} Nuage by <a href="https://facile.studio" class="underline hover:cursor-pointer font-semibold">Facile.</a>
 		</div>

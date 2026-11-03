@@ -178,7 +178,7 @@
 			</button>
 		{/if}
 		<div
-			class="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] rounded-fc-lg border border-fc-border bg-fc-component/90 px-3 pt-3 pb-1.5 shadow-lg backdrop-blur transition-opacity duration-300 {hideChrome
+			class="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] rounded-fc-lg bg-fc-component/90 px-3 pt-3 pb-1.5 shadow-lg backdrop-blur transition-opacity duration-300 {hideChrome
 				? 'pointer-events-none opacity-0'
 				: 'opacity-100'}"
 		>

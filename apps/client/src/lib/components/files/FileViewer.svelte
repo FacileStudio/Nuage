@@ -63,7 +63,7 @@
 		<div
 			class="flex h-full flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
 		>
-			<header class="flex items-center gap-3 border-b border-fc-border bg-fc-component px-2 py-2 sm:px-4">
+			<header class="flex items-center gap-3 bg-fc-component px-2 py-2 sm:px-4">
 				<button type="button" class="viewer-tool size-11" aria-label="Close preview" onclick={() => dialog?.close()}>
 					<iconify-icon icon={icons.close} width="20" height="20" class="block"></iconify-icon>
 				</button>
@@ -105,7 +105,7 @@
 						type="button"
 						aria-label="Previous file"
 						onclick={() => step(-1)}
-						class="absolute top-1/2 left-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill border border-fc-border bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
+						class="absolute top-1/2 left-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
 					>
 						<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>
 					</button>
@@ -113,7 +113,7 @@
 						type="button"
 						aria-label="Next file"
 						onclick={() => step(1)}
-						class="absolute top-1/2 right-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill border border-fc-border bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
+						class="absolute top-1/2 right-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
 					>
 						<iconify-icon icon={nuage.next} width="22" height="22" class="block"></iconify-icon>
 					</button>
@@ -123,7 +123,7 @@
 			{#if files.length > 1}
 				<nav
 					aria-label="Files in this folder"
-					class="flex items-center justify-between border-t border-fc-border bg-fc-component px-2 sm:hidden"
+					class="flex items-center justify-between bg-fc-component px-2 sm:hidden"
 				>
 					<button type="button" class="viewer-tool" aria-label="Previous file" onclick={() => step(-1)}>
 						<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>

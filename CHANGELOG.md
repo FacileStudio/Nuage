@@ -10,6 +10,15 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-03
+
+### Changed
+
+- **Borderless cards, panels and floating bars.** The web app moves to muse v0.8.0 and drops the
+  decorative borders on the landing cards, the login error and tabs, list containers, the context
+  menu, the viewers' toolbars and the member rows. Tone and spacing separate them now. Inputs,
+  focus rings, the drop zone and the selection toggle keep theirs.
+
 ## [0.8.0] - 2026-11-03
 
 ### Added

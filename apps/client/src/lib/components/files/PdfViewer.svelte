@@ -103,7 +103,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="flex h-full w-full flex-col overflow-hidden rounded-fc-lg bg-fc-surface" onkeydown={onKeydown}>
-	<div class="flex flex-wrap items-center gap-1 border-b border-fc-border bg-fc-component px-2 py-1.5 text-fc-fg">
+	<div class="flex flex-wrap items-center gap-1 bg-fc-component px-2 py-1.5 text-fc-fg">
 		<div class="flex items-center gap-1 text-fc-sm">
 			<button type="button" class="viewer-tool" aria-label="Previous page" disabled={pageNum <= 1} onclick={() => goTo(pageNum - 1)}>
 				<iconify-icon icon={nuage.previous} width="18" height="18" class="block"></iconify-icon>
