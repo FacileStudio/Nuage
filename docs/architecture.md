@@ -86,6 +86,10 @@ Three credentials exist:
   `/auth/oidc/callback` completes it and upserts the user, and `POST /auth/sync-profile`
   refreshes the profile. `SSO_ONLY=true` removes `/auth/register` and `/auth/login` from the
   router entirely rather than merely hiding them in the UI.
+- **Delegated JWTs**, enabled when `OIDC_MACHINE_AUDIENCE` is Nuage's client id. Registre
+  mints them by token exchange for another suite service acting for a user (`act.sub`), and
+  porte maps `sub` to the local account. With `OIDC_SCOPE_PREFIX=nuage`, reads need
+  `nuage.read` and writes `nuage.write`. A delegated token never carries the admin role.
 
 Nuage is one of the six Go backends federating to Authentik at `porte.facile.studio` through
 `go-oidc/v3`. OIDC remains additive: the local user table stays authoritative, and the

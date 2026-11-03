@@ -61,6 +61,14 @@ func skipOrFail(t *testing.T, format string, args ...any) {
 
 func setupTestServer(t *testing.T) *testServer {
 	t.Helper()
+	return setupTestServerWith(t, env.Config{SSOOnly: false}, nil)
+}
+
+// setupTestServerWith builds the server from appEnv. A non-nil verifier stands
+// in for the provider's JWKS on the bearer JWT path, and the OIDC kit is then
+// left unmounted because its discovery would need a live issuer.
+func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVerifier) *testServer {
+	t.Helper()
 
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -111,8 +119,7 @@ func setupTestServer(t *testing.T) *testServer {
 
 	notifier := nook.NewNotifier(db)
 	actLogger := activity.NewLogger(db)
-	appEnv := env.Config{SSOOnly: false}
-	sessions, passwords, kit, err := buildTestAuth(db, notifier, appEnv)
+	sessions, passwords, kit, err := buildTestAuth(db, notifier, appEnv, verifier)
 	if err != nil {
 		t.Fatalf("build auth: %v", err)
 	}
@@ -133,7 +140,9 @@ func setupTestServer(t *testing.T) *testServer {
 	router.Use(troncmiddleware.CORS(troncmiddleware.CORSConfig{AllowedOrigins: []string{"*"}}))
 
 	sessions.Mount(router)
-	kit.Mount(router)
+	if kit != nil {
+		kit.Mount(router)
+	}
 	auth.RegisterRoutes(router, authService, appEnv)
 	users.RegisterRoutes(router, userService, authService)
 	files.RegisterRoutes(router, fileService, authService)
@@ -249,7 +258,10 @@ func parseJSON(resp *http.Response, dest any) {
 // buildTestAuth mirrors main.go's buildAuth over the test database. OIDC is
 // unconfigured here, so oidc.New returns a kit that serves /auth/config and
 // authenticates sessions and nothing else — which is what these tests exercise.
-func buildTestAuth(db *gorm.DB, notifier *nook.Notifier, appEnv env.Config) (*session.Manager, *local.Kit, *oidc.Kit, error) {
+// With a verifier the manager also takes bearer JWTs and no kit is built.
+func buildTestAuth(
+	db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, verifier session.JWTVerifier,
+) (*session.Manager, *local.Kit, *oidc.Kit, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, nil, nil, err
@@ -262,16 +274,19 @@ func buildTestAuth(db *gorm.DB, notifier *nook.Notifier, appEnv env.Config) (*se
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	kit, err := oidc.New(context.Background(), cfg, oidc.Deps{
+	passwords, err := local.New(local.Config{AllowRegistration: true, MinPasswordLength: 8}, local.Deps{
 		Users: users, Identities: store.Identities(), Sessions: sessions,
-		Codes: store.LoginCodes(), Logger: slog.Default(),
+		Logger: slog.Default(), Count: users.CountUsers,
 	})
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	passwords, err := local.New(local.Config{AllowRegistration: true, MinPasswordLength: 8}, local.Deps{
+	if verifier != nil {
+		return sessions.WithJWT(verifier), passwords, nil, nil
+	}
+	kit, err := oidc.New(context.Background(), cfg, oidc.Deps{
 		Users: users, Identities: store.Identities(), Sessions: sessions,
-		Logger: slog.Default(), Count: users.CountUsers,
+		Codes: store.LoginCodes(), Logger: slog.Default(),
 	})
 	if err != nil {
 		return nil, nil, nil, err

@@ -13,6 +13,12 @@ Auth is `Authorization: Bearer <token>`, either a session token or an API token.
 what lets a plain `<img src>` or a browser download work. WebDAV uses HTTP Basic instead,
 with an API token as the password.
 
+With `OIDC_MACHINE_AUDIENCE` set, the bearer may also be a delegated JWT that Registre minted
+for Nuage (`aud` = Nuage's client id, `sub` = the user, `act.sub` = the calling service). With
+`OIDC_SCOPE_PREFIX=nuage`, GET, HEAD and OPTIONS need `nuage.read` or `nuage.write`, every
+other method needs `nuage.write`, and a refusal is `403`. Such a token is never admin and is
+refused (`403`) on `/users/me/api-token*` and on `PATCH /users/me`.
+
 An interactive reference powered by Scalar is served at `/docs`, with the OpenAPI 3.1 schema at `/docs/openapi.json`.
 
 ## Health and docs

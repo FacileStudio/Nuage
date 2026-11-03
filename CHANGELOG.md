@@ -10,6 +10,18 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Added
+
+- **Delegated access for suite services.** With `OIDC_MACHINE_AUDIENCE` set to Nuage's client
+  id and `OIDC_SCOPE_PREFIX=nuage`, a short-lived JWT that Registre mints for another suite
+  service (Bulle) opens the API for the signed-in user it names. `nuage.read` allows GET, HEAD
+  and OPTIONS; anything that changes data needs `nuage.write`. A delegated token never holds the
+  admin role. Both variables are empty by default, which leaves behaviour unchanged.
+
+### Changed
+
+- porte v0.5.2 to v0.7.0.
+
 ## [0.7.0] - 2026-11-01
 
 ### Added

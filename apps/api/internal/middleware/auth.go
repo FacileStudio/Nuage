@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
@@ -34,6 +35,12 @@ type Authenticator interface {
 // here and lands in the same context every controller already reads, keeping
 // authcontext.Identity.UserID a decimal string and leaving the ParseInt call
 // sites downstream untouched.
+//
+// A bearer JWT has no session row, so its SessionID is zero. Such a token is
+// another suite service acting for the user, and it never carries the admin
+// role, whatever the account holds. Nor may it mint an API token or change
+// the password or address the account signs in with: a five-minute delegation
+// must not turn itself into a credential that outlives it.
 func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 	hydrate := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -47,8 +54,8 @@ func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 				httpjson.WriteError(w, err)
 				return
 			}
-			if scope != nil && !tokenscope.Permits(request.Method, request.URL.Path) {
-				httpjson.WriteError(w, errors.Forbidden("this token cannot call this endpoint"))
+			if err := permitted(authenticated, scope, request.Method, request.URL.Path); err != nil {
+				httpjson.WriteError(w, err)
 				return
 			}
 			userID, email, isAdmin, err := auth.IdentityForUser(request.Context(), authenticated.UserID)
@@ -59,7 +66,7 @@ func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 			authContext := authcontext.WithIdentity(request.Context(), authcontext.Identity{
 				UserID:  userID,
 				Email:   email,
-				IsAdmin: isAdmin && scope == nil,
+				IsAdmin: isAdmin && scope == nil && authenticated.SessionID != 0,
 			})
 			if scope != nil {
 				authContext = tokenscope.With(authContext, scope)
@@ -70,6 +77,28 @@ func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return auth.RequireAuth(hydrate(next))
 	}
+}
+
+// permitted refuses a restricted API token outside its allowlist and a
+// delegated JWT on the routes that manage credentials.
+func permitted(authenticated porte.Identity, scope *tokenscope.Scope, method, path string) error {
+	if authenticated.SessionID == 0 && managesCredentials(method, path) {
+		return errors.Forbidden("a delegated token cannot manage credentials")
+	}
+	if scope != nil && !tokenscope.Permits(method, path) {
+		return errors.Forbidden("this token cannot call this endpoint")
+	}
+	return nil
+}
+
+// managesCredentials reports whether the route mints, lists or revokes API
+// tokens, or edits the profile that holds the sign-in password and address.
+func managesCredentials(method, path string) bool {
+	path = strings.TrimSuffix(strings.TrimPrefix(path, "/api"), "/")
+	if path == "/users/me" {
+		return method != http.MethodGet
+	}
+	return strings.HasPrefix(path, "/users/me/api-token")
 }
 
 // RequireAdmin rejects authenticated callers that are not administrators. It
