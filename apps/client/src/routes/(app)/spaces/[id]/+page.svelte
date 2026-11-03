@@ -88,7 +88,7 @@
 			title="Space not found"
 			description="It may have been deleted, or you may no longer be a member."
 		>
-			<Button href="/spaces" icon={icons.space}>Back to spaces</Button>
+			<Button href="/spaces" icon={icons.chevronLeft}>Back to spaces</Button>
 		</EmptyState>
 	{:else}
 		<PageHeader title={space.name} description={space.description || undefined}>
