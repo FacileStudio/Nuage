@@ -18,6 +18,7 @@
 	import { backend, type Space, type SpaceMember, type UserProfile } from '$lib/backend';
 	import { icons, nuage } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
+	import { registreSpaceUrl } from '$lib/registre';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MemberAvatar from '$lib/components/MemberAvatar.svelte';
 
@@ -146,7 +147,8 @@
 		}
 	}
 
-	const isOwnerOrAdmin = $derived(space?.role === 'owner' || space?.role === 'admin');
+	const linked = $derived(Boolean(space?.registre_space_id));
+	const isOwnerOrAdmin = $derived(!linked && (space?.role === 'owner' || space?.role === 'admin'));
 	const isOwner = $derived(space?.role === 'owner');
 	const ownerCount = $derived(members.filter((m) => m.role === 'owner').length);
 	const memberName = (member: SpaceMember) => member.user?.name || member.user?.email || 'Unknown';
@@ -190,7 +192,17 @@
 			description="Everyone here can read and write every file in the space."
 		>
 			{#snippet actions()}
-				{#if isOwnerOrAdmin}
+				{#if linked}
+					<Button
+						variant="outline"
+						href={registreSpaceUrl(space?.registre_space_id)}
+						target="_blank"
+						rel="noopener noreferrer"
+						icon={icons.usersGroup}
+					>
+						Manage in Registre
+					</Button>
+				{:else if isOwnerOrAdmin}
 					<Button icon={nuage.memberAdd} onclick={openAdd}>Add member</Button>
 				{/if}
 			{/snippet}

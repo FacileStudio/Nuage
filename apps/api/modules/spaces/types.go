@@ -30,15 +30,17 @@ type UpdateMemberRequest struct {
 	Role string `json:"role"`
 }
 
-// SpaceResponse is one space as returned by the API.
+// SpaceResponse is one space as returned by the API. RegistreSpaceID is set when
+// Registre owns the space's name and members, and null otherwise.
 type SpaceResponse struct {
-	ID          int64  `json:"id"`
-	FacileID    string `json:"facile_id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Role        string `json:"role"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID              int64   `json:"id"`
+	FacileID        string  `json:"facile_id"`
+	RegistreSpaceID *string `json:"registre_space_id"`
+	Name            string  `json:"name"`
+	Description     string  `json:"description"`
+	Role            string  `json:"role"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
 }
 
 // SpaceListResponse is a list of the caller's spaces.

@@ -74,6 +74,7 @@
 	}
 
 	const isOwner = $derived(space?.role === 'owner');
+	const linked = $derived(Boolean(space?.registre_space_id));
 </script>
 
 <svelte:head>
@@ -107,8 +108,8 @@
 	{:else}
 		<SettingsSection title="General" description="How this space is labelled everywhere it appears.">
 			<SettingsRow label="Name" stacked>
-				<Field>
-					<Input bind:value={name} placeholder="Design team" />
+				<Field helper={linked ? 'Renamed in Registre, for every Facile app at once.' : undefined}>
+					<Input bind:value={name} placeholder="Design team" disabled={linked} />
 				</Field>
 			</SettingsRow>
 			<SettingsRow label="Description" stacked>
@@ -136,7 +137,7 @@
 			</SettingsRow>
 		</SettingsSection>
 
-		{#if isOwner}
+		{#if isOwner && !linked}
 			<!-- Danger zone sits last and never gets a heading of its own above the fold: a
 			     destructive action should cost a scroll (CHARTE §14). -->
 			<SettingsSection

@@ -83,7 +83,7 @@ func TestMigrateBucketsMovesLegacySpaceFilesOnce(t *testing.T) {
 	legacy := schemas.File{FacileID: "fac_legacy", Name: "legacy.txt", BucketKey: key, UploadedBy: owner, SpaceID: &spaceID}
 	require.NoError(t, ts.db.Create(&legacy).Error)
 
-	service := spaces.NewService(ts.db, store)
+	service := spaces.NewService(ts.db, store, "")
 	for range 2 {
 		require.NoError(t, service.MigrateBuckets(ctx))
 	}

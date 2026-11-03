@@ -8,6 +8,7 @@
 	import { formatDate } from '$lib/format';
 	import { icons, nuage } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
+	import { registreSpaceUrl } from '$lib/registre';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MemberAvatar from '$lib/components/MemberAvatar.svelte';
 
@@ -66,6 +67,7 @@
 
 	const isCurrent = $derived(space !== null && spaceStore.id === space.id);
 	const isOwnerOrAdmin = $derived(space?.role === 'owner' || space?.role === 'admin');
+	const linked = $derived(Boolean(space?.registre_space_id));
 	const memberName = (member: SpaceMember) => member.user?.name || member.user?.email || 'Unknown';
 </script>
 
@@ -99,9 +101,21 @@
 						Settings
 					</Button>
 				{/if}
-				<Button variant="ghost-danger" icon={icons.logout} onclick={() => (leaveOpen = true)}>
-					Leave space
-				</Button>
+				{#if linked}
+					<Button
+						variant="outline"
+						href={registreSpaceUrl(space?.registre_space_id)}
+						target="_blank"
+						rel="noopener noreferrer"
+						icon={icons.usersGroup}
+					>
+						Manage in Registre
+					</Button>
+				{:else}
+					<Button variant="ghost-danger" icon={icons.logout} onclick={() => (leaveOpen = true)}>
+						Leave space
+					</Button>
+				{/if}
 			{/snippet}
 		</PageHeader>
 
@@ -115,7 +129,7 @@
 							{members.length === 1 ? 'person has' : 'people have'} access to everything in this space.
 						</p>
 					</div>
-					{#if isOwnerOrAdmin}
+					{#if isOwnerOrAdmin && !linked}
 						<Button variant="outline" href="/spaces/{spaceId}/members" icon={nuage.memberAdd}>
 							Manage
 						</Button>

@@ -216,6 +216,15 @@ A space is a shared container: files and folders carry an optional `space_id`, a
 membership carries a role. Membership is unique on `(space_id, user_id)`, and both foreign
 keys cascade on delete.
 
+**Registre owns shared spaces.** When OIDC is configured, Nuage imports its user-made
+spaces into Registre once at boot, retrying with backoff until Registre answers, and then
+mirrors Registre's snapshot at boot, every 5 minutes, and 2 seconds after Registre posts to
+`POST /api/registre/sync` (no credentials, answers `202`, only schedules a pull). A linked
+space carries `registre_space_id`; its name and members come from Registre, so `POST
+/spaces`, renaming, deleting, member changes and leaving answer `409` with the Registre page
+to use instead. The description, folders and files stay Nuage's. Spaces another app
+provisioned (`provisioned_by` set) are never imported or linked and keep working as before.
+
 ## Sync
 
 | Method | Path | Auth |

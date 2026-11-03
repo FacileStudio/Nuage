@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -36,6 +37,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/FacileStudio/Journal/sdk/journal"
+	"github.com/FacileStudio/porte/directory"
 	"github.com/FacileStudio/porte/local"
 	"github.com/FacileStudio/porte/oidc"
 	portepg "github.com/FacileStudio/porte/pg"
@@ -110,6 +112,35 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 		return nil, nil, nil, err
 	}
 	return sessions, passwords, kit, nil
+}
+
+// newDirectory builds the Registre space sync when OIDC is configured, using the app's own
+// client credentials, and returns nils otherwise: without Registre there is nothing to sync
+// and no nudge route to mount.
+func newDirectory(db *gorm.DB, appEnv env.Config, appLogger *slog.Logger) (*spaces.Registre, *directory.Syncer) {
+	if appEnv.OIDC == nil {
+		return nil, nil
+	}
+	registre := spaces.NewRegistre(db, appEnv.OIDC.Issuer, appLogger)
+	syncer := &directory.Syncer{
+		Client: directory.Client{
+			Issuer:       appEnv.OIDC.Issuer,
+			ClientID:     appEnv.OIDC.ClientID,
+			ClientSecret: appEnv.OIDC.ClientSecret,
+		},
+		Apply:  registre.Apply,
+		Logger: appLogger,
+	}
+	return registre, syncer
+}
+
+// registreSpacesURL is Registre's spaces page, where shared spaces are managed once OIDC is
+// configured, and empty when Nuage manages them itself.
+func registreSpacesURL(appEnv env.Config) string {
+	if appEnv.OIDC == nil {
+		return ""
+	}
+	return strings.TrimRight(appEnv.OIDC.Issuer, "/") + "/spaces"
 }
 
 func main() {
@@ -269,7 +300,8 @@ func run() int {
 	sharingService := sharing.NewService(db, notifier, actLogger)
 	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
-	spacesService := spaces.NewService(db, storageClient)
+	spacesService := spaces.NewService(db, storageClient, registreSpacesURL(appEnv))
+	registre, syncer := newDirectory(db, appEnv, appLogger)
 	if err := spacesService.MigrateBuckets(context.Background()); err != nil {
 		appLogger.Error("failed to move space files to their own buckets; serving with the files still in the shared bucket", slog.Any("error", err))
 	}
@@ -292,6 +324,9 @@ func run() int {
 		return storageClient.EnsureBucket(ctx)
 	})
 	registerVersionRoute(router)
+	if syncer != nil {
+		router.Method(http.MethodPost, directory.SyncPath, syncer.Handler())
+	}
 
 	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 
@@ -343,6 +378,9 @@ func run() int {
 
 	fileService.StartSessionSweeper(shutdownSignal)
 	startMaintenance(shutdownSignal, db, trashService, appLogger)
+	if registre != nil {
+		go registre.Run(shutdownSignal, syncer)
+	}
 
 	appLogger.Info("server starting", slog.String("addr", addr))
 	select {

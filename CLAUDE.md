@@ -176,5 +176,16 @@ credentials.
 - `PUT /api/spaces/by-facile-id/{facile_id}` is the idempotent find-or-create: `fac_` plus 24 hex, `INSERT ... ON CONFLICT DO NOTHING` on the unique `facile_id`, the caller becomes owner only when the call created the row, an existing space the caller may not use (non-member, or outside the token's scope) answers the same 404 `space not found` as a missing one, so the error does not confirm an id is taken. The bucket name always derives from the id, never from the request.
 - A file upload whose exact name and content hash already exist live in the same folder or space returns that file (200) and stores nothing, instead of a `(1)` copy. `saveNewFile` decides it under the folder's name lock, so racing sync uploads of the same bytes collapse into one file. Same name with different content still gets a `(1)` name.
 - Find-or-create trusts the caller with an unguessable `facile_id` (96 random bits), so anyone who learns a real suite space id can claim it first, and a caller who is allowed to create can still tell a free id (201) from a taken one (404). Closing that needs suite-level proof of who may provision an id, which does not exist yet.
+- **Registre owns shared spaces.** With OIDC configured, `spaces.Registre.Run` imports every
+  unlinked user-made space (`provisioned_by = ''`) into Registre once, retrying with backoff
+  up to 5 minutes, and only then starts `directory.Syncer.Run` (boot, every 5 minutes, and
+  2 s after a nudge on `POST /api/registre/sync`, mounted on the root router outside every
+  auth middleware). `Apply` runs in one transaction: link by `registre_space_id`, else the
+  oldest unlinked user-made space with the same `lower(name)`, else create; members resolve
+  by porte identity, then email, then a pre-provisioned user plus identity row. Removals only
+  touch members holding an identity under the issuer, so local password accounts stay.
+  Provisioned spaces (Plume, Ardoise publishing targets) are never imported or linked. A linked
+  space answers 409 to `POST /spaces`, rename, delete, member changes and leave; its
+  description, folders and files stay Nuage's.
 - Every space-scoped endpoint calls `spaceaccess.Require` before using a caller-supplied `space_id` as a query or write predicate.
 - Production routing uses Traefik labels in docker-compose.yml (Dokploy deployment on `nuage.facile.studio`). There is **no** strip-prefix middleware: `/api` is owned by the Go router, so a local `curl` against port 4000 must include it.

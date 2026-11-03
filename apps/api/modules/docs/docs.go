@@ -722,7 +722,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/spaces",
-							Summary:      "Create a new space",
+							Summary:      "Create a new space. Answers 409 with the Registre spaces page when OIDC is configured: shared spaces are created in Registre and mirrored here.",
 							Auth:         "bearer",
 							RequestBody:  CreateSpaceRequest{},
 							ResponseBody: SpaceResponse{},
@@ -756,7 +756,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "PUT",
 							Path:         "/spaces/{id}",
-							Summary:      "Update space name",
+							Summary:      "Update a space's name and description. A space linked to Registre (registre_space_id set) keeps Registre's name: renaming it answers 409.",
 							Auth:         "bearer",
 							PathParams:   []Field{{Name: "id", Type: "string", Description: "Space ID"}},
 							RequestBody:  UpdateSpaceRequest{},
@@ -765,7 +765,7 @@ func Reference() apiref.Config {
 						{
 							Method:     "DELETE",
 							Path:       "/spaces/{id}",
-							Summary:    "Delete space and all contents",
+							Summary:    "Delete space and all contents. Answers 409 for a space linked to Registre.",
 							Auth:       "bearer",
 							PathParams: []Field{{Name: "id", Type: "string", Description: "Space ID"}},
 							Status:     http.StatusNoContent,
@@ -781,7 +781,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/spaces/{id}/members",
-							Summary:      "Add a member to space",
+							Summary:      "Add a member to space. Answers 409 for a space linked to Registre, which alone manages its members.",
 							Auth:         "bearer",
 							PathParams:   []Field{{Name: "id", Type: "string", Description: "Space ID"}},
 							RequestBody:  AddSpaceMemberRequest{},
@@ -791,7 +791,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "PUT",
 							Path:         "/spaces/{id}/members/{memberId}",
-							Summary:      "Update space member role",
+							Summary:      "Update space member role. Answers 409 for a space linked to Registre.",
 							Auth:         "bearer",
 							PathParams:   []Field{{Name: "id", Type: "string", Description: "Space ID"}, {Name: "memberId", Type: "string", Description: "Member ID"}},
 							RequestBody:  UpdateSpaceMemberRequest{},
@@ -800,7 +800,7 @@ func Reference() apiref.Config {
 						{
 							Method:     "DELETE",
 							Path:       "/spaces/{id}/members/{memberId}",
-							Summary:    "Remove member from space",
+							Summary:    "Remove member from space. Answers 409 for a space linked to Registre.",
 							Auth:       "bearer",
 							PathParams: []Field{{Name: "id", Type: "string", Description: "Space ID"}, {Name: "memberId", Type: "string", Description: "Member ID"}},
 							Status:     http.StatusNoContent,
@@ -808,7 +808,7 @@ func Reference() apiref.Config {
 						{
 							Method:     "POST",
 							Path:       "/spaces/{id}/leave",
-							Summary:    "Leave a space",
+							Summary:    "Leave a space. Answers 409 for a space linked to Registre: leave it there.",
 							Auth:       "bearer",
 							PathParams: []Field{{Name: "id", Type: "string", Description: "Space ID"}},
 							Status:     http.StatusNoContent,

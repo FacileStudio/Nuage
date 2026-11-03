@@ -4,6 +4,7 @@
 	import { backend, type Space } from '$lib/backend';
 	import { icons } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
+	import { registreSpaceUrl } from '$lib/registre';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const app = getContext<{ token: string }>('app');
@@ -33,7 +34,9 @@
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
 	<PageHeader title="Spaces" description="Shared storage for a team. Files in a space belong to the space, not to you.">
 		{#snippet actions()}
-			<Button href="/spaces/new" icon={icons.plus}>New space</Button>
+			<Button href={registreSpaceUrl()} target="_blank" rel="noopener noreferrer" icon={icons.settings}>
+				Manage in Registre
+			</Button>
 		{/snippet}
 	</PageHeader>
 
@@ -43,9 +46,11 @@
 		<EmptyState
 			icon={icons.usersGroup}
 			title="No spaces yet"
-			description="Create one to share a folder tree with your team instead of passing links around."
+			description="Spaces are created in Registre and show up here with their members, in every Facile app."
 		>
-			<Button href="/spaces/new" icon={icons.plus}>Create your first space</Button>
+			<Button href={registreSpaceUrl()} target="_blank" rel="noopener noreferrer" icon={icons.plus}>
+				Create a space in Registre
+			</Button>
 		</EmptyState>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2">

@@ -3,14 +3,21 @@ package schemas
 import "time"
 
 // Space is a shared team workspace.
+//
+// RegistreSpaceID links the row to the space Registre owns. A linked space is
+// named and staffed by Registre's snapshot alone and never edited here; its
+// folders and files stay Nuage's. It is nullable so the spaces Registre has not
+// answered for, and the ones another app provisioned, stay unlinked rather than
+// colliding on an empty string.
 type Space struct {
-	ID            int64     `json:"id" gorm:"primaryKey"`
-	FacileID      string    `json:"facile_id" gorm:"uniqueIndex;not null"`
-	Name          string    `json:"name" gorm:"not null"`
-	Description   string    `json:"description"`
-	ProvisionedBy string    `json:"-" gorm:"not null;default:''"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID              int64     `json:"id" gorm:"primaryKey"`
+	FacileID        string    `json:"facile_id" gorm:"uniqueIndex;not null"`
+	Name            string    `json:"name" gorm:"not null"`
+	Description     string    `json:"description"`
+	ProvisionedBy   string    `json:"-" gorm:"not null;default:''"`
+	RegistreSpaceID *string   `json:"registre_space_id" gorm:"uniqueIndex"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 func (Space) TableName() string { return "spaces" }

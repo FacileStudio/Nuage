@@ -21,19 +21,28 @@ import (
 )
 
 // Service manages spaces and their members.
+//
+// registre is Registre's spaces page when Registre owns shared spaces, and
+// empty otherwise. While it is set, a shared space is created only there, and
+// a space linked to Registre is renamed, staffed, left and deleted only there.
 type Service struct {
-	orm     *gorm.DB
-	guard   portespaces.Guard
-	storage *storage.Client
+	orm      *gorm.DB
+	guard    portespaces.Guard
+	storage  *storage.Client
+	registre string
 }
 
 // NewService builds a spaces Service over the given database connection and
-// object store. Each space owns a bucket in that store.
-func NewService(orm *gorm.DB, storageClient *storage.Client) *Service {
-	return &Service{orm: orm, guard: spaceaccess.NewGuard(orm), storage: storageClient}
+// object store. Each space owns a bucket in that store. registre is Registre's
+// spaces page, or empty to manage every space here.
+func NewService(orm *gorm.DB, storageClient *storage.Client, registre string) *Service {
+	return &Service{orm: orm, guard: spaceaccess.NewGuard(orm), storage: storageClient, registre: registre}
 }
 
 func (s *Service) createSpace(ctx context.Context, userID int64, req CreateSpaceRequest) (*schemas.Space, error) {
+	if s.registre != "" {
+		return nil, errors.Conflict("shared spaces are created in Registre: " + s.registre)
+	}
 	if req.Name == "" {
 		return nil, errors.Invalid("name is required")
 	}
@@ -230,6 +239,9 @@ func (s *Service) updateSpace(ctx context.Context, userID int64, spaceID int64, 
 		return nil, errors.Internal("failed to get space", err)
 	}
 
+	if req.Name != nil && *req.Name != space.Name && space.RegistreSpaceID != nil {
+		return nil, s.managed(*space.RegistreSpaceID)
+	}
 	if req.Name != nil {
 		if *req.Name == "" {
 			return nil, errors.Invalid("name cannot be empty")
@@ -253,11 +265,14 @@ func (s *Service) deleteSpace(ctx context.Context, userID int64, spaceID int64) 
 	}
 
 	var space schemas.Space
-	if err := s.orm.WithContext(ctx).Select("facile_id").Where("id = ?", spaceID).First(&space).Error; err != nil {
+	if err := s.orm.WithContext(ctx).Select("facile_id", "registre_space_id").Where("id = ?", spaceID).First(&space).Error; err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.NotFound("space not found")
 		}
 		return errors.Internal("failed to get space", err)
+	}
+	if space.RegistreSpaceID != nil {
+		return s.managed(*space.RegistreSpaceID)
 	}
 
 	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -317,6 +332,9 @@ func (s *Service) addMember(ctx context.Context, userID int64, spaceID int64, re
 	if err != nil {
 		return nil, err
 	}
+	if err := s.refuseLinked(s.orm.WithContext(ctx), spaceID); err != nil {
+		return nil, err
+	}
 
 	role := req.Role
 	if role == "" {
@@ -366,6 +384,9 @@ func (s *Service) updateMember(ctx context.Context, userID int64, spaceID int64,
 	if err != nil {
 		return nil, err
 	}
+	if err := s.refuseLinked(s.orm.WithContext(ctx), spaceID); err != nil {
+		return nil, err
+	}
 
 	target, err := parseRole(req.Role)
 	if err != nil {
@@ -413,6 +434,9 @@ func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64,
 		if err != nil {
 			return err
 		}
+		if err := s.refuseLinked(tx, spaceID); err != nil {
+			return err
+		}
 
 		var member schemas.SpaceMember
 		if err := tx.Where("id = ? AND space_id = ?", memberID, spaceID).First(&member).Error; err != nil {
@@ -444,6 +468,10 @@ func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64,
 func (s *Service) leaveSpace(ctx context.Context, userID int64, spaceID int64) error {
 	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockMembers(ctx, tx, spaceID); err != nil {
+			return err
+		}
+
+		if err := s.refuseLinked(tx, spaceID); err != nil {
 			return err
 		}
 
@@ -510,13 +538,14 @@ func lockMembers(ctx context.Context, tx *gorm.DB, spaceID int64) error {
 
 func mapSpaceWithRole(space schemas.Space, role string) SpaceResponse {
 	return SpaceResponse{
-		ID:          space.ID,
-		FacileID:    space.FacileID,
-		Name:        space.Name,
-		Description: space.Description,
-		Role:        role,
-		CreatedAt:   space.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:   space.UpdatedAt.UTC().Format(time.RFC3339),
+		ID:              space.ID,
+		FacileID:        space.FacileID,
+		RegistreSpaceID: space.RegistreSpaceID,
+		Name:            space.Name,
+		Description:     space.Description,
+		Role:            role,
+		CreatedAt:       space.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:       space.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 

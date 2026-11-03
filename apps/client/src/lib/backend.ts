@@ -182,6 +182,7 @@ export type ActivityListResponse = {
 export type Space = {
 	id: number;
 	facile_id: string;
+	registre_space_id: string | null;
 	name: string;
 	description: string;
 	role: string;
@@ -635,13 +636,6 @@ export const backend = {
 
 	listSpaces(token: string) {
 		return apiFetch<{ spaces: Space[] }>('/spaces', {}, token);
-	},
-
-	createSpace(token: string, data: { name: string; description?: string }) {
-		return apiFetch<Space>('/spaces', {
-			method: 'POST',
-			body: JSON.stringify(data)
-		}, token);
 	},
 
 	getSpace(token: string, id: number) {
