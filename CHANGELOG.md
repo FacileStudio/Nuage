@@ -10,6 +10,15 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-03
+
+### Changed
+
+- **Spaces use the share-circle icon.** The web app moves to muse v0.8.1 and shows
+  `icons.space` on the Spaces nav item (sidebar and mobile bar), the space cards, the "No spaces
+  yet" and "Space not found" states, "Back to spaces" and "Manage in Registre". Member lists keep
+  the people icons.
+
 ## [0.10.0] - 2026-11-03
 
 ### Changed
