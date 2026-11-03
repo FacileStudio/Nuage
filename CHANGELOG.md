@@ -10,6 +10,14 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-03
+
+### Fixed
+
+- **"Back to spaces" uses the back chevron.** The button on the "Space not found" state of the
+  space, members and settings pages shows `icons.chevronLeft` again, like every other
+  back-navigation button in the suite. Spaces keep `icons.space` everywhere else.
+
 ## [0.10.1] - 2026-11-03
 
 ### Changed
