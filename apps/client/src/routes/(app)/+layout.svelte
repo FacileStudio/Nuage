@@ -162,7 +162,7 @@
 				icon={nuage.brand}
 				title="Nuage"
 				bind:collapsed
-				pages={navPages}
+				pages={navPages.filter((p) => p.href !== '/spaces')}
 				spaces={switcherSpaces}
 				{activeSpaceId}
 				onSpaceSelect={selectSpace}
