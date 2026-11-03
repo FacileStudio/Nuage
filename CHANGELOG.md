@@ -10,6 +10,23 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-03
+
+### Changed
+
+- **Registre owns shared spaces.** With OIDC configured, Nuage hands its user-made spaces to
+  Registre once at boot, retrying until Registre answers, then mirrors Registre's spaces and
+  members at boot, every 5 minutes and within seconds of a nudge on `POST /api/registre/sync`.
+  A space links by Registre id or, the first time, by name. Members Registre adds are
+  provisioned before their first sign-in; members it removes lose access; local password
+  accounts are never removed. Folders, files and the description stay Nuage's. Spaces that
+  Plume or Ardoise provisioned are left out and work as before.
+- **Space management moves to Registre.** The spaces pages link to
+  https://sso.facile.studio/spaces instead of offering create, rename, delete, invite, role
+  change, remove and leave. For a linked space those endpoints answer 409 with the Registre
+  page, and `POST /spaces` answers 409 whenever OIDC is configured. The member lists stay, with
+  pictures.
+
 ## [0.9.0] - 2026-11-03
 
 ### Changed
