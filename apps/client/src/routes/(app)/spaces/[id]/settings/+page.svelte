@@ -99,11 +99,11 @@
 		<div class="flex h-64 items-center justify-center"><Spinner /></div>
 	{:else if !space}
 		<EmptyState
-			icon={icons.warning}
+			icon={icons.space}
 			title="Space not found"
 			description="It may have been deleted, or you may no longer be a member."
 		>
-			<Button href="/spaces" icon={icons.usersGroup}>Back to spaces</Button>
+			<Button href="/spaces" icon={icons.space}>Back to spaces</Button>
 		</EmptyState>
 	{:else}
 		<SettingsSection title="General" description="How this space is labelled everywhere it appears.">

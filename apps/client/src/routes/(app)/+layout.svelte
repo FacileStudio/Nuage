@@ -129,7 +129,7 @@
 		{ href: '/shared', label: 'Shared links', icon: nuage.share },
 		{ href: '/trash', label: 'Trash', icon: icons.remove },
 		{ href: '/activity', label: 'Activity', icon: icons.history },
-		{ href: '/spaces', label: 'Spaces', icon: icons.usersGroup }
+		{ href: '/spaces', label: 'Spaces', icon: icons.space }
 	].map((item) => ({ ...item, active: isActive(item.href) })));
 
 	/* MobileNav's ceiling is six targets plus the avatar and its labels are tooltips, so the

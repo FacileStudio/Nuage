@@ -84,11 +84,11 @@
 		<div class="flex h-64 items-center justify-center"><Spinner /></div>
 	{:else if !space}
 		<EmptyState
-			icon={icons.warning}
+			icon={icons.space}
 			title="Space not found"
 			description="It may have been deleted, or you may no longer be a member."
 		>
-			<Button href="/spaces" icon={icons.usersGroup}>Back to spaces</Button>
+			<Button href="/spaces" icon={icons.space}>Back to spaces</Button>
 		</EmptyState>
 	{:else}
 		<PageHeader title={space.name} description={space.description || undefined}>
@@ -107,7 +107,7 @@
 						href={registreSpaceUrl(space?.registre_space_id)}
 						target="_blank"
 						rel="noopener noreferrer"
-						icon={icons.usersGroup}
+						icon={icons.space}
 					>
 						Manage in Registre
 					</Button>

@@ -34,7 +34,7 @@
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
 	<PageHeader title="Spaces" description="Shared storage for a team. Files in a space belong to the space, not to you.">
 		{#snippet actions()}
-			<Button href={registreSpaceUrl()} target="_blank" rel="noopener noreferrer" icon={icons.settings}>
+			<Button href={registreSpaceUrl()} target="_blank" rel="noopener noreferrer" icon={icons.space}>
 				Manage in Registre
 			</Button>
 		{/snippet}
@@ -44,7 +44,7 @@
 		<div class="flex h-64 items-center justify-center"><Spinner /></div>
 	{:else if spaces.length === 0}
 		<EmptyState
-			icon={icons.usersGroup}
+			icon={icons.space}
 			title="No spaces yet"
 			description="Spaces are created in Registre and show up here with their members, in every Facile app."
 		>
@@ -59,7 +59,7 @@
 				     target in the status bar — and it brings the focus ring and hover step with it. -->
 				<Card href="/spaces/{space.id}" class="flex items-center gap-4">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-fc-md bg-fc-surface">
-						<iconify-icon icon={icons.usersGroup} width="20" height="20" class="block text-fc-fg-muted"
+						<iconify-icon icon={icons.space} width="20" height="20" class="block text-fc-fg-muted"
 						></iconify-icon>
 					</span>
 					<div class="flex min-w-0 flex-1 flex-col gap-0.5">
