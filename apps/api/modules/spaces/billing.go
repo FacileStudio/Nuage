@@ -2,20 +2,22 @@ package spaces
 
 import (
 	"context"
-	"net/http"
-	"strconv"
+	"time"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
-	"github.com/FacileStudio/tronc/httpjson"
 
-	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// TransferBillingRequest names the owner who starts paying for a space
-// another app provisioned.
+// billingOfferTTL is how long an offer to take over a space's billing stays
+// open before the payer has to make it again.
+const billingOfferTTL = 7 * 24 * time.Hour
+
+// TransferBillingRequest names the owner offered to pay for a space another
+// app provisioned.
 type TransferBillingRequest struct {
 	UserID int64 `json:"user_id"`
 }
@@ -33,62 +35,88 @@ func refusePayerRemoval(tx *gorm.DB, spaceID, memberUserID int64) error {
 		return errors.Internal("failed to check who pays for the space", err)
 	}
 	if others > 0 {
-		return errors.Conflict("this member pays for the space's storage; transfer billing to another owner first")
+		return errors.Conflict("this member pays for the space's storage; another owner must accept its billing first")
 	}
 	return nil
 }
 
-// transferBilling moves who pays for a provisioned space from the caller to
-// another owner of it. Only the current payer may hand it over, and only to a
-// member who is already an owner, all under the members lock.
-func (s *Service) transferBilling(ctx context.Context, userID, spaceID, toUserID int64) error {
+// offerBilling lets the current payer offer the space's billing to another
+// owner. Nothing moves until that owner accepts; a new offer replaces the
+// previous one.
+func (s *Service) offerBilling(ctx context.Context, userID, spaceID, toUserID int64) error {
 	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockMembers(ctx, tx, spaceID); err != nil {
 			return err
 		}
-		var owners int64
-		if err := tx.Model(&schemas.SpaceMember{}).
-			Where("space_id = ? AND user_id = ? AND role = 'owner'", spaceID, toUserID).Count(&owners).Error; err != nil {
-			return errors.Internal("failed to check the new payer", err)
+		var payer int64
+		if err := tx.Model(&schemas.Space{}).Where("id = ? AND charged_to = ?", spaceID, userID).Count(&payer).Error; err != nil {
+			return errors.Internal("failed to check who pays for the space", err)
 		}
-		if owners == 0 {
-			return errors.Invalid("billing can only move to an owner of the space")
+		if payer == 0 {
+			return errors.Forbidden("only the member who pays for this space can change its billing")
 		}
-		moved := tx.Model(&schemas.Space{}).Where("id = ? AND charged_to = ?", spaceID, userID).Update("charged_to", toUserID)
-		if moved.Error != nil {
-			return errors.Internal("failed to transfer billing", moved.Error)
+		if toUserID == userID || !isOwner(tx, spaceID, toUserID) {
+			return errors.Invalid("billing can only be offered to another owner of the space")
 		}
-		if moved.RowsAffected == 0 {
-			return errors.Forbidden("only the member who pays for this space can transfer its billing")
-		}
-		return nil
+		end := time.Now().Add(billingOfferTTL)
+		offered := tx.Model(&schemas.Space{}).Where("id = ? AND charged_to = ?", spaceID, userID).
+			Updates(map[string]any{"billing_offer_to": toUserID, "billing_offer_end": end})
+		return payerOnly(offered)
 	})
 }
 
-func (h *Handler) transferBilling(w http.ResponseWriter, r *http.Request) {
-	identity, ok := authcontext.IdentityFromContext(r.Context())
-	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
-		return
+// revokeBilling withdraws the payer's pending offer.
+func (s *Service) revokeBilling(ctx context.Context, userID, spaceID int64) error {
+	revoked := s.orm.WithContext(ctx).Model(&schemas.Space{}).Where("id = ? AND charged_to = ?", spaceID, userID).
+		Updates(map[string]any{"billing_offer_to": nil, "billing_offer_end": nil})
+	return payerOnly(revoked)
+}
+
+// acceptBilling makes the caller the payer when the payer offered it to them,
+// the offer is still open and they are still an owner. Both people's plan
+// locks are held while it moves, so no upload is admitted against the old
+// payer's plan halfway through.
+func (s *Service) acceptBilling(ctx context.Context, userID, spaceID int64) error {
+	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockMembers(ctx, tx, spaceID); err != nil {
+			return err
+		}
+		var space schemas.Space
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", spaceID).Take(&space).Error; err != nil {
+			return errors.NotFound("space not found")
+		}
+		if !offeredTo(space, userID, time.Now()) || !isOwner(tx, spaceID, userID) {
+			return errors.Forbidden("there is no open billing offer for you on this space")
+		}
+		if err := quota.LockPeople(tx, *space.ChargedTo, userID); err != nil {
+			return err
+		}
+		return tx.Model(&schemas.Space{}).Where("id = ?", spaceID).
+			Updates(map[string]any{"charged_to": userID, "billing_offer_to": nil, "billing_offer_end": nil}).Error
+	})
+}
+
+// offeredTo reports whether the space holds an open billing offer to userID.
+func offeredTo(space schemas.Space, userID int64, now time.Time) bool {
+	return space.ChargedTo != nil && space.BillingOfferTo != nil && *space.BillingOfferTo == userID &&
+		space.BillingOfferEnd != nil && space.BillingOfferEnd.After(now)
+}
+
+// isOwner reports whether userID is an owner of the space.
+func isOwner(tx *gorm.DB, spaceID, userID int64) bool {
+	var owners int64
+	err := tx.Model(&schemas.SpaceMember{}).Where("space_id = ? AND user_id = ? AND role = 'owner'", spaceID, userID).Count(&owners).Error
+	return err == nil && owners > 0
+}
+
+// payerOnly turns an update guarded on charged_to into a refusal when the
+// caller is not the payer.
+func payerOnly(result *gorm.DB) error {
+	if result.Error != nil {
+		return errors.Internal("failed to update billing", result.Error)
 	}
-	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
-	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
-		return
+	if result.RowsAffected == 0 {
+		return errors.Forbidden("only the member who pays for this space can change its billing")
 	}
-	spaceID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		httpjson.WriteError(w, errors.Invalid("invalid space id"))
-		return
-	}
-	var req TransferBillingRequest
-	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
-		httpjson.WriteError(w, err)
-		return
-	}
-	if err := h.service.transferBilling(r.Context(), userID, spaceID, req.UserID); err != nil {
-		httpjson.WriteError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return nil
 }

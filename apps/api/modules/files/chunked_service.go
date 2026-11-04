@@ -109,6 +109,9 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 	if partNumber < 1 {
 		return nil, errors.Invalid("part_number must be >= 1")
 	}
+	if err := s.admitChunk(ctx, session, nil); err != nil {
+		return nil, err
+	}
 
 	var existing schemas.UploadChunk
 	if err := s.orm.WithContext(ctx).Where("session_id = ? AND part_number = ?", sessionID, partNumber).First(&existing).Error; err == nil {
@@ -155,9 +158,9 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 		Hash:       chunkHash,
 	}
 
-	if err := s.orm.WithContext(ctx).Create(chunk).Error; err != nil {
+	if err := s.admitChunk(ctx, session, chunk); err != nil {
 		_ = s.storage.DeleteObject(ctx, bucketKey)
-		return nil, errors.Internal("failed to record chunk", err)
+		return nil, recordFailure(err)
 	}
 
 	return chunk, nil

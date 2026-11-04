@@ -83,10 +83,7 @@ func (s *davServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if nuage, ok := fs.(*NuageFS); ok {
-		w = &refusalWriter{ResponseWriter: w, fs: nuage}
-	}
-	s.handler(mount, fs, key).ServeHTTP(w, r)
+	s.handler(mount, fs, key).ServeHTTP(withRefusals(w, fs), r)
 }
 
 func (s *davServer) mount(ctx context.Context, userID int64, m mountPath) (webdav.FileSystem, string, error) {

@@ -35,3 +35,14 @@ func backfillChargedTo(db *gorm.DB) error {
 	}
 	return nil
 }
+
+// backfill runs every data backfill that follows the schema migration, in
+// order. Each one matches nothing once its rows are fixed.
+func backfill(db *gorm.DB) error {
+	for _, step := range []func(*gorm.DB) error{backfillAvatarUploadPath, backfillMimeTypes, backfillChargedTo} {
+		if err := step(db); err != nil {
+			return err
+		}
+	}
+	return nil
+}

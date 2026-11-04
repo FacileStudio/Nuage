@@ -2,6 +2,7 @@ package quota
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -117,8 +118,21 @@ func lockedUsage(tx *gorm.DB, t target) (int64, error) {
 	filter, args := t.filter("s", "user_id")
 	args = append([]any{time.Now().Add(-schemas.SessionIdleWindow)}, args...)
 	var reserved int64
-	if err := tx.Raw(fmt.Sprintf(reservedSQL, schemas.OpenSessionClause("s"), filter), args...).Scan(&reserved).Error; err != nil {
+	if err := tx.Raw(fmt.Sprintf(reservedSQL, schemas.ReservingSessionClause("s"), filter), args...).Scan(&reserved).Error; err != nil {
 		return 0, errors.Internal("failed to measure reserved uploads", err)
 	}
 	return used + reserved, nil
+}
+
+// LockPeople takes the plan locks of the given people in ascending id order,
+// the same locks an upload charged to them takes, so moving who pays for a
+// space cannot interleave with an upload being admitted against either one.
+func LockPeople(tx *gorm.DB, ids ...int64) error {
+	slices.Sort(ids)
+	for _, id := range slices.Compact(ids) {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", target{personID: id}.lockKey()).Error; err != nil {
+			return errors.Internal("failed to lock the storage scope", err)
+		}
+	}
+	return nil
 }

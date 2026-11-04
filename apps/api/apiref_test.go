@@ -80,6 +80,7 @@ func TestRegistryIsComplete(t *testing.T) {
 		"/trash/{type}/{id}/restore",
 		"/users/me/avatar",
 		"/spaces/{id}/leave",
+		"/spaces/{id}/billing/accept",
 	); len(issues) > 0 {
 		t.Errorf("incomplete documentation routes: %v", issues)
 	}

@@ -65,13 +65,7 @@ func migrateSchema(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
-	if err := backfillAvatarUploadPath(db); err != nil {
-		return err
-	}
-	if err := backfillMimeTypes(db); err != nil {
-		return err
-	}
-	if err := backfillChargedTo(db); err != nil {
+	if err := backfill(db); err != nil {
 		return err
 	}
 	return ensureAdmin(db)
