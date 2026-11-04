@@ -75,14 +75,16 @@ func (s *Service) revokeBilling(ctx context.Context, userID, spaceID int64) erro
 // acceptBilling makes the caller the payer when the payer offered it to them,
 // the offer is still open and they are still an owner. Both people's plan
 // locks are held while it moves, so no upload is admitted against the old
-// payer's plan halfway through.
+// payer's plan halfway through. The space row is locked FOR NO KEY UPDATE: an
+// upload holding a plan lock needs KEY SHARE on it for the files.space_id
+// foreign key, which FOR UPDATE would block, deadlocking the two.
 func (s *Service) acceptBilling(ctx context.Context, userID, spaceID int64) error {
 	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockMembers(ctx, tx, spaceID); err != nil {
 			return err
 		}
 		var space schemas.Space
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", spaceID).Take(&space).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "NO KEY UPDATE"}).Where("id = ?", spaceID).Take(&space).Error; err != nil {
 			return errors.NotFound("space not found")
 		}
 		if !offeredTo(space, userID, time.Now()) || !isOwner(tx, spaceID, userID) {
