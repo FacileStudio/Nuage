@@ -71,6 +71,9 @@ func migrateSchema(db *gorm.DB) error {
 	if err := backfillMimeTypes(db); err != nil {
 		return err
 	}
+	if err := backfillChargedTo(db); err != nil {
+		return err
+	}
 	return ensureAdmin(db)
 }
 

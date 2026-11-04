@@ -1,10 +1,12 @@
 package tests
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,4 +65,42 @@ func TestPlanVersionCreationIsChecked(t *testing.T) {
 
 	assert.Equal(t, http.StatusPaymentRequired, reuploadFile(e.ts, e.token, fileID, "abcd").StatusCode)
 	assert.Equal(t, http.StatusOK, reuploadFile(e.ts, e.token, fileID, "ab").StatusCode)
+}
+
+// parallelInits starts n chunked uploads of size bytes at once and counts the
+// answers by status.
+func parallelInits(e planEnv, n int, size int64) map[int]int {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	counts := map[int]int{}
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp := initChunkedUpload(e.ts, e.token, map[string]any{"file_name": fmt.Sprintf("p%d.bin", i), "total_size": size})
+			mu.Lock()
+			counts[resp.StatusCode]++
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return counts
+}
+
+func TestPlanParallelSessionsCannotStagePastThePlan(t *testing.T) {
+	e := newPlanEnv(t, "plan-parallel@example.com")
+	e.enforce(t, 1, "1", "")
+	e.fill(t, nil, gibibyte-1000)
+
+	counts := parallelInits(e, 20, 300)
+	assert.Equal(t, 3, counts[http.StatusCreated])
+	assert.Equal(t, 17, counts[http.StatusPaymentRequired])
+}
+
+func TestOpenSessionsAreCappedPerUser(t *testing.T) {
+	e := newPlanEnv(t, "plan-cap@example.com")
+
+	counts := parallelInits(e, 20, 1)
+	assert.Equal(t, 10, counts[http.StatusCreated])
+	assert.Equal(t, 10, counts[http.StatusTooManyRequests])
 }

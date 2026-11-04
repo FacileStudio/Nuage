@@ -138,20 +138,6 @@ func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, app
 	return registre, syncer
 }
 
-// newPlans builds the plan entitlements and restores the ones saved before the last
-// restart, so a reboot never fails open again once Registre has served plans.
-func newPlans(db *gorm.DB, appEnv env.Config, appLogger *slog.Logger) *entitlements.Plans {
-	issuer := ""
-	if appEnv.OIDC != nil {
-		issuer = appEnv.OIDC.Issuer
-	}
-	plans := entitlements.New(db, issuer, appLogger)
-	if err := plans.Restore(context.Background()); err != nil {
-		appLogger.Error("failed to restore the saved plan entitlements; allowing every upload until Registre answers", slog.Any("error", err))
-	}
-	return plans
-}
-
 // registreSpacesURL is Registre's spaces page, where shared spaces are managed once OIDC is
 // configured, and empty when Nuage manages them itself.
 func registreSpacesURL(appEnv env.Config) string {

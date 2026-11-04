@@ -117,6 +117,7 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 	space := schemas.Space{FacileID: facileID, Name: name, Description: req.Description}
 	if scope != nil {
 		space.ProvisionedBy = scope.App
+		space.ChargedTo = &userID
 	}
 	created := false
 	err = s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

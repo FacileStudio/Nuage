@@ -14,18 +14,24 @@ tag records what shipped rather than triggering the deploy.
 
 - **Storage follows the Registre plan (`nuage.storage_gb`, free plan 5 GB).** Every directory
   sync now also feeds the plan entitlements to porte/forfait, and the state is saved in the new
-  `entitlement_state` row and restored at boot, so a restart keeps the last known plans. Files
+  `entitlement_state` row and restored at boot, so a restart keeps the last known plans. A saved
+  row that cannot be imported enforces the free-plan defaults until Registre answers, and a
+  database error while reading it is retried at boot instead of failing open. Files
   in a space count against that space's Registre plan; personal files count against the owner's
-  person plan. Usage is live bytes (files not in the trash, plus their versions) against
+  person plan. Usage is every stored byte (files, trashed ones included until they are purged,
+  plus their versions, plus the declared size of open chunked uploads) against
   `storage_gb * 1024^3`, and `-1` is unlimited.
 - **Every path that adds bytes is checked**: single and chunked uploads (at session start with
-  the declared size, and again at completion), WebDAV PUT and COPY, version uploads and
-  restores, and trash restore. The check runs again inside the transaction that records the
-  bytes, under a per-scope advisory lock, so two uploads racing at the ceiling cannot both land.
+  the declared size, atomically with the session insert, and again at completion), WebDAV PUT
+  and COPY, version uploads and restores. The check runs again inside the transaction that
+  records the bytes, under a per-scope advisory lock, so two uploads racing at the ceiling
+  cannot both land. Trash restore adds nothing, since trashed bytes still count.
+- **At most 10 chunked uploads open per user.** The eleventh `POST /files/upload/init` answers
+  429 until one completes, is aborted or expires.
 - **Over the plan answers HTTP 402** in the usual error envelope with `code: "payment_required"`,
   `key`, `limit` (GB) and `upgrade_url` (the Registre space page, or `/spaces` for personal
   files). WebDAV answers 507 Insufficient Storage. The client shows a banner with an upgrade
-  link (https or same-origin only), and the usage meter shows the plan ceiling.
+  link (Registre's exact origin or a same-origin path only), and the usage meter shows the plan ceiling.
 - **Boot report of usage above the free plan.** At every boot the API logs a
   `forfait: ... storage above the free plan` warning per person and space storing more than
   5 GB, so overrides can be added in Ardoise before its first entitlements push.
@@ -35,8 +41,11 @@ tag records what shipped rather than triggering the deploy.
 - Until Registre serves a snapshot with a non-zero `entitlements_revision`, nothing changes:
   the per-user quota and its instance default apply exactly as before. Afterwards an explicit
   per-user limit set by an admin keeps winning over the person plan, and still caps that user's
-  uploads into spaces. A space not linked to Registre refuses new files with 412 once plans
-  apply, since it has no plan of its own.
+  uploads into spaces. A space another app provisioned (Plume, Ardoise) is charged to the
+  personal plan of the user who created it: `spaces.charged_to` is set at creation and
+  backfilled at boot from the earliest owner of existing provisioned spaces (each one logged).
+  Those spaces and the person's own files share one ceiling under one lock. Any other space
+  not linked to Registre refuses new files with 412 once plans apply.
 - Downloads, listings, deletes and emptying the trash are never gated, whatever the usage.
 
 ## [0.10.3] - 2026-11-03

@@ -170,7 +170,7 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 		}
 		deletedAt := *record.DeletedAt
 		err = s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			if err := s.admitRestore(tx, userID, record.SpaceID, "f.folder_id IN ? AND f.deleted_at = ?", folderIDs, deletedAt); err != nil {
+			if err := s.admitRestore(tx, userID, record.SpaceID, "folder_id IN ? AND deleted_at = ?", folderIDs, deletedAt); err != nil {
 				return err
 			}
 			if err := tx.Model(&schemas.File{}).Where("folder_id IN ? AND deleted_at = ?", folderIDs, deletedAt).Update("deleted_at", nil).Error; err != nil {

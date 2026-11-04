@@ -17,24 +17,31 @@ type overRow struct {
 	Override int64
 }
 
-// personalOverSQL lists the users whose personal live bytes exceed the free plan.
-const personalOverSQL = `SELECT u.id, u.email AS name, COALESCE(i.subject, '') AS ref, t.used,
-	COALESCE(q.storage_limit, 0) AS override
-	FROM (SELECT f.uploaded_by AS user_id, SUM(f.size + COALESCE(
-		(SELECT SUM(v.size) FROM file_versions v WHERE v.file_id = f.id), 0)) AS used
-		FROM files f WHERE f.deleted_at IS NULL AND f.space_id IS NULL GROUP BY f.uploaded_by) t
+// chargedBytesSQL sums every file's bytes and versions by who pays for them:
+// the person for personal files and app-provisioned spaces charged to them,
+// the space for every other space.
+const chargedBytesSQL = `SELECT CASE WHEN f.space_id IS NULL THEN f.uploaded_by
+		WHEN sp.registre_space_id IS NULL AND sp.charged_to IS NOT NULL THEN sp.charged_to END AS user_id,
+	CASE WHEN f.space_id IS NOT NULL AND (sp.registre_space_id IS NOT NULL OR sp.charged_to IS NULL)
+		THEN f.space_id END AS space_id,
+	SUM(f.size + COALESCE((SELECT SUM(v.size) FROM file_versions v WHERE v.file_id = f.id), 0)) AS used
+	FROM files f LEFT JOIN spaces sp ON sp.id = f.space_id GROUP BY 1, 2`
+
+// personalOverSQL lists the people whose charged bytes exceed the free plan.
+const personalOverSQL = `SELECT u.id, u.email AS name, COALESCE(i.subject, '') AS ref, SUM(t.used) AS used,
+	COALESCE(MAX(q.storage_limit), 0) AS override
+	FROM (` + chargedBytesSQL + `) t
 	JOIN users u ON u.id = t.user_id
 	LEFT JOIN porte_identities i ON i.user_id = u.id AND i.provider = ?
 	LEFT JOIN user_quotas q ON q.user_id = u.id
-	WHERE t.used > ? ORDER BY t.used DESC`
+	GROUP BY u.id, u.email, i.subject HAVING SUM(t.used) > ? ORDER BY used DESC`
 
-// spaceOverSQL lists the spaces whose live bytes exceed the free plan.
-const spaceOverSQL = `SELECT s.id, s.name, COALESCE(s.registre_space_id, '') AS ref, t.used, 0 AS override
-	FROM (SELECT f.space_id, SUM(f.size + COALESCE(
-		(SELECT SUM(v.size) FROM file_versions v WHERE v.file_id = f.id), 0)) AS used
-		FROM files f WHERE f.deleted_at IS NULL AND f.space_id IS NOT NULL GROUP BY f.space_id) t
+// spaceOverSQL lists the spaces paying for themselves whose bytes exceed the
+// free plan.
+const spaceOverSQL = `SELECT s.id, s.name, COALESCE(s.registre_space_id, '') AS ref, SUM(t.used) AS used, 0 AS override
+	FROM (` + chargedBytesSQL + `) t
 	JOIN spaces s ON s.id = t.space_id
-	WHERE t.used > ? ORDER BY t.used DESC`
+	GROUP BY s.id, s.name, s.registre_space_id HAVING SUM(t.used) > ? ORDER BY used DESC`
 
 // ReportOverFreePlan logs, once at boot, every person and space whose stored
 // bytes exceed the free plan. Before Ardoise's first push the owner adds an

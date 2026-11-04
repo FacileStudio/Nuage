@@ -22,6 +22,8 @@ test('isSafeUpgradeUrl accepts https and same-origin paths only', () => {
 	expect(isSafeUpgradeUrl('//evil.example')).toBe(false);
 	expect(isSafeUpgradeUrl('http://sso.facile.studio/spaces')).toBe(false);
 	expect(isSafeUpgradeUrl('https://user:pw@sso.facile.studio')).toBe(false);
+	expect(isSafeUpgradeUrl('https://evil.example/spaces')).toBe(false);
+	expect(isSafeUpgradeUrl('https://sso.facile.studio.evil.example/spaces')).toBe(false);
 	expect(isSafeUpgradeUrl('data:text/html,x')).toBe(false);
 });
 
