@@ -2,7 +2,9 @@ package quota
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte/forfait"
 	"github.com/FacileStudio/tronc/errors"
 
@@ -16,10 +18,10 @@ const usageSQL = `SELECT COALESCE((SELECT SUM(f.size) FROM files f WHERE %[1]s),
 	+ COALESCE((SELECT SUM(v.size) FROM file_versions v JOIN files f ON f.id = v.file_id WHERE %[1]s), 0)`
 
 // reservedSQL sums the declared size of the scope's chunked uploads still
-// receiving chunks. A session being assembled is not counted: its completion
+// receiving chunks, idle for less than schemas.SessionIdleWindow. A session
+// being assembled is not counted: its completion
 // is checked on its own, inside the transaction that records the file.
-const reservedSQL = `SELECT COALESCE(SUM(s.total_size), 0) FROM upload_sessions s
-	WHERE s.status = 'pending' AND s.expires_at > now() AND %s`
+const reservedSQL = `SELECT COALESCE(SUM(s.total_size), 0) FROM upload_sessions s WHERE %s AND %s`
 
 // target is what an addition is charged to: a space linked to Registre, with
 // its own plan, or a person. A person's plan covers their personal files and
@@ -64,15 +66,17 @@ func (s *Service) targetOf(tx *gorm.DB, userID int64, spaceID *int64) (target, e
 		RegistreSpaceID *string
 		ProvisionedBy   string
 		ChargedTo       *int64
+		PayerExists     bool
 	}
-	if err := tx.Table("spaces").Select("registre_space_id, provisioned_by, charged_to").
+	if err := tx.Table("spaces").Select("registre_space_id, provisioned_by, charged_to, "+
+		"EXISTS (SELECT 1 FROM users u WHERE u.id = spaces.charged_to) AS payer_exists").
 		Where("id = ?", *spaceID).Limit(1).Scan(&row).Error; err != nil {
 		return target{}, errors.Internal("failed to load the space", err)
 	}
 	if row.RegistreSpaceID != nil && *row.RegistreSpaceID != "" {
 		return target{scope: forfait.Scope{SpaceID: *row.RegistreSpaceID}, spaceID: *spaceID}, nil
 	}
-	if row.ProvisionedBy != "" && row.ChargedTo != nil {
+	if row.ProvisionedBy != "" && row.ChargedTo != nil && row.PayerExists {
 		return s.personTarget(tx, *row.ChargedTo)
 	}
 	return target{}, errors.Failed("this space is not linked to Registre yet, so it has no plan to store new files under")
@@ -111,8 +115,9 @@ func lockedUsage(tx *gorm.DB, t target) (int64, error) {
 		return 0, err
 	}
 	filter, args := t.filter("s", "user_id")
+	args = append([]any{time.Now().Add(-schemas.SessionIdleWindow)}, args...)
 	var reserved int64
-	if err := tx.Raw(fmt.Sprintf(reservedSQL, filter), args...).Scan(&reserved).Error; err != nil {
+	if err := tx.Raw(fmt.Sprintf(reservedSQL, schemas.OpenSessionClause("s"), filter), args...).Scan(&reserved).Error; err != nil {
 		return 0, errors.Internal("failed to measure reserved uploads", err)
 	}
 	return used + reserved, nil

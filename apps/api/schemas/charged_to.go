@@ -11,13 +11,15 @@ import (
 const chargedToBackfillSQL = `UPDATE spaces s SET charged_to = o.user_id
 	FROM (SELECT DISTINCT ON (space_id) space_id, user_id FROM space_members
 		WHERE role = 'owner' ORDER BY space_id, joined_at, id) o
-	WHERE s.id = o.space_id AND s.provisioned_by <> '' AND s.charged_to IS NULL
+	WHERE s.id = o.space_id AND s.provisioned_by <> ''
+		AND (s.charged_to IS NULL OR NOT EXISTS (SELECT 1 FROM users u WHERE u.id = s.charged_to))
 	RETURNING s.id, s.provisioned_by, s.charged_to`
 
-// backfillChargedTo gives each provisioned space that predates charged_to the
-// earliest owner as the person whose plan pays for it, and logs every space it
-// charged. A provisioned space with no owner stays uncharged and is refused new
-// files once plans apply. It matches nothing once every row is set.
+// backfillChargedTo gives each provisioned space that predates charged_to, or
+// whose payer's account was deleted, its earliest remaining owner as the
+// person whose plan pays for it, and logs every space it charged. A space with
+// no owner left keeps no valid payer and is refused new files once plans
+// apply. It matches nothing once every row is set.
 func backfillChargedTo(db *gorm.DB) error {
 	var charged []struct {
 		ID            int64

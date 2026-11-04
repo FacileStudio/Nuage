@@ -105,8 +105,6 @@ export class UploadQueue {
 	}
 
 	async #chunked(file: File, id: string, target: UploadTarget): Promise<void> {
-		const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-
 		const session = await backend.initUpload(target.token, {
 			file_name: file.name,
 			mime_type: file.type || 'application/octet-stream',
@@ -115,13 +113,26 @@ export class UploadQueue {
 			space_id: target.spaceId
 		});
 
+		try {
+			await this.#sendChunks(file, id, target.token, session.session_id);
+			await backend.completeUpload(target.token, session.session_id);
+		} catch (e) {
+			await backend.abortUpload(target.token, session.session_id).catch(() => undefined);
+			throw e;
+		}
+	}
+
+	/**
+	 * Sends every chunk in order. A failed chunk or completion aborts the session in `#chunked`,
+	 * so an abandoned upload stops reserving its size against the plan at once.
+	 */
+	async #sendChunks(file: File, id: string, token: string, sessionId: string): Promise<void> {
+		const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 		for (let part = 0; part < totalChunks; part += 1) {
 			const start = part * CHUNK_SIZE;
 			const end = Math.min(start + CHUNK_SIZE, file.size);
-			await backend.uploadChunk(target.token, session.session_id, part + 1, file.slice(start, end));
+			await backend.uploadChunk(token, sessionId, part + 1, file.slice(start, end));
 			this.#patch(id, { progress: (end / file.size) * 100 });
 		}
-
-		await backend.completeUpload(target.token, session.session_id);
 	}
 }

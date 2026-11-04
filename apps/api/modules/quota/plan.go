@@ -37,48 +37,47 @@ func (s *Service) AdmitTx(tx *gorm.DB, userID int64, spaceID *int64, adding int6
 	return s.enforce(tx, userID, spaceID, adding)
 }
 
-// enforce applies the admin override, then the plan of whatever the bytes are
-// charged to, against its usage counted under its lock. For a person the
-// override is that person's and replaces the plan; for a linked space the
-// uploader's override still caps the upload and the space's plan applies too.
+// enforce checks the bytes against the ceiling of whatever they are charged
+// to, using that target's usage counted under its lock: for a person, their
+// personal files, every app-provisioned space charged to them and their open
+// uploads. An admin limit on the person replaces only the plan's ceiling,
+// never the usage, so co-members of a charged space stay capped too.
 func (s *Service) enforce(tx *gorm.DB, userID int64, spaceID *int64, adding int64) error {
 	charged, err := s.targetOf(tx, userID, spaceID)
 	if err != nil {
-		return err
-	}
-	overrideOf := userID
-	if charged.personID != 0 {
-		overrideOf = charged.personID
-	}
-	overridden, err := checkOverride(tx, overrideOf, adding)
-	if err != nil || (overridden && charged.personID != 0) {
 		return err
 	}
 	used, err := lockedUsage(tx, charged)
 	if err != nil {
 		return err
 	}
+	if charged.personID != 0 {
+		override, err := overrideOf(tx, charged.personID)
+		if err != nil {
+			return err
+		}
+		if override != 0 {
+			return withinOverride(override, used, adding)
+		}
+	}
 	return s.plans.CheckBytes(charged.scope, used, adding)
 }
 
-// checkOverride applies the storage limit an admin set on the user, when there
-// is one, and reports whether there is. The override counts every byte the
-// user uploaded, as the per-user quota always has.
-func checkOverride(tx *gorm.DB, userID int64, adding int64) (bool, error) {
-	var row struct {
-		StorageUsed  int64
-		StorageLimit int64
-	}
-	err := tx.Table("user_quotas").Select("storage_used, storage_limit").
-		Where("user_id = ?", userID).Limit(1).Scan(&row).Error
+// overrideOf is the storage limit an admin set on the user in bytes: 0 when
+// there is none, -1 for unlimited.
+func overrideOf(tx *gorm.DB, userID int64) (int64, error) {
+	var limit int64
+	err := tx.Table("user_quotas").Select("storage_limit").Where("user_id = ?", userID).Limit(1).Scan(&limit).Error
 	if err != nil {
-		return false, errors.Internal("failed to load quota", err)
+		return 0, errors.Internal("failed to load quota", err)
 	}
-	if row.StorageLimit == 0 {
-		return false, nil
+	return limit, nil
+}
+
+// withinOverride compares used+adding with an admin limit without overflow.
+func withinOverride(limit, used, adding int64) error {
+	if limit < 0 || used <= limit-adding {
+		return nil
 	}
-	if row.StorageLimit > 0 && row.StorageUsed > row.StorageLimit-adding {
-		return true, errors.TooLarge("storage quota exceeded")
-	}
-	return true, nil
+	return errors.TooLarge("storage quota exceeded")
 }

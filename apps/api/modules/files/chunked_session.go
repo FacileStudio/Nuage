@@ -23,8 +23,9 @@ func openSession(tx *gorm.DB, session *schemas.UploadSession) error {
 		return errors.Internal("failed to lock upload sessions", err)
 	}
 	var open int64
-	if err := tx.Model(&schemas.UploadSession{}).
-		Where("user_id = ? AND status = 'pending' AND expires_at > ?", session.UserID, time.Now()).
+	if err := tx.Table("upload_sessions s").
+		Where("s.user_id = ?", session.UserID).
+		Where(schemas.OpenSessionClause("s"), time.Now().Add(-schemas.SessionIdleWindow)).
 		Count(&open).Error; err != nil {
 		return errors.Internal("failed to count upload sessions", err)
 	}

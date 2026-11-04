@@ -40,12 +40,20 @@ tag records what shipped rather than triggering the deploy.
 
 - Until Registre serves a snapshot with a non-zero `entitlements_revision`, nothing changes:
   the per-user quota and its instance default apply exactly as before. Afterwards an explicit
-  per-user limit set by an admin keeps winning over the person plan, and still caps that user's
-  uploads into spaces. A space another app provisioned (Plume, Ardoise) is charged to the
+  per-user limit set by an admin replaces the person's plan ceiling (`-1` unlimited), measured
+  against the same usage the plan counts, app-provisioned spaces charged to them included. It
+  no longer applies to uploads into Registre-linked spaces, which follow the space's plan. A space another app provisioned (Plume, Ardoise) is charged to the
   personal plan of the user who created it: `spaces.charged_to` is set at creation and
   backfilled at boot from the earliest owner of existing provisioned spaces (each one logged).
   Those spaces and the person's own files share one ceiling under one lock. Any other space
   not linked to Registre refuses new files with 412 once plans apply.
+- **The payer of an app-provisioned space cannot leave or be removed while others remain** (409).
+  `POST /api/spaces/{id}/billing {"user_id"}` lets the current payer hand billing to another
+  owner. A space whose payer's account was deleted refuses new files (412) until the next boot
+  reassigns it to its earliest remaining owner.
+- **Idle chunked uploads stop reserving.** A pending session with no chunk for an hour no longer
+  counts toward the plan or the 10-upload cap; the web client aborts a session whose upload
+  fails.
 - Downloads, listings, deletes and emptying the trash are never gated, whatever the usage.
 
 ## [0.10.3] - 2026-11-03

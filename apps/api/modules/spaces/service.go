@@ -450,6 +450,9 @@ func (s *Service) removeMember(ctx context.Context, userID int64, spaceID int64,
 		if actor.Role == portespaces.RoleAdmin && portespaces.Role(member.Role) != portespaces.RoleMember {
 			return errors.Forbidden("admins cannot remove owners or other admins")
 		}
+		if err := refusePayerRemoval(tx, spaceID, member.UserID); err != nil {
+			return err
+		}
 
 		leave := locked.CanLeave(ctx, strconv.FormatInt(member.UserID, 10), strconv.FormatInt(spaceID, 10))
 		if leave != nil {
@@ -473,6 +476,10 @@ func (s *Service) leaveSpace(ctx context.Context, userID int64, spaceID int64) e
 		}
 
 		if err := s.refuseLinked(tx, spaceID); err != nil {
+			return err
+		}
+
+		if err := refusePayerRemoval(tx, spaceID, userID); err != nil {
 			return err
 		}
 

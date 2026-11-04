@@ -104,3 +104,17 @@ func TestOpenSessionsAreCappedPerUser(t *testing.T) {
 	assert.Equal(t, 10, counts[http.StatusCreated])
 	assert.Equal(t, 10, counts[http.StatusTooManyRequests])
 }
+
+func TestPlanIdleSessionStopsReserving(t *testing.T) {
+	e := newPlanEnv(t, "plan-idle@example.com")
+	e.enforce(t, 1, "1", "")
+	e.fill(t, nil, gibibyte-1000)
+
+	abandoned := initSession(t, e.ts, e.token, 900)
+	assert.Equal(t, http.StatusPaymentRequired,
+		initChunkedUpload(e.ts, e.token, map[string]any{"file_name": "next.bin", "total_size": 200}).StatusCode)
+
+	require.NoError(t, e.ts.db.Exec("UPDATE upload_sessions SET created_at = now() - interval '2 hours' WHERE id = ?", abandoned).Error)
+	assert.Equal(t, http.StatusCreated,
+		initChunkedUpload(e.ts, e.token, map[string]any{"file_name": "next.bin", "total_size": 200}).StatusCode)
+}

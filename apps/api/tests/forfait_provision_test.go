@@ -1,11 +1,15 @@
 package tests
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/porte/directory"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -88,4 +92,79 @@ func TestPlanBackfillChargesProvisionedSpacesToTheirOwner(t *testing.T) {
 	e.enforce(t, 1, "100", "")
 	require.NoError(t, e.ts.db.Exec("INSERT INTO space_members (space_id, user_id, role) VALUES (?, ?, 'member')", orphan, e.userID).Error)
 	assert.Equal(t, http.StatusPreconditionFailed, uploadFileToSpace(e.ts, app, "z.pdf", "no payer", orphan).StatusCode)
+}
+
+// memberOf adds userID to the space with role and returns the membership id.
+func memberOf(t *testing.T, ts *testServer, spaceID, userID int64, role string) int64 {
+	t.Helper()
+	member := schemas.SpaceMember{SpaceID: spaceID, UserID: userID, Role: role}
+	require.NoError(t, ts.db.Create(&member).Error)
+	return member.ID
+}
+
+// registered registers a user and returns its id and token.
+func registered(t *testing.T, ts *testServer, email string) (int64, string) {
+	t.Helper()
+	rawID, token := registerUser(ts, email, "password12345")
+	var id int64
+	_, err := fmt.Sscan(rawID, &id)
+	require.NoError(t, err)
+	return id, token
+}
+
+func TestPlanPayerOverrideStillCapsCoMembers(t *testing.T) {
+	e := newPlanEnv(t, "plan-payer@example.com")
+	spaceID := provisionedID(t, e.ts, mintProvisionToken(t, e.ts, e.token, "ardoise"))
+	memberID, memberToken := registered(t, e.ts, "plan-comember@example.com")
+	memberOf(t, e.ts, spaceID, memberID, "member")
+	resp := doJSON(e.ts, "PUT", fmt.Sprintf("/quota/users/%d", e.userID), map[string]int64{"storage_limit": 1000}, e.token)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	e.enforce(t, 1, "100", "")
+
+	assert.Equal(t, http.StatusCreated, uploadFileToSpace(e.ts, memberToken, "a.bin", strings.Repeat("a", 600), spaceID).StatusCode)
+	assert.Equal(t, http.StatusRequestEntityTooLarge,
+		uploadFileToSpace(e.ts, memberToken, "b.bin", strings.Repeat("b", 600), spaceID).StatusCode)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, uploadFile(e.ts, e.token, "c.bin", strings.Repeat("c", 600), nil).StatusCode)
+}
+
+func TestPlanPayerCannotBeEvictedWithoutATransfer(t *testing.T) {
+	e := newPlanEnv(t, "plan-evict@example.com")
+	spaceID := provisionedID(t, e.ts, mintProvisionToken(t, e.ts, e.token, "plume"))
+	coID, coToken := registered(t, e.ts, "plan-coowner@example.com")
+	memberOf(t, e.ts, spaceID, coID, "owner")
+	plainID, _ := registered(t, e.ts, "plan-plain@example.com")
+	memberOf(t, e.ts, spaceID, plainID, "member")
+	var payerMember schemas.SpaceMember
+	require.NoError(t, e.ts.db.Where("space_id = ? AND user_id = ?", spaceID, e.userID).First(&payerMember).Error)
+
+	assert.Equal(t, http.StatusConflict, doDelete(e.ts, fmt.Sprintf("/spaces/%d/members/%d", spaceID, payerMember.ID), coToken).StatusCode)
+	assert.Equal(t, http.StatusConflict, doJSON(e.ts, "POST", fmt.Sprintf("/spaces/%d/leave", spaceID), nil, e.token).StatusCode)
+
+	billing := fmt.Sprintf("/spaces/%d/billing", spaceID)
+	assert.Equal(t, http.StatusForbidden, doJSON(e.ts, "POST", billing, map[string]int64{"user_id": coID}, coToken).StatusCode)
+	assert.Equal(t, http.StatusBadRequest, doJSON(e.ts, "POST", billing, map[string]int64{"user_id": plainID}, e.token).StatusCode)
+	require.Equal(t, http.StatusNoContent, doJSON(e.ts, "POST", billing, map[string]int64{"user_id": coID}, e.token).StatusCode)
+
+	var chargedTo int64
+	require.NoError(t, e.ts.db.Model(&schemas.Space{}).Where("id = ?", spaceID).Pluck("charged_to", &chargedTo).Error)
+	assert.Equal(t, coID, chargedTo)
+	assert.Equal(t, http.StatusOK, doJSON(e.ts, "POST", fmt.Sprintf("/spaces/%d/leave", spaceID), nil, e.token).StatusCode)
+}
+
+func TestPlanDeletedPayerFailsClosedUntilBackfill(t *testing.T) {
+	ts := setupSettledServer(t)
+	registered(t, ts, "plan-first@example.com")
+	payerID, payerToken := registered(t, ts, "plan-gone@example.com")
+	spaceID := provisionedID(t, ts, mintProvisionToken(t, ts, payerToken, "ardoise"))
+	coID, coToken := registered(t, ts, "plan-heir@example.com")
+	memberOf(t, ts, spaceID, coID, "owner")
+	require.NoError(t, ts.db.Exec("DELETE FROM users WHERE id = ?", payerID).Error)
+	require.NoError(t, ts.plans.Apply(context.Background(), directory.Snapshot{Version: 1, EntitlementsRevision: 1}))
+
+	assert.Equal(t, http.StatusPreconditionFailed, uploadFileToSpace(ts, coToken, "a.pdf", "orphaned", spaceID).StatusCode)
+	require.NoError(t, schemas.Migrate(ts.db))
+	var chargedTo int64
+	require.NoError(t, ts.db.Model(&schemas.Space{}).Where("id = ?", spaceID).Pluck("charged_to", &chargedTo).Error)
+	assert.Equal(t, coID, chargedTo)
+	assert.Equal(t, http.StatusCreated, uploadFileToSpace(ts, coToken, "b.pdf", "inherited", spaceID).StatusCode)
 }
