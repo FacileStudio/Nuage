@@ -1,6 +1,9 @@
 package schemas
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // UploadSession is a chunked-upload session in progress.
 type UploadSession struct {
@@ -32,3 +35,17 @@ type UploadChunk struct {
 }
 
 func (UploadChunk) TableName() string { return "upload_chunks" }
+
+// SessionIdleWindow is how long a pending chunked upload keeps reserving its
+// declared size, and counting toward its user's open uploads, after its last
+// chunk arrived (or after it started, before any chunk). A session idle for
+// longer can still be resumed; its completion is checked again on its own.
+const SessionIdleWindow = time.Hour
+
+// OpenSessionClause is the SQL condition, on the upload_sessions row aliased
+// alias, for a session that is pending, unexpired and active within
+// SessionIdleWindow. It takes the idle cutoff as its one argument.
+func OpenSessionClause(alias string) string {
+	return fmt.Sprintf(`%[1]s.status = 'pending' AND %[1]s.expires_at > now()
+		AND COALESCE((SELECT MAX(c.created_at) FROM upload_chunks c WHERE c.session_id = %[1]s.id), %[1]s.created_at) > ?`, alias)
+}

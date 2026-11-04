@@ -315,6 +315,10 @@ type AdminUsageResponse struct {
 	Users []QuotaResponse `json:"users"`
 }
 
+type TransferBillingRequest struct {
+	UserID int64 `json:"user_id" validate:"required"`
+}
+
 type SetQuotaRequest struct {
 	StorageLimit int64 `json:"storage_limit" validate:"required"`
 }
@@ -812,6 +816,15 @@ func Reference() apiref.Config {
 							Auth:       "bearer",
 							PathParams: []Field{{Name: "id", Type: "string", Description: "Space ID"}},
 							Status:     http.StatusNoContent,
+						},
+						{
+							Method:      "POST",
+							Path:        "/spaces/{id}/billing",
+							Summary:     "Hand who pays for an app-provisioned space's storage to another owner. Only the current payer may call it. The payer cannot leave or be removed while other members remain.",
+							Auth:        "bearer",
+							PathParams:  []Field{{Name: "id", Type: "string", Description: "Space ID"}},
+							RequestBody: TransferBillingRequest{},
+							Status:      http.StatusNoContent,
 						},
 					},
 				},
