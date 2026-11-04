@@ -100,11 +100,8 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 func (s *Service) writeVersion(ctx context.Context, userID int64, fileID int64, bucketKey, fileHash, mimeType string, size int64) (int64, error) {
 	var oldSize int64
 	txErr := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var current schemas.File
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fileID).First(&current).Error; err != nil {
-			return errors.Internal("failed to lock file record", err)
-		}
-		if err := s.quota.AdmitTx(tx, userID, current.SpaceID, size); err != nil {
+		current, err := s.lockForVersion(tx, userID, fileID, size)
+		if err != nil {
 			return err
 		}
 
@@ -146,6 +143,17 @@ func (s *Service) writeVersion(ctx context.Context, userID int64, fileID int64, 
 		return 0, txErr
 	}
 	return oldSize, nil
+}
+
+// lockForVersion locks the file row, then admits size new bytes against the
+// plan of the file's scope: the row lock first and the plan lock last, the
+// order every path that adds bytes to an existing file uses.
+func (s *Service) lockForVersion(tx *gorm.DB, userID, fileID, size int64) (schemas.File, error) {
+	var current schemas.File
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fileID).First(&current).Error; err != nil {
+		return current, errors.Internal("failed to lock file record", err)
+	}
+	return current, s.quota.AdmitTx(tx, userID, current.SpaceID, size)
 }
 
 // commitUploadedVersion makes an already-stored object the content of a file and

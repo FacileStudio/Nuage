@@ -66,3 +66,15 @@ func (s *Service) Reserve(ctx context.Context, userID int64, spaceID *int64, siz
 		return create(tx)
 	})
 }
+
+// Readmit runs touch in a transaction that first admits size bytes for a
+// lapsed chunked upload under the plan lock. Before plans apply it only runs
+// touch, as nothing was reserved.
+func (s *Service) Readmit(ctx context.Context, userID int64, spaceID *int64, size int64, touch func(tx *gorm.DB) error) error {
+	return s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.AdmitTx(tx, userID, spaceID, size); err != nil {
+			return err
+		}
+		return touch(tx)
+	})
+}

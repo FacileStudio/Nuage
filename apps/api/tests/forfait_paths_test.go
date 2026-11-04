@@ -118,3 +118,31 @@ func TestPlanIdleSessionStopsReserving(t *testing.T) {
 	assert.Equal(t, http.StatusCreated,
 		initChunkedUpload(e.ts, e.token, map[string]any{"file_name": "next.bin", "total_size": 200}).StatusCode)
 }
+
+func TestPlanLapsedSessionMustReadmitBeforeItsNextChunk(t *testing.T) {
+	e := newPlanEnv(t, "plan-revive@example.com")
+	e.enforce(t, 1, "1", "")
+	e.fill(t, nil, gibibyte-1000)
+	lapsed := initSession(t, e.ts, e.token, 900)
+	require.NoError(t, e.ts.db.Exec("UPDATE upload_sessions SET created_at = now() - interval '2 hours' WHERE id = ?", lapsed).Error)
+
+	taken := initSession(t, e.ts, e.token, 200)
+	assert.Equal(t, http.StatusPaymentRequired, putChunk(e.ts, e.token, lapsed, 1, make([]byte, 100)).StatusCode,
+		"the room the lapsed session held went to another upload")
+
+	require.Equal(t, http.StatusOK, doDelete(e.ts, "/files/upload/"+taken, e.token).StatusCode)
+	assert.Equal(t, http.StatusCreated, putChunk(e.ts, e.token, lapsed, 1, make([]byte, 100)).StatusCode)
+	assert.Equal(t, http.StatusPaymentRequired,
+		initChunkedUpload(e.ts, e.token, map[string]any{"file_name": "after.bin", "total_size": 200}).StatusCode,
+		"a revived session reserves again")
+}
+
+func TestLapsedSessionsStillCountTowardTheCap(t *testing.T) {
+	e := newPlanEnv(t, "plan-pileup@example.com")
+	for range 10 {
+		initSession(t, e.ts, e.token, 1)
+	}
+	require.NoError(t, e.ts.db.Exec("UPDATE upload_sessions SET created_at = now() - interval '2 hours'").Error)
+	assert.Equal(t, http.StatusTooManyRequests,
+		initChunkedUpload(e.ts, e.token, map[string]any{"file_name": "eleventh.bin", "total_size": 1}).StatusCode)
+}

@@ -7,6 +7,8 @@ import (
 
 	"github.com/FacileStudio/porte/forfait"
 	"github.com/FacileStudio/tronc/errors"
+
+	"golang.org/x/net/webdav"
 )
 
 // refuse remembers a storage refusal so the response says 507 Insufficient
@@ -46,4 +48,13 @@ func (w *refusalWriter) Write(b []byte) (int, error) {
 		return len(b), nil
 	}
 	return w.ResponseWriter.Write(b)
+}
+
+// withRefusals wraps w so a write the mount refused for space answers 507.
+// Only a NuageFS mount stores bytes; the spaces index passes through.
+func withRefusals(w http.ResponseWriter, fs webdav.FileSystem) http.ResponseWriter {
+	if nuage, ok := fs.(*NuageFS); ok {
+		return &refusalWriter{ResponseWriter: w, fs: nuage}
+	}
+	return w
 }

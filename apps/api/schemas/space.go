@@ -12,17 +12,21 @@ import "time"
 //
 // ChargedTo is the user whose personal plan pays for a space another app
 // provisioned: the account that created it. It is set by the server at
-// creation, never from a request, and is nil for user-made spaces.
+// creation, never from a request, and is nil for user-made spaces. It moves
+// only when the owner named in BillingOfferTo accepts the payer's offer before
+// BillingOfferEnd.
 type Space struct {
-	ID              int64     `json:"id" gorm:"primaryKey"`
-	FacileID        string    `json:"facile_id" gorm:"uniqueIndex;not null"`
-	Name            string    `json:"name" gorm:"not null"`
-	Description     string    `json:"description"`
-	ProvisionedBy   string    `json:"-" gorm:"not null;default:''"`
-	RegistreSpaceID *string   `json:"registre_space_id" gorm:"uniqueIndex"`
-	ChargedTo       *int64    `json:"-" gorm:"index"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              int64      `json:"id" gorm:"primaryKey"`
+	FacileID        string     `json:"facile_id" gorm:"uniqueIndex;not null"`
+	Name            string     `json:"name" gorm:"not null"`
+	Description     string     `json:"description"`
+	ProvisionedBy   string     `json:"-" gorm:"not null;default:''"`
+	RegistreSpaceID *string    `json:"registre_space_id" gorm:"uniqueIndex"`
+	ChargedTo       *int64     `json:"-" gorm:"index"`
+	BillingOfferTo  *int64     `json:"-"`
+	BillingOfferEnd *time.Time `json:"-"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func (Space) TableName() string { return "spaces" }

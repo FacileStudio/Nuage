@@ -3,6 +3,8 @@ package schemas
 import (
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // UploadSession is a chunked-upload session in progress.
@@ -37,15 +39,28 @@ type UploadChunk struct {
 func (UploadChunk) TableName() string { return "upload_chunks" }
 
 // SessionIdleWindow is how long a pending chunked upload keeps reserving its
-// declared size, and counting toward its user's open uploads, after its last
-// chunk arrived (or after it started, before any chunk). A session idle for
-// longer can still be resumed; its completion is checked again on its own.
+// declared size after it was last active: its start, or its last chunk. A lapsed session still counts toward
+// its user's open uploads until it expires, and its next chunk must re-admit
+// the reservation under the plan lock before it is stored.
 const SessionIdleWindow = time.Hour
 
-// OpenSessionClause is the SQL condition, on the upload_sessions row aliased
-// alias, for a session that is pending, unexpired and active within
+// ReservingSessionClause is the SQL condition, on the upload_sessions row
+// aliased alias, for a session that is pending, unexpired and active within
 // SessionIdleWindow. It takes the idle cutoff as its one argument.
-func OpenSessionClause(alias string) string {
-	return fmt.Sprintf(`%[1]s.status = 'pending' AND %[1]s.expires_at > now()
-		AND COALESCE((SELECT MAX(c.created_at) FROM upload_chunks c WHERE c.session_id = %[1]s.id), %[1]s.created_at) > ?`, alias)
+func ReservingSessionClause(alias string) string {
+	return fmt.Sprintf(`%[1]s.status = 'pending' AND %[1]s.expires_at > now() AND %[2]s > ?`, alias, lastActiveSQL(alias))
+}
+
+// lastActiveSQL is the SQL expression for when the session aliased alias was
+// last active.
+func lastActiveSQL(alias string) string {
+	return fmt.Sprintf(`COALESCE((SELECT MAX(c.created_at) FROM upload_chunks c WHERE c.session_id = %[1]s.id), %[1]s.created_at)`, alias)
+}
+
+// SessionLapsed reports whether the session stopped reserving its size.
+func SessionLapsed(db *gorm.DB, sessionID string) (bool, error) {
+	var lapsed bool
+	err := db.Raw(fmt.Sprintf("SELECT %s <= ? FROM upload_sessions s WHERE s.id = ?", lastActiveSQL("s")),
+		time.Now().Add(-SessionIdleWindow), sessionID).Scan(&lapsed).Error
+	return lapsed, err
 }
