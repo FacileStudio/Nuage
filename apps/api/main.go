@@ -15,6 +15,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
+	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
@@ -116,8 +117,9 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 
 // newDirectory builds the Registre space sync when OIDC is configured, using the app's own
 // client credentials, and returns nils otherwise: without Registre there is nothing to sync
-// and no nudge route to mount.
-func newDirectory(db *gorm.DB, appEnv env.Config, appLogger *slog.Logger) (*spaces.Registre, *directory.Syncer) {
+// and no nudge route to mount. Every snapshot updates the spaces first, then the plan
+// entitlements; both run even when the other fails, and either failure retries the snapshot.
+func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, appLogger *slog.Logger) (*spaces.Registre, *directory.Syncer) {
 	if appEnv.OIDC == nil {
 		return nil, nil
 	}
@@ -128,10 +130,26 @@ func newDirectory(db *gorm.DB, appEnv env.Config, appLogger *slog.Logger) (*spac
 			ClientID:     appEnv.OIDC.ClientID,
 			ClientSecret: appEnv.OIDC.ClientSecret,
 		},
-		Apply:  registre.Apply,
+		Apply: func(ctx context.Context, snapshot directory.Snapshot) error {
+			return errors.Join(registre.Apply(ctx, snapshot), plans.Apply(ctx, snapshot))
+		},
 		Logger: appLogger,
 	}
 	return registre, syncer
+}
+
+// newPlans builds the plan entitlements and restores the ones saved before the last
+// restart, so a reboot never fails open again once Registre has served plans.
+func newPlans(db *gorm.DB, appEnv env.Config, appLogger *slog.Logger) *entitlements.Plans {
+	issuer := ""
+	if appEnv.OIDC != nil {
+		issuer = appEnv.OIDC.Issuer
+	}
+	plans := entitlements.New(db, issuer, appLogger)
+	if err := plans.Restore(context.Background()); err != nil {
+		appLogger.Error("failed to restore the saved plan entitlements; allowing every upload until Registre answers", slog.Any("error", err))
+	}
+	return plans
 }
 
 // registreSpacesURL is Registre's spaces page, where shared spaces are managed once OIDC is
@@ -288,7 +306,9 @@ func run() int {
 	}
 	authService := auth.NewService(db, sessions, passwords, appLogger)
 	userService := users.NewService(db, appEnv.StorageDir, authService)
-	quotaService := quota.NewService(db)
+	plans := newPlans(db, appEnv, appLogger)
+	quotaService := quota.NewService(db).WithPlans(plans)
+	go quotaService.ReportOverFreePlan(context.Background(), appLogger)
 	if appEnv.PresignSecret == "" {
 		appLogger.Error("failed to load config", slog.Any("error", errors.New("PRESIGN_SECRET is required: unauthenticated download links are signed with it")))
 		return 1
@@ -301,7 +321,7 @@ func run() int {
 	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
 	spacesService := spaces.NewService(db, storageClient, registreSpacesURL(appEnv))
-	registre, syncer := newDirectory(db, appEnv, appLogger)
+	registre, syncer := newDirectory(db, appEnv, plans, appLogger)
 	if err := spacesService.MigrateBuckets(context.Background()); err != nil {
 		appLogger.Error("failed to move space files to their own buckets; serving with the files still in the shared bucket", slog.Any("error", err))
 	}

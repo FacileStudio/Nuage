@@ -96,6 +96,9 @@ func (s *Service) saveNewFile(ctx context.Context, record *schemas.File, request
 			return err
 		}
 		record.Name = reserved
+		if err := s.quota.AdmitTx(tx, record.UploadedBy, record.SpaceID, record.Size); err != nil {
+			return err
+		}
 		if err := tx.Create(record).Error; err != nil {
 			return errors.Internal("failed to save file record", err)
 		}
@@ -366,7 +369,7 @@ func (s *Service) uploadFile(ctx context.Context, userID int64, name string, mim
 	}
 
 	if s.quota != nil && estimatedSize > 0 {
-		if err := s.quota.CheckQuota(ctx, userID, estimatedSize); err != nil {
+		if err := s.quota.Admit(ctx, userID, spaceID, estimatedSize); err != nil {
 			if s.notifier != nil {
 				if usage, qErr := s.quota.GetUsage(ctx, userID); qErr == nil {
 					s.notifier.Notify(ctx, userID, "quota.exceeded", nook.EventData{

@@ -8,6 +8,7 @@
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { icons, nuage } from '$lib/icons';
 	import QuotaMeter from '$lib/components/QuotaMeter.svelte';
+	import PlanLimitBanner from '$lib/components/PlanLimitBanner.svelte';
 
 	let { children } = $props();
 
@@ -177,6 +178,7 @@
 		</div>
 
 		<main class="min-w-0 flex-1 overflow-auto overscroll-contain rounded-fc-lg pb-24 md:pb-0">
+			<PlanLimitBanner />
 			{@render children()}
 		</main>
 	</div>

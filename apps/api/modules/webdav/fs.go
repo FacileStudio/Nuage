@@ -2,9 +2,6 @@ package webdav
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -13,8 +10,6 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
-	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
-	"github.com/FacileStudio/Nuage/apps/api/internal/spacebucket"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -30,6 +25,7 @@ type NuageFS struct {
 	storage *storage.Client
 	quota   *quota.Service
 	scope   scope
+	refusal error
 }
 
 // NewNuageFS builds a webdav.FileSystem for the given scope.
@@ -305,102 +301,6 @@ func (fs *NuageFS) Rename(ctx context.Context, oldName, newName string) error {
 		return fs.db.WithContext(ctx).Model(folder).Updates(updates).Error
 	}
 	return os.ErrNotExist
-}
-
-func (fs *NuageFS) createFile(ctx context.Context, name string, parentPath string, content io.ReadSeeker, size int64) error {
-	parent, _, err := fs.resolvePath(ctx, parentPath)
-	if err != nil {
-		return err
-	}
-	var folderID *int64
-	if parent != nil {
-		folderID = &parent.ID
-	}
-
-	if fs.quota != nil {
-		if err := fs.quota.CheckQuota(ctx, fs.scope.userID, size); err != nil {
-			return err
-		}
-	}
-
-	sniffed, err := detectMimeType(content)
-	if err != nil {
-		return err
-	}
-	mimeType := mimetype.Resolve(name, sniffed)
-
-	store, bucket, err := spacebucket.Open(ctx, fs.db, fs.storage, fs.scope.spaceID)
-	if err != nil {
-		return err
-	}
-
-	fid := facile.NewID()
-	bucketKey := fmt.Sprintf("%d/%s/%s", fs.scope.userID, fid, name)
-
-	hasher := sha256.New()
-	tee := io.TeeReader(content, hasher)
-	if err := store.PutObject(ctx, bucketKey, tee, size, mimeType); err != nil {
-		return err
-	}
-
-	record := &schemas.File{
-		FacileID:   fid,
-		Name:       name,
-		MimeType:   mimeType,
-		Size:       size,
-		Hash:       hex.EncodeToString(hasher.Sum(nil)),
-		BucketKey:  bucketKey,
-		Bucket:     bucket,
-		FolderID:   folderID,
-		UploadedBy: fs.scope.userID,
-		SpaceID:    fs.scope.spaceID,
-	}
-	if err := fs.db.WithContext(ctx).Create(record).Error; err != nil {
-		_ = fs.storage.DeleteObject(ctx, bucketKey)
-		return err
-	}
-	if fs.quota != nil {
-		fs.quota.UpdateUsage(ctx, fs.scope.userID, size)
-	}
-	return nil
-}
-
-func (fs *NuageFS) overwriteFile(ctx context.Context, file *schemas.File, content io.ReadSeeker, size int64) error {
-	if !fs.scope.ownsFile(file) {
-		return os.ErrPermission
-	}
-
-	if fs.quota != nil {
-		if delta := size - file.Size; delta > 0 {
-			if err := fs.quota.CheckQuota(ctx, fs.scope.userID, delta); err != nil {
-				return err
-			}
-		}
-	}
-
-	sniffed, err := detectMimeType(content)
-	if err != nil {
-		return err
-	}
-	mimeType := mimetype.Resolve(file.Name, sniffed)
-
-	hasher := sha256.New()
-	tee := io.TeeReader(content, hasher)
-	if err := fs.storage.For(file.Bucket).PutObject(ctx, file.BucketKey, tee, size, mimeType); err != nil {
-		return err
-	}
-
-	if err := fs.db.WithContext(ctx).Model(file).Updates(map[string]any{
-		"size":      size,
-		"hash":      hex.EncodeToString(hasher.Sum(nil)),
-		"mime_type": mimeType,
-	}).Error; err != nil {
-		return err
-	}
-	if fs.quota != nil {
-		fs.quota.UpdateUsage(ctx, fs.scope.userID, size-file.Size)
-	}
-	return nil
 }
 
 func detectMimeType(content io.ReadSeeker) (string, error) {

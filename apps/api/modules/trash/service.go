@@ -140,8 +140,8 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 				updates["folder_id"] = nil
 			}
 		}
-		if err := s.orm.WithContext(ctx).Model(&record).Updates(updates).Error; err != nil {
-			return errors.Internal("failed to restore file", err)
+		if err := s.restoreFile(ctx, userID, &record, updates); err != nil {
+			return err
 		}
 		if s.activity != nil {
 			s.activity.Log(ctx, activity.Entry{
@@ -170,6 +170,9 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 		}
 		deletedAt := *record.DeletedAt
 		err = s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := s.admitRestore(tx, userID, record.SpaceID, "f.folder_id IN ? AND f.deleted_at = ?", folderIDs, deletedAt); err != nil {
+				return err
+			}
 			if err := tx.Model(&schemas.File{}).Where("folder_id IN ? AND deleted_at = ?", folderIDs, deletedAt).Update("deleted_at", nil).Error; err != nil {
 				return err
 			}
@@ -182,7 +185,7 @@ func (s *Service) restore(ctx context.Context, userID int64, itemType string, it
 			return nil
 		})
 		if err != nil {
-			return errors.Internal("failed to restore folder", err)
+			return restoreFailure(err, "failed to restore folder")
 		}
 		if s.activity != nil {
 			s.activity.Log(ctx, activity.Entry{

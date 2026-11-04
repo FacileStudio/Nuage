@@ -38,7 +38,7 @@ func (s *Service) reuploadFile(ctx context.Context, userID int64, fileID string,
 	}
 
 	if s.quota != nil && size > 0 {
-		if err := s.quota.CheckQuota(ctx, userID, size); err != nil {
+		if err := s.quota.Admit(ctx, userID, record.SpaceID, size); err != nil {
 			return nil, err
 		}
 	}
@@ -103,6 +103,9 @@ func (s *Service) writeVersion(ctx context.Context, userID int64, fileID int64, 
 		var current schemas.File
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fileID).First(&current).Error; err != nil {
 			return errors.Internal("failed to lock file record", err)
+		}
+		if err := s.quota.AdmitTx(tx, userID, current.SpaceID, size); err != nil {
+			return err
 		}
 
 		var maxVersion int
@@ -225,6 +228,9 @@ func (s *Service) restoreVersion(ctx context.Context, userID int64, fileID strin
 		var current schemas.File
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fid).First(&current).Error; err != nil {
 			return errors.Internal("failed to lock file record", err)
+		}
+		if err := s.quota.AdmitTx(tx, userID, current.SpaceID, info.Size); err != nil {
+			return err
 		}
 
 		var maxVersion int

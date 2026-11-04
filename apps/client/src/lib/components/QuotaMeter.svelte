@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { QuotaResponse } from '$lib/backend';
 	import { formatSize } from '$lib/format';
+	import { isSafeUpgradeUrl } from '$lib/plan-limit';
 	import { nuage } from '$lib/icons';
 
 	let {
@@ -12,6 +13,9 @@
 	} = $props();
 
 	const hasLimit = $derived(quota.storage_limit > 0);
+	const upgrade = $derived(
+		quota.source === 'plan' && isSafeUpgradeUrl(quota.upgrade_url) ? quota.upgrade_url : undefined
+	);
 	const percent = $derived(Math.min(Math.max(quota.percentage, 0), 100));
 
 	/*
@@ -40,7 +44,11 @@
 		</span>
 	{:else if hasLimit}
 		<div class="flex items-center justify-between gap-2 text-fc-xs text-fc-fg-muted">
-			<span class="truncate">{formatSize(quota.storage_used)} of {formatSize(quota.storage_limit)}</span>
+			<span class="truncate"
+				>{formatSize(quota.storage_used)} of {formatSize(quota.storage_limit)}{quota.source === 'plan'
+					? ' on your plan'
+					: ''}</span
+			>
 			<span class="shrink-0 tabular-nums">{Math.round(percent)}%</span>
 		</div>
 		<div
@@ -56,6 +64,11 @@
 				style="width: {percent}%"
 			></div>
 		</div>
+		{#if upgrade && percent >= 80}
+			<a class="text-fc-xs font-medium text-fc-accent hover:underline" href={upgrade} rel="noopener noreferrer"
+				>Upgrade plan</a
+			>
+		{/if}
 	{:else}
 		<div class="flex items-center gap-1.5 text-fc-xs text-fc-fg-muted">
 			<iconify-icon icon={nuage.brand} width="14" height="14" class="block shrink-0"></iconify-icon>

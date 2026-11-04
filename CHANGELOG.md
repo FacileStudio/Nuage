@@ -10,6 +10,35 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Added
+
+- **Storage follows the Registre plan (`nuage.storage_gb`, free plan 5 GB).** Every directory
+  sync now also feeds the plan entitlements to porte/forfait, and the state is saved in the new
+  `entitlement_state` row and restored at boot, so a restart keeps the last known plans. Files
+  in a space count against that space's Registre plan; personal files count against the owner's
+  person plan. Usage is live bytes (files not in the trash, plus their versions) against
+  `storage_gb * 1024^3`, and `-1` is unlimited.
+- **Every path that adds bytes is checked**: single and chunked uploads (at session start with
+  the declared size, and again at completion), WebDAV PUT and COPY, version uploads and
+  restores, and trash restore. The check runs again inside the transaction that records the
+  bytes, under a per-scope advisory lock, so two uploads racing at the ceiling cannot both land.
+- **Over the plan answers HTTP 402** in the usual error envelope with `code: "payment_required"`,
+  `key`, `limit` (GB) and `upgrade_url` (the Registre space page, or `/spaces` for personal
+  files). WebDAV answers 507 Insufficient Storage. The client shows a banner with an upgrade
+  link (https or same-origin only), and the usage meter shows the plan ceiling.
+- **Boot report of usage above the free plan.** At every boot the API logs a
+  `forfait: ... storage above the free plan` warning per person and space storing more than
+  5 GB, so overrides can be added in Ardoise before its first entitlements push.
+
+### Changed
+
+- Until Registre serves a snapshot with a non-zero `entitlements_revision`, nothing changes:
+  the per-user quota and its instance default apply exactly as before. Afterwards an explicit
+  per-user limit set by an admin keeps winning over the person plan, and still caps that user's
+  uploads into spaces. A space not linked to Registre refuses new files with 412 once plans
+  apply, since it has no plan of its own.
+- Downloads, listings, deletes and emptying the trash are never gated, whatever the usage.
+
 ## [0.10.3] - 2026-11-03
 
 ### Fixed

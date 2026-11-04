@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
 
@@ -23,13 +24,13 @@ func newHandler(service *Service) *Handler {
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
@@ -46,13 +47,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.service.listTrash(r.Context(), userID, hasSpace, spaceID)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
 	items, retention, err := h.service.withExpiry(r.Context(), items)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -62,13 +63,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
@@ -76,7 +77,7 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 	itemID := chi.URLParam(r, "id")
 
 	if err := h.service.restore(r.Context(), userID, itemType, itemID); err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -86,13 +87,13 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) permanentDelete(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
@@ -100,7 +101,7 @@ func (h *Handler) permanentDelete(w http.ResponseWriter, r *http.Request) {
 	itemID := chi.URLParam(r, "id")
 
 	if err := h.service.permanentDelete(r.Context(), userID, itemType, itemID); err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -110,19 +111,19 @@ func (h *Handler) permanentDelete(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) emptyTrash(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	count, err := h.service.emptyTrash(r.Context(), userID)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
