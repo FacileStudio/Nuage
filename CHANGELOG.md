@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-04
+
 ### Added
 
 - **Storage follows the Registre plan (`nuage.storage_gb`, free plan 5 GB).** Every directory
