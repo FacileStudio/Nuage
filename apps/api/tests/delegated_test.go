@@ -100,6 +100,10 @@ func TestDelegatedTokenScopes(t *testing.T) {
 		{"delegated token cannot edit the profile", http.MethodPatch, "/users/me",
 			map[string]string{"password": "another-password-456"}, delegatedWrite, http.StatusForbidden},
 		{"delegated token reads the profile", http.MethodGet, "/users/me", nil, delegatedRead, http.StatusOK},
+		{"delegated token cannot offer billing", http.MethodPost, "/spaces/1/billing",
+			map[string]int64{"user_id": 2}, delegatedWrite, http.StatusForbidden},
+		{"delegated token cannot withdraw billing", http.MethodDelete, "/spaces/1/billing", nil, delegatedWrite, http.StatusForbidden},
+		{"delegated token cannot accept billing", http.MethodPost, "/spaces/1/billing/accept", nil, delegatedWrite, http.StatusForbidden},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

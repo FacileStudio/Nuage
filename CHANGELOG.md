@@ -50,7 +50,8 @@ tag records what shipped rather than triggering the deploy.
 - **The payer of an app-provisioned space cannot leave or be removed while others remain** (409).
   Billing moves in two steps: the payer offers it to another owner with
   `POST /api/spaces/{id}/billing {"user_id"}` (open 7 days, withdrawn with `DELETE`), and only
-  that owner's own `POST /api/spaces/{id}/billing/accept` moves it. App tokens cannot accept. A space whose payer's account was deleted refuses new files (412) until the next boot
+  that owner's own `POST /api/spaces/{id}/billing/accept` moves it. App tokens and delegated
+  suite JWTs cannot offer, withdraw or accept: consent comes only from the person's session. A space whose payer's account was deleted refuses new files (412) until the next boot
   reassigns it to its earliest remaining owner.
 - **Idle chunked uploads stop reserving.** A pending session with no chunk for an hour no longer
   counts toward the plan; its next chunk must fit the plan again (402 otherwise). It still

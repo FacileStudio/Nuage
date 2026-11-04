@@ -38,9 +38,10 @@ type Authenticator interface {
 //
 // A bearer JWT has no session row, so its SessionID is zero. Such a token is
 // another suite service acting for the user, and it never carries the admin
-// role, whatever the account holds. Nor may it mint an API token or change
-// the password or address the account signs in with: a five-minute delegation
-// must not turn itself into a credential that outlives it.
+// role, whatever the account holds. Nor may it mint an API token, change
+// the password or address the account signs in with, or move who pays for a
+// space: a five-minute delegation must not turn itself into a credential that
+// outlives it, nor consent on the person's behalf.
 func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 	hydrate := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -92,13 +93,21 @@ func permitted(authenticated porte.Identity, scope *tokenscope.Scope, method, pa
 }
 
 // managesCredentials reports whether the route mints, lists or revokes API
-// tokens, or edits the profile that holds the sign-in password and address.
+// tokens, edits the profile that holds the sign-in password and address, or
+// offers, withdraws or accepts who pays for a space. Billing is consent, and
+// consent comes only from the person's own session.
 func managesCredentials(method, path string) bool {
 	path = strings.TrimSuffix(strings.TrimPrefix(path, "/api"), "/")
 	if path == "/users/me" {
 		return method != http.MethodGet
 	}
-	return strings.HasPrefix(path, "/users/me/api-token")
+	return strings.HasPrefix(path, "/users/me/api-token") || isBilling(path)
+}
+
+// isBilling reports whether path is a space's billing route.
+func isBilling(path string) bool {
+	rest, ok := strings.CutPrefix(path, "/spaces/")
+	return ok && (strings.HasSuffix(rest, "/billing") || strings.HasSuffix(rest, "/billing/accept"))
 }
 
 // RequireAdmin rejects authenticated callers that are not administrators. It
