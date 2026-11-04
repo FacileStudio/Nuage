@@ -61,6 +61,7 @@ func migrateSchema(db *gorm.DB) error {
 		&ActivityLog{},
 		&NookDelivery{},
 		&Tombstone{},
+		&EntitlementState{},
 	); err != nil {
 		return err
 	}

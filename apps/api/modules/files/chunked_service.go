@@ -73,10 +73,8 @@ func (s *Service) initUpload(ctx context.Context, userID int64, req InitUploadRe
 		}
 	}
 
-	if s.quota != nil {
-		if err := s.quota.CheckQuota(ctx, userID, req.TotalSize); err != nil {
-			return nil, nil, err
-		}
+	if err := s.quota.Admit(ctx, userID, req.SpaceID, req.TotalSize); err != nil {
+		return nil, nil, err
 	}
 
 	session := &schemas.UploadSession{
@@ -223,15 +221,12 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 		}
 	}
 
-	if s.quota != nil {
-		if err := s.quota.CheckQuota(ctx, userID, totalSize); err != nil {
-			s.releaseSessionClaim(sessionID)
-			return nil, false, err
-		}
-	}
-
 	target, err := s.uploadTarget(ctx, userID, targetFileID)
 	if err != nil {
+		s.releaseSessionClaim(sessionID)
+		return nil, false, err
+	}
+	if err := s.quota.Admit(ctx, userID, landingSpace(session.SpaceID, target), totalSize); err != nil {
 		s.releaseSessionClaim(sessionID)
 		return nil, false, err
 	}
@@ -314,6 +309,15 @@ func (s *Service) completeUpload(ctx context.Context, userID int64, sessionID st
 	}
 
 	return record, true, nil
+}
+
+// landingSpace is the space a completed session's bytes count against: the
+// replaced file's when there is one, else the session's.
+func landingSpace(spaceID *int64, target *schemas.File) *int64 {
+	if target != nil {
+		return target.SpaceID
+	}
+	return spaceID
 }
 
 // uploadStore picks the bucket the assembled bytes land in. A replacement keeps

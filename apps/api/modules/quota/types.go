@@ -6,7 +6,19 @@ type UsageResponse struct {
 	StorageUsed  int64   `json:"storage_used"`
 	StorageLimit int64   `json:"storage_limit"`
 	Percentage   float64 `json:"percentage"`
+	Source       string  `json:"source"`
+	UpgradeURL   string  `json:"upgrade_url,omitempty"`
 }
+
+const (
+	// SourcePlan marks a limit read from the person's Registre plan.
+	SourcePlan = "plan"
+	// SourceOverride marks a limit an admin set on the user.
+	SourceOverride = "override"
+	// SourceInstance marks the instance default quota, which applies until
+	// Registre serves plans.
+	SourceInstance = "instance"
+)
 
 // UnlimitedStorageLimit is the only accepted negative storage_limit value; it
 // grants unlimited storage. A limit of 0 applies the instance default quota.

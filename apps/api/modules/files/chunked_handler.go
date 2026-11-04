@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
 
@@ -15,24 +16,24 @@ import (
 func (h *Handler) initUpload(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	var req InitUploadRequest
 	if err := httpjson.DecodeJSON(w, r, &req); err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
 	session, existing, err := h.service.initUpload(r.Context(), userID, req)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 	if existing != nil {
@@ -50,19 +51,19 @@ func (h *Handler) initUpload(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) uploadChunk(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	sessionID := chi.URLParam(r, "sessionId")
 	partNumber, err := strconv.Atoi(chi.URLParam(r, "partNumber"))
 	if err != nil {
-		httpjson.WriteError(w, errors.Invalid("invalid part number"))
+		entitlements.WriteError(w, errors.Invalid("invalid part number"))
 		return
 	}
 
@@ -70,7 +71,7 @@ func (h *Handler) uploadChunk(w http.ResponseWriter, r *http.Request) {
 
 	chunk, err := h.service.uploadChunk(r.Context(), userID, sessionID, partNumber, r.Body, r.ContentLength)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -84,12 +85,12 @@ func (h *Handler) uploadChunk(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) completeUpload(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
@@ -98,14 +99,14 @@ func (h *Handler) completeUpload(w http.ResponseWriter, r *http.Request) {
 	var req CompleteUploadRequest
 	if r.Body != nil && r.ContentLength > 0 {
 		if err := httpjson.DecodeJSON(w, r, &req); err != nil {
-			httpjson.WriteError(w, err)
+			entitlements.WriteError(w, err)
 			return
 		}
 	}
 
 	record, created, err := h.service.completeUpload(r.Context(), userID, sessionID, req.FileID)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -121,19 +122,19 @@ func (h *Handler) completeUpload(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getUploadStatus(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	sessionID := chi.URLParam(r, "sessionId")
 	session, chunks, err := h.service.getUploadStatus(r.Context(), userID, sessionID)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -159,18 +160,18 @@ func (h *Handler) getUploadStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) abortUpload(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	sessionID := chi.URLParam(r, "sessionId")
 	if err := h.service.abortUpload(r.Context(), userID, sessionID); err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 

@@ -83,6 +83,9 @@ func (s *davServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if nuage, ok := fs.(*NuageFS); ok {
+		w = &refusalWriter{ResponseWriter: w, fs: nuage}
+	}
 	s.handler(mount, fs, key).ServeHTTP(w, r)
 }
 

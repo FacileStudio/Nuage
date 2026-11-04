@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
@@ -46,7 +47,11 @@ import (
 type testServer struct {
 	router *chi.Mux
 	db     *gorm.DB
+	plans  *entitlements.Plans
 }
+
+// testIssuer is the OIDC issuer the plan entitlements are built for in tests.
+const testIssuer = "https://sso.test"
 
 // skipOrFail lets a developer without Postgres and MinIO run the suite, while
 // making the same missing infrastructure a hard failure in CI so a green run
@@ -125,7 +130,8 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	}
 	authService := auth.NewService(db, sessions, passwords, slog.Default())
 	userService := users.NewService(db, t.TempDir(), authService)
-	quotaService := quota.NewService(db)
+	plans := entitlements.New(db, testIssuer, slog.Default())
+	quotaService := quota.NewService(db).WithPlans(plans)
 	presignSecret := presign.DeriveSecret("test-secret", "nuage-presign-v1")
 	fileService := files.NewService(db, storageClient, notifier, actLogger, quotaService, presignSecret)
 	trashService := trash.NewService(db, storageClient, actLogger, quotaService)
@@ -162,7 +168,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 		sqlDB.Close()
 	})
 
-	return &testServer{router: router, db: db}
+	return &testServer{router: router, db: db, plans: plans}
 }
 
 func cleanDB(db *gorm.DB) {

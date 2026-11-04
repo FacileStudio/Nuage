@@ -1,3 +1,5 @@
+import { notePlanLimit } from '$lib/plan-limit';
+
 const backendBaseUrl = '/api';
 
 /*
@@ -113,6 +115,8 @@ export type QuotaResponse = {
 	storage_used: number;
 	storage_limit: number;
 	percentage: number;
+	source?: 'plan' | 'override' | 'instance';
+	upgrade_url?: string;
 };
 
 export type InitUploadResponse = {
@@ -257,6 +261,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, token?: stri
 		} catch {
 			payload = undefined;
 		}
+		notePlanLimit(response.status, payload);
 		throw new ApiError(
 			payload?.error?.message || `Request failed with status ${response.status}`,
 			response.status
@@ -337,6 +342,7 @@ export const backend = {
 				} catch {
 					payload = undefined;
 				}
+				notePlanLimit(r.status, payload);
 				throw new Error(payload?.error?.message || `Upload failed with status ${r.status}`);
 			}
 			return (await r.json()) as NuageFile;
@@ -543,6 +549,7 @@ export const backend = {
 					let msg = `Upload failed with status ${xhr.status}`;
 					try {
 						const payload = JSON.parse(xhr.responseText);
+						notePlanLimit(xhr.status, payload);
 						if (payload?.error?.message) msg = payload.error.message;
 					} catch {}
 					reject(new Error(msg));
@@ -575,6 +582,7 @@ export const backend = {
 					let msg = `Chunk upload failed with status ${xhr.status}`;
 					try {
 						const payload = JSON.parse(xhr.responseText);
+						notePlanLimit(xhr.status, payload);
 						if (payload?.error?.message) msg = payload.error.message;
 					} catch {}
 					reject(new Error(msg));

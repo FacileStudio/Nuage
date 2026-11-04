@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
+	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
@@ -15,23 +16,23 @@ import (
 func (h *Handler) reupload(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
-		httpjson.WriteError(w, errors.TooLarge("file is too large"))
+		entitlements.WriteError(w, errors.TooLarge("file is too large"))
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		httpjson.WriteError(w, errors.Invalid("file is required"))
+		entitlements.WriteError(w, errors.Invalid("file is required"))
 		return
 	}
 	defer file.Close()
@@ -40,7 +41,7 @@ func (h *Handler) reupload(w http.ResponseWriter, r *http.Request) {
 
 	record, err := h.service.reuploadFile(r.Context(), userID, chi.URLParam(r, "id"), file, header.Size, mimeType)
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -50,18 +51,18 @@ func (h *Handler) reupload(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) listVersions(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	versions, err := h.service.listVersions(r.Context(), userID, chi.URLParam(r, "id"))
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 
@@ -75,18 +76,18 @@ func (h *Handler) listVersions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) restoreVersion(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authcontext.IdentityFromContext(r.Context())
 	if !ok {
-		httpjson.WriteError(w, errors.Unauthorized("missing auth"))
+		entitlements.WriteError(w, errors.Unauthorized("missing auth"))
 		return
 	}
 	userID, err := strconv.ParseInt(identity.UserID, 10, 64)
 	if err != nil {
-		httpjson.WriteError(w, errors.Internal("failed to parse user id", err))
+		entitlements.WriteError(w, errors.Internal("failed to parse user id", err))
 		return
 	}
 
 	record, err := h.service.restoreVersion(r.Context(), userID, chi.URLParam(r, "id"), chi.URLParam(r, "versionId"))
 	if err != nil {
-		httpjson.WriteError(w, err)
+		entitlements.WriteError(w, err)
 		return
 	}
 

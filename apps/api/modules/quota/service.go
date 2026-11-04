@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"strconv"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/errors"
 
@@ -16,7 +17,8 @@ const defaultQuotaBytes int64 = 50 * 1024 * 1024 * 1024
 
 // Service tracks and enforces per-user storage quotas.
 type Service struct {
-	orm *gorm.DB
+	orm   *gorm.DB
+	plans *entitlements.Plans
 }
 
 // NewService builds a quota Service over the given database connection.
@@ -56,24 +58,19 @@ func (s *Service) GetUsage(ctx context.Context, userID int64) (*UsageResponse, e
 	if err != nil {
 		return nil, err
 	}
-	limit := quota.StorageLimit
+	if quota.StorageLimit == 0 && s.plans.Enforcing() {
+		return s.planUsage(ctx, userID)
+	}
+	source, limit := SourceOverride, quota.StorageLimit
 	if limit == 0 {
-		limit = s.getDefaultLimit()
+		source, limit = SourceInstance, s.getDefaultLimit()
 	}
-
-	var pct float64
-	if limit > 0 {
-		pct = float64(quota.StorageUsed) / float64(limit) * 100
-		if pct > 100 {
-			pct = 100
-		}
-	}
-
 	return &UsageResponse{
 		UserID:       userID,
 		StorageUsed:  quota.StorageUsed,
 		StorageLimit: limit,
-		Percentage:   pct,
+		Percentage:   percentOf(quota.StorageUsed, limit),
+		Source:       source,
 	}, nil
 }
 
@@ -97,6 +94,9 @@ func (s *Service) CheckQuota(ctx context.Context, userID int64, additionalBytes 
 }
 
 func (s *Service) UpdateUsage(ctx context.Context, userID int64, delta int64) error {
+	if s == nil {
+		return nil
+	}
 	if _, err := s.ensureQuota(ctx, userID); err != nil {
 		return err
 	}

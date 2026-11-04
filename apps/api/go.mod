@@ -5,6 +5,8 @@ go 1.26
 require (
 	github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba
 	github.com/FacileStudio/porte v0.7.0
+	github.com/FacileStudio/porte/directory v0.2.0
+	github.com/FacileStudio/porte/forfait v0.1.0
 	github.com/FacileStudio/tronc v0.16.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/httprate v0.15.0
@@ -18,7 +20,6 @@ require (
 )
 
 require (
-	github.com/FacileStudio/porte/directory v0.1.0 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
