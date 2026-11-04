@@ -9,18 +9,20 @@ import (
 	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// restoredBytesSQL sums what restoring the matching trashed files adds back
-// to their scope: each file and the versions it keeps.
-const restoredBytesSQL = `SELECT COALESCE(SUM(f.size + COALESCE(
-	(SELECT SUM(v.size) FROM file_versions v WHERE v.file_id = f.id), 0)), 0) FROM files f WHERE `
+// restoredBytes is what a restore adds to its scope's usage: nothing, since
+// trashed files keep counting until they are purged. The plan check still runs
+// at the restore, so it holds if that accounting ever changes.
+const restoredBytes int64 = 0
 
-// restoreFile takes one file out of the trash, inside the transaction that
-// checks its bytes still fit the scope's plan.
+// restoreFile takes one file out of the trash. It locks the file row first,
+// then runs the plan check, the same order writeVersion and restoreVersion
+// use, so a restore cannot deadlock against an upload into the same scope.
 func (s *Service) restoreFile(ctx context.Context, userID int64, record *schemas.File, updates map[string]any) error {
 	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.admitRestore(tx, userID, record.SpaceID, "f.id = ?", record.ID); err != nil {
+		if err := s.admitRestore(tx, userID, record.SpaceID, "id = ?", record.ID); err != nil {
 			return err
 		}
 		return tx.Model(record).Updates(updates).Error
@@ -28,17 +30,15 @@ func (s *Service) restoreFile(ctx context.Context, userID int64, record *schemas
 	return restoreFailure(err, "failed to restore file")
 }
 
-// admitRestore refuses a restore that would take the scope over its plan.
-// Restored files count again, since trashed ones do not.
+// admitRestore locks the trashed files a restore brings back, in id order,
+// and then checks the scope's plan for what the restore adds.
 func (s *Service) admitRestore(tx *gorm.DB, userID int64, spaceID *int64, where string, args ...any) error {
-	if s.quota == nil {
-		return nil
-	}
-	var adding int64
-	if err := tx.Raw(restoredBytesSQL+where, args...).Scan(&adding).Error; err != nil {
+	var locked []int64
+	if err := tx.Model(&schemas.File{}).Where(where, args...).Where("deleted_at IS NOT NULL").
+		Order("id").Clauses(clause.Locking{Strength: "UPDATE"}).Pluck("id", &locked).Error; err != nil {
 		return err
 	}
-	return s.quota.AdmitTx(tx, userID, spaceID, adding)
+	return s.quota.AdmitTx(tx, userID, spaceID, restoredBytes)
 }
 
 // restoreFailure keeps a plan refusal or an API error as it is and wraps any

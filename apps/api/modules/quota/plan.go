@@ -2,19 +2,11 @@ package quota
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/FacileStudio/porte/forfait"
 	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
 )
-
-// usageSQL sums the live bytes of one scope: every file not in the trash plus
-// the versions it keeps. The scope filter is spliced in twice.
-const usageSQL = `SELECT COALESCE((SELECT SUM(f.size) FROM files f WHERE f.deleted_at IS NULL AND %[1]s), 0)
-	+ COALESCE((SELECT SUM(v.size) FROM file_versions v JOIN files f ON f.id = v.file_id
-		WHERE f.deleted_at IS NULL AND %[1]s), 0)`
 
 // Admit reports whether userID may add adding bytes to the space, or to their
 // personal files when spaceID is nil. It is the early check that runs before
@@ -45,22 +37,28 @@ func (s *Service) AdmitTx(tx *gorm.DB, userID int64, spaceID *int64, adding int6
 	return s.enforce(tx, userID, spaceID, adding)
 }
 
-// enforce applies the admin override, then the plan of the scope the bytes
-// land in, against that scope's usage counted under its lock.
+// enforce applies the admin override, then the plan of whatever the bytes are
+// charged to, against its usage counted under its lock. For a person the
+// override is that person's and replaces the plan; for a linked space the
+// uploader's override still caps the upload and the space's plan applies too.
 func (s *Service) enforce(tx *gorm.DB, userID int64, spaceID *int64, adding int64) error {
-	overridden, err := checkOverride(tx, userID, adding)
-	if err != nil || (overridden && spaceID == nil) {
-		return err
-	}
-	sc, err := s.scopeOf(tx, userID, spaceID)
+	charged, err := s.targetOf(tx, userID, spaceID)
 	if err != nil {
 		return err
 	}
-	used, err := lockedUsage(tx, userID, spaceID)
+	overrideOf := userID
+	if charged.personID != 0 {
+		overrideOf = charged.personID
+	}
+	overridden, err := checkOverride(tx, overrideOf, adding)
+	if err != nil || (overridden && charged.personID != 0) {
+		return err
+	}
+	used, err := lockedUsage(tx, charged)
 	if err != nil {
 		return err
 	}
-	return s.plans.CheckBytes(sc, used, adding)
+	return s.plans.CheckBytes(charged.scope, used, adding)
 }
 
 // checkOverride applies the storage limit an admin set on the user, when there
@@ -83,60 +81,4 @@ func checkOverride(tx *gorm.DB, userID int64, adding int64) (bool, error) {
 		return true, errors.TooLarge("storage quota exceeded")
 	}
 	return true, nil
-}
-
-// scopeOf names the plan scope the bytes count against: the Registre space a
-// space is linked to, or the person's Registre subject for personal files. A
-// space that is not linked has no plan and is refused, never read as the
-// uploader's personal plan.
-func (s *Service) scopeOf(tx *gorm.DB, userID int64, spaceID *int64) (forfait.Scope, error) {
-	if spaceID == nil {
-		subject, err := s.subjectOf(tx, userID)
-		return forfait.Scope{Subject: subject}, err
-	}
-	var linked struct{ RegistreSpaceID *string }
-	if err := tx.Table("spaces").Select("registre_space_id").Where("id = ?", *spaceID).Limit(1).Scan(&linked).Error; err != nil {
-		return forfait.Scope{}, errors.Internal("failed to load the space", err)
-	}
-	if linked.RegistreSpaceID == nil || *linked.RegistreSpaceID == "" {
-		return forfait.Scope{}, errors.Failed("this space is not linked to Registre yet, so it has no plan to store new files under")
-	}
-	return forfait.Scope{SpaceID: *linked.RegistreSpaceID}, nil
-}
-
-// subjectOf is the user's Registre subject, or empty for an account with no
-// identity under the issuer, which then reads the free plan.
-func (s *Service) subjectOf(tx *gorm.DB, userID int64) (string, error) {
-	var subject string
-	err := tx.Table("porte_identities").Select("subject").
-		Where("user_id = ? AND provider = ?", userID, s.plans.Issuer()).Limit(1).Scan(&subject).Error
-	if err != nil {
-		return "", errors.Internal("failed to load the identity", err)
-	}
-	return subject, nil
-}
-
-// lockedUsage takes the scope's transactional lock and sums its live bytes.
-func lockedUsage(tx *gorm.DB, userID int64, spaceID *int64) (int64, error) {
-	key := fmt.Sprintf("nuage:plan:user:%d", userID)
-	if spaceID != nil {
-		key = fmt.Sprintf("nuage:plan:space:%d", *spaceID)
-	}
-	if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key).Error; err != nil {
-		return 0, errors.Internal("failed to lock the storage scope", err)
-	}
-	return scopeUsage(tx, userID, spaceID)
-}
-
-// scopeUsage sums the live bytes of a space, or of the user's personal files.
-func scopeUsage(db *gorm.DB, userID int64, spaceID *int64) (int64, error) {
-	filter, arg := "f.space_id IS NULL AND f.uploaded_by = ?", userID
-	if spaceID != nil {
-		filter, arg = "f.space_id = ?", *spaceID
-	}
-	var used int64
-	if err := db.Raw(fmt.Sprintf(usageSQL, filter), arg, arg).Scan(&used).Error; err != nil {
-		return 0, errors.Internal("failed to measure storage usage", err)
-	}
-	return used, nil
 }

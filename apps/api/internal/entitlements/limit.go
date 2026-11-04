@@ -47,7 +47,14 @@ func bytesOf(gb int64) int64 {
 }
 
 // Limit is the storage ceiling in GB for the scope, -1 meaning unlimited.
+//
+// A personal scope with no subject is an account Registre does not know. It
+// never reads the entitlements of an empty subject: it gets the free plan
+// once plans apply.
 func (p *Plans) Limit(sc forfait.Scope) int64 {
+	if sc.SpaceID == "" && sc.Subject == "" && p.Enforcing() {
+		return storageDefaultGB
+	}
 	return p.store.Limit(sc, StorageKey)
 }
 

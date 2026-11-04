@@ -130,22 +130,66 @@ func TestPlanAdminOverrideWins(t *testing.T) {
 	assert.Equal(t, http.StatusRequestEntityTooLarge, uploadFile(e.ts, e.token, "c.txt", "override says no", nil).StatusCode)
 }
 
-func TestPlanTrashRestoreIsCheckedButReadsAndDeletesAreNot(t *testing.T) {
+func TestPlanTrashKeepsCountingUntilPurged(t *testing.T) {
 	e := newPlanEnv(t, "plan-trash@example.com")
 	e.enforce(t, 1, "1", "")
-	fileID := uploadedID(t, e, "keep.txt", "hello")
+	e.fill(t, nil, gibibyte-10)
+	fileID := uploadedID(t, e, "keep.txt", "0123456789")
 	require.Equal(t, http.StatusOK, doDelete(e.ts, fmt.Sprintf("/files/%d", fileID), e.token).StatusCode)
-	e.fill(t, nil, gibibyte-2)
 
-	assert.Equal(t, http.StatusPaymentRequired,
-		doJSON(e.ts, "POST", fmt.Sprintf("/trash/file/%d/restore", fileID), nil, e.token).StatusCode)
-
-	e.fill(t, nil, gibibyte)
-	other := uploadFile(e.ts, e.token, "late.txt", "refused", nil)
-	require.Equal(t, http.StatusPaymentRequired, other.StatusCode)
+	assert.Equal(t, http.StatusPaymentRequired, uploadFile(e.ts, e.token, "again.txt", "x", nil).StatusCode,
+		"trashing must not free room for new bytes")
 	assert.Equal(t, http.StatusOK, doGet(e.ts, "/files", e.token).StatusCode)
 	assert.Equal(t, http.StatusOK, doGet(e.ts, "/trash", e.token).StatusCode)
+	assert.Equal(t, http.StatusOK,
+		doJSON(e.ts, "POST", fmt.Sprintf("/trash/file/%d/restore", fileID), nil, e.token).StatusCode,
+		"a restore adds nothing, so it passes at the ceiling")
+
+	require.Equal(t, http.StatusOK, doDelete(e.ts, fmt.Sprintf("/files/%d", fileID), e.token).StatusCode)
 	assert.Equal(t, http.StatusOK, doDelete(e.ts, fmt.Sprintf("/trash/file/%d", fileID), e.token).StatusCode)
+	assert.Equal(t, http.StatusCreated, uploadFile(e.ts, e.token, "after-purge.txt", "x", nil).StatusCode)
+}
+
+func TestPlanUnreadableSavedStateEnforcesDefaults(t *testing.T) {
+	for name, document := range map[string]string{
+		"corrupt":    "not json",
+		"revision 0": `{"version":1,"snapshot_version":3,"entitlements_revision":0,"spaces":{},"people":{}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newPlanEnv(t, "plan-corrupt@example.com")
+			require.NoError(t, e.ts.db.Exec("INSERT INTO entitlement_state (id, document, updated_at) VALUES (1, ?, now())", document).Error)
+
+			restarted := entitlements.New(e.ts.db, testIssuer, nil)
+			require.NoError(t, restarted.Restore(context.Background()))
+			assert.True(t, restarted.Enforcing())
+			assert.Equal(t, int64(5), restarted.Limit(forfait.Scope{Subject: "sub-1"}))
+
+			real := directory.Snapshot{Version: 2, EntitlementsRevision: 1,
+				People: []directory.Person{{Subject: "sub-1", Entitlements: storageGB("100")}}}
+			require.NoError(t, restarted.Apply(context.Background(), real))
+			assert.Equal(t, int64(100), restarted.Limit(forfait.Scope{Subject: "sub-1"}))
+		})
+	}
+}
+
+func TestPlanRestoreErrorIsReturnedNotFailedOpen(t *testing.T) {
+	e := newPlanEnv(t, "plan-dberror@example.com")
+	require.NoError(t, e.ts.db.Exec("DROP TABLE entitlement_state").Error)
+	restarted := entitlements.New(e.ts.db, testIssuer, nil)
+	assert.Error(t, restarted.Restore(context.Background()))
+}
+
+func TestPlanEmptySubjectReadsDefaults(t *testing.T) {
+	ts := setupSettledServer(t)
+	rawID, token := registerUser(ts, "plan-nosub@example.com", "password12345")
+	e := planEnv{ts: ts, token: token}
+	_, err := fmt.Sscan(rawID, &e.userID)
+	require.NoError(t, err)
+	require.NoError(t, ts.plans.Apply(context.Background(), directory.Snapshot{Version: 1, EntitlementsRevision: 1,
+		People: []directory.Person{{Subject: "", Entitlements: storageGB("100")}}}))
+	e.fill(t, nil, 5*gibibyte-5)
+
+	assert.Equal(t, http.StatusPaymentRequired, uploadFile(ts, token, "x.txt", "0123456789", nil).StatusCode)
 }
 
 func TestPlanDownloadAndDeleteWorkOverTheLimit(t *testing.T) {

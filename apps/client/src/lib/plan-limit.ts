@@ -1,3 +1,5 @@
+import { REGISTRE_ORIGIN } from '$lib/registre';
+
 /** A plan refusal read from a 402 body: what was refused and where to upgrade. */
 export type PlanLimit = {
 	message?: string;
@@ -17,16 +19,15 @@ const amount = (value: unknown): number | string | undefined =>
 	typeof value === 'number' && Number.isFinite(value) ? value : text(value);
 
 /**
- * True for a same-origin path or an https URL with a host and no credentials. Anything else,
- * `javascript:` included, never reaches an `href`. Same rule as muse's `isSafeUpgradeUrl`,
- * which the installed muse does not ship yet.
+ * True for a same-origin path, or an https URL on Registre's exact origin (the OIDC issuer)
+ * with no credentials. Any other host, and `javascript:` or `data:`, never reaches an `href`.
  */
 export function isSafeUpgradeUrl(raw: string | undefined): raw is string {
 	if (!raw || /[\s\\\p{Cc}]/u.test(raw)) return false;
 	if (raw.startsWith('/')) return !raw.startsWith('//');
 	try {
 		const url = new URL(raw);
-		return url.protocol === 'https:' && url.host !== '' && !url.username && !url.password;
+		return url.origin === REGISTRE_ORIGIN && !url.username && !url.password;
 	} catch {
 		return false;
 	}

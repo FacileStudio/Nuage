@@ -29,11 +29,20 @@ const StorageKey = "nuage.storage_gb"
 // storageDefault is the free plan's ceiling: 5 GB.
 const storageDefault = "5"
 
+// storageDefaultGB is storageDefault as a number, for the scopes no snapshot
+// can name.
+const storageDefaultGB int64 = 5
+
+// defaultsDocument is an Export document holding no scope at revision 1: once
+// imported every scope reads the feature defaults.
+const defaultsDocument = `{"version":1,"snapshot_version":1,"entitlements_revision":1,"spaces":{},"people":{}}`
+
 // Plans is Nuage's view of the plan entitlements. It is safe for concurrent
 // use once built.
 type Plans struct {
 	store     *forfait.Store
 	orm       *gorm.DB
+	logger    *slog.Logger
 	enforcing atomic.Bool
 }
 
@@ -51,7 +60,7 @@ func New(orm *gorm.DB, issuer string, logger *slog.Logger) *Plans {
 	})
 	store.Issuer = issuer
 	store.Logger = logger
-	return &Plans{store: store, orm: orm}
+	return &Plans{store: store, orm: orm, logger: logger}
 }
 
 // Enforcing reports whether an authoritative snapshot was ever applied, here
@@ -61,8 +70,11 @@ func (p *Plans) Enforcing() bool {
 }
 
 // Restore loads the saved state into the Store. It must run before the first
-// directory pull. A missing row leaves the Store failing open; a row that
-// cannot be read is logged and leaves it failing open until the next sync.
+// directory pull. A missing row means Registre never served plans, so the
+// Store keeps failing open. A row that exists is proof plans were enforced
+// once: when it cannot be imported, or carries no revision, Restore enforces
+// the feature defaults until Registre answers instead of failing open. An
+// error means the row could not be read and the caller must retry.
 func (p *Plans) Restore(ctx context.Context) error {
 	var row schemas.EntitlementState
 	err := p.orm.WithContext(ctx).Where("id = ?", schemas.EntitlementStateID).Take(&row).Error
@@ -72,7 +84,19 @@ func (p *Plans) Restore(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := p.store.Import([]byte(row.Document)); err != nil {
+	importErr := p.store.Import([]byte(row.Document))
+	if err := p.refresh(); err != nil || p.Enforcing() {
+		return err
+	}
+	p.logger.Error("forfait: the saved entitlements are unreadable or carry no revision; enforcing plan defaults until Registre answers",
+		slog.Any("error", importErr))
+	return p.enforceDefaults()
+}
+
+// enforceDefaults ends fail-open with every scope on the feature defaults, as
+// revision 1 so the first real snapshot replaces it.
+func (p *Plans) enforceDefaults() error {
+	if err := p.store.Import([]byte(defaultsDocument)); err != nil {
 		return err
 	}
 	return p.refresh()

@@ -9,6 +9,10 @@ import "time"
 // folders and files stay Nuage's. It is nullable so the spaces Registre has not
 // answered for, and the ones another app provisioned, stay unlinked rather than
 // colliding on an empty string.
+//
+// ChargedTo is the user whose personal plan pays for a space another app
+// provisioned: the account that created it. It is set by the server at
+// creation, never from a request, and is nil for user-made spaces.
 type Space struct {
 	ID              int64     `json:"id" gorm:"primaryKey"`
 	FacileID        string    `json:"facile_id" gorm:"uniqueIndex;not null"`
@@ -16,6 +20,7 @@ type Space struct {
 	Description     string    `json:"description"`
 	ProvisionedBy   string    `json:"-" gorm:"not null;default:''"`
 	RegistreSpaceID *string   `json:"registre_space_id" gorm:"uniqueIndex"`
+	ChargedTo       *int64    `json:"-" gorm:"index"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
