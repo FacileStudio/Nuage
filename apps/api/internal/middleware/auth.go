@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
 	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
+	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte"
 	"github.com/FacileStudio/tronc/errors"
 	"github.com/FacileStudio/tronc/httpjson"
@@ -23,6 +25,7 @@ type Authenticator interface {
 	RequireAuth(http.Handler) http.Handler
 	IdentityForUser(ctx context.Context, userID int64) (id string, email string, isAdmin bool, err error)
 	ScopeForSession(ctx context.Context, sessionID int64) (*tokenscope.Scope, error)
+	RegisteredApp(ctx context.Context, clientID string) (*schemas.RegisteredApp, error)
 }
 
 // RequireAuth runs porte's middleware and then fills in what porte
@@ -42,35 +45,18 @@ type Authenticator interface {
 // the password or address the account signs in with, or move who pays for a
 // space: a five-minute delegation must not turn itself into a credential that
 // outlives it, nor consent on the person's behalf.
+//
+// A delegated JWT whose actor (act.sub, set by Registre to the client that
+// performed the exchange) is a registered app is that app acting for the user.
+// It reaches the app folder routes and nothing else, and nothing else reaches
+// those routes.
 func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 	hydrate := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-			authenticated, ok := porte.From(request.Context())
-			if !ok {
-				httpjson.WriteError(w, errors.Unauthorized("missing auth"))
-				return
-			}
-			scope, err := auth.ScopeForSession(request.Context(), authenticated.SessionID)
+			authContext, err := hydrated(request, auth)
 			if err != nil {
 				httpjson.WriteError(w, err)
 				return
-			}
-			if err := permitted(authenticated, scope, request.Method, request.URL.Path); err != nil {
-				httpjson.WriteError(w, err)
-				return
-			}
-			userID, email, isAdmin, err := auth.IdentityForUser(request.Context(), authenticated.UserID)
-			if err != nil {
-				httpjson.WriteError(w, err)
-				return
-			}
-			authContext := authcontext.WithIdentity(request.Context(), authcontext.Identity{
-				UserID:  userID,
-				Email:   email,
-				IsAdmin: isAdmin && scope == nil && authenticated.SessionID != 0,
-			})
-			if scope != nil {
-				authContext = tokenscope.With(authContext, scope)
 			}
 			next.ServeHTTP(w, request.WithContext(authContext))
 		})
@@ -80,11 +66,66 @@ func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 	}
 }
 
-// permitted refuses a restricted API token outside its allowlist and a
-// delegated JWT on the routes that manage credentials.
-func permitted(authenticated porte.Identity, scope *tokenscope.Scope, method, path string) error {
+// hydrated checks what the credential porte verified may do on this request
+// and returns the context carrying the identity, the token scope and the
+// acting app.
+func hydrated(request *http.Request, auth Authenticator) (context.Context, error) {
+	ctx := request.Context()
+	authenticated, ok := porte.From(ctx)
+	if !ok {
+		return nil, errors.Unauthorized("missing auth")
+	}
+	scope, err := auth.ScopeForSession(ctx, authenticated.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	app, err := actingApp(ctx, auth, authenticated)
+	if err != nil {
+		return nil, err
+	}
+	if err := permitted(authenticated, scope, app, request.Method, request.URL.Path); err != nil {
+		return nil, err
+	}
+	identity, err := identityOf(ctx, auth, authenticated, scope)
+	if err != nil {
+		return nil, err
+	}
+	ctx = authcontext.WithIdentity(ctx, identity)
+	if scope != nil {
+		ctx = tokenscope.With(ctx, scope)
+	}
+	if app != nil {
+		ctx = appregistry.With(ctx, app)
+	}
+	return ctx, nil
+}
+
+// identityOf is the profile behind the credential. Only the person's own
+// unrestricted session carries the admin role.
+func identityOf(ctx context.Context, auth Authenticator, authenticated porte.Identity, scope *tokenscope.Scope) (authcontext.Identity, error) {
+	userID, email, isAdmin, err := auth.IdentityForUser(ctx, authenticated.UserID)
+	if err != nil {
+		return authcontext.Identity{}, err
+	}
+	return authcontext.Identity{
+		UserID:  userID,
+		Email:   email,
+		IsAdmin: isAdmin && scope == nil && authenticated.SessionID != 0,
+	}, nil
+}
+
+// permitted refuses a restricted API token outside its allowlist, a
+// delegated JWT on the routes that manage credentials, a registered app
+// outside its app folder and anyone else inside it.
+func permitted(authenticated porte.Identity, scope *tokenscope.Scope, app *schemas.RegisteredApp, method, path string) error {
 	if authenticated.SessionID == 0 && managesCredentials(method, path) {
 		return errors.Forbidden("a delegated token cannot manage credentials")
+	}
+	if inApp := isAppRoute(path); inApp != (app != nil) {
+		if inApp {
+			return errors.Forbidden("only a registered app acting for a user can use app folders")
+		}
+		return errors.Forbidden("a registered app can only reach its app folder")
 	}
 	if scope != nil && !tokenscope.Permits(method, path) {
 		return errors.Forbidden("this token cannot call this endpoint")
@@ -93,21 +134,19 @@ func permitted(authenticated porte.Identity, scope *tokenscope.Scope, method, pa
 }
 
 // managesCredentials reports whether the route mints, lists or revokes API
-// tokens, edits the profile that holds the sign-in password and address, or
-// offers, withdraws or accepts who pays for a space. Billing is consent, and
-// consent comes only from the person's own session.
+// tokens, edits the profile that holds the sign-in password and address,
+// offers, withdraws or accepts who pays for a space, or deletes an app's data.
+// Billing and deleting app data are consent, and consent comes only from the
+// person's own session.
 func managesCredentials(method, path string) bool {
 	path = strings.TrimSuffix(strings.TrimPrefix(path, "/api"), "/")
-	if path == "/users/me" {
+	switch {
+	case path == "/users/me":
+		return method != http.MethodGet
+	case strings.HasPrefix(path, "/app-data"):
 		return method != http.MethodGet
 	}
 	return strings.HasPrefix(path, "/users/me/api-token") || isBilling(path)
-}
-
-// isBilling reports whether path is a space's billing route.
-func isBilling(path string) bool {
-	rest, ok := strings.CutPrefix(path, "/spaces/")
-	return ok && (strings.HasSuffix(rest, "/billing") || strings.HasSuffix(rest, "/billing/accept"))
 }
 
 // RequireAdmin rejects authenticated callers that are not administrators. It

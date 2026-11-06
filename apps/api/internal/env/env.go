@@ -1,6 +1,7 @@
 package env
 
 import (
+	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/porte"
 
 	"fmt"
@@ -52,6 +53,11 @@ type Config struct {
 	SSOOnly       bool
 	MinIO         MinIOConfig
 	PresignSecret string
+
+	// Apps are the suite apps that get a private app folder per user, from
+	// NUAGE_APPS. An app acts only through a delegated Registre JWT whose
+	// act.sub is its client id, so they need OIDC_MACHINE_AUDIENCE.
+	Apps []appregistry.App
 }
 
 // Load reads the configuration from the environment, failing when a required
@@ -100,7 +106,29 @@ func Load() (Config, error) {
 		}
 	}
 
+	if cfg.Apps, err = loadApps(cfg.OIDC); err != nil {
+		return Config{}, err
+	}
+
 	return cfg, nil
+}
+
+// loadApps reads NUAGE_APPS. Registered apps prove who they are with a
+// delegated JWT, so declaring one without the machine audience that verifies
+// those tokens is refused rather than left unable to act.
+func loadApps(oidc *OIDCConfig) ([]appregistry.App, error) {
+	ownClientID := ""
+	if oidc != nil {
+		ownClientID = oidc.ClientID
+	}
+	apps, err := appregistry.Parse(troncenv.String("NUAGE_APPS", ""), ownClientID)
+	if err != nil {
+		return nil, err
+	}
+	if len(apps) > 0 && (oidc == nil || oidc.MachineAudience == "") {
+		return nil, fmt.Errorf("NUAGE_APPS requires OIDC_ISSUER and OIDC_MACHINE_AUDIENCE: apps act through delegated Registre tokens")
+	}
+	return apps, nil
 }
 
 // loadMinIO requires the endpoint and the credentials. Every file the app

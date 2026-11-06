@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/Nuage/apps/api/internal/tokenscope"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte"
@@ -193,4 +194,10 @@ func (service *Service) SaveScope(ctx context.Context, sessionID int64, app stri
 		return errors.Internal("failed to save the token scope", err)
 	}
 	return nil
+}
+
+// RegisteredApp returns the active app registered under the Registre client
+// id clientID, or nil when there is none.
+func (service *Service) RegisteredApp(ctx context.Context, clientID string) (*schemas.RegisteredApp, error) {
+	return appregistry.ForClient(ctx, service.orm, clientID)
 }

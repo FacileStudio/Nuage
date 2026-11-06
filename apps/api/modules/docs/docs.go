@@ -359,6 +359,34 @@ func Mount(router chi.Router) {
 }
 
 // Reference returns Nuage's API reference configuration.
+type AppObjectResponse struct {
+	Key       string `json:"key"`
+	Name      string `json:"name"`
+	MimeType  string `json:"mime_type"`
+	Size      int64  `json:"size"`
+	Hash      string `json:"hash"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type AppObjectListResponse struct {
+	Objects []AppObjectResponse `json:"objects"`
+	Next    string              `json:"next,omitempty"`
+}
+
+type AppDataEntry struct {
+	App       string `json:"app"`
+	Name      string `json:"name"`
+	Active    bool   `json:"active"`
+	Objects   int64  `json:"objects"`
+	UsedBytes int64  `json:"used_bytes"`
+	CreatedAt string `json:"created_at"`
+}
+
+type AppDataResponse struct {
+	Apps []AppDataEntry `json:"apps"`
+}
+
 func Reference() apiref.Config {
 	return apiref.Config{
 		Title:       "Nuage API",
@@ -900,6 +928,58 @@ func Reference() apiref.Config {
 							Summary:      "Fetch full workspace file and folder snapshot",
 							Auth:         "bearer",
 							ResponseBody: SyncStateResponse{},
+						},
+					},
+				},
+				{
+					Name:        "apps",
+					Description: "App folders: each app registered in NUAGE_APPS stores private data per user, counted on that user's personal plan and never shown as a space or in the file tree. The app calls /app with a delegated JWT Registre minted for it by token exchange (sub = the user, aud = Nuage, act.sub = the app's client id); it reaches only that user's folder for its own app. Cookie sessions, API tokens (restricted or not) and JWTs of unregistered actors are refused there with 403, and a registered app's JWT is refused everywhere else.",
+					Routes: []Route{
+						{
+							Method:       "GET",
+							Path:         "/app/objects",
+							Summary:      "List the acting app's objects for the user, in key order. Requires nuage.read.",
+							Auth:         "bearer",
+							QueryParams:  []Field{{Name: "prefix", Type: "string", Description: "Only keys starting with this"}, {Name: "after", Type: "string", Description: "Start after this key (the previous page's next)"}, {Name: "limit", Type: "integer", Description: "1 to 1000, default 100"}},
+							ResponseBody: AppObjectListResponse{},
+						},
+						{
+							Method:      "GET",
+							Path:        "/app/object",
+							Summary:     "Download one object's bytes (Range supported). 404 when the key holds nothing. Requires nuage.read.",
+							Auth:        "bearer",
+							QueryParams: []Field{{Name: "key", Type: "string", Description: "Object key"}},
+						},
+						{
+							Method:       "PUT",
+							Path:         "/app/object",
+							Summary:      "Store the raw request body under key, replacing what the key held (201 new, 200 replaced). At most 100 MiB; Content-Length must match the body. The folder is created on first use. Only the growth is charged to the user's personal plan (402 when it does not fit). Requires nuage.write.",
+							Auth:         "bearer",
+							QueryParams:  []Field{{Name: "key", Type: "string", Description: "1 to 512 bytes of UTF-8; no control characters, backslashes, or empty, . or .. segments"}, {Name: "name", Type: "string", Description: "Download file name; defaults to the key's last segment"}},
+							ResponseBody: AppObjectResponse{},
+						},
+						{
+							Method:      "DELETE",
+							Path:        "/app/object",
+							Summary:     "Delete one object and give its bytes back to the user's plan. Requires nuage.write.",
+							Auth:        "bearer",
+							QueryParams: []Field{{Name: "key", Type: "string", Description: "Object key"}},
+							Status:      http.StatusNoContent,
+						},
+						{
+							Method:       "GET",
+							Path:         "/app-data",
+							Summary:      "The caller's app folders: per app, object count and bytes used. Content is never listed here.",
+							Auth:         "bearer",
+							ResponseBody: AppDataResponse{},
+						},
+						{
+							Method:     "DELETE",
+							Path:       "/app-data/{app}",
+							Summary:    "Delete everything an app stores for the caller. Only the caller's own session may do it: delegated JWTs and API tokens restricted to an app are refused.",
+							Auth:       "bearer",
+							PathParams: []Field{{Name: "app", Type: "string", Description: "App key"}},
+							Status:     http.StatusNoContent,
 						},
 					},
 				},

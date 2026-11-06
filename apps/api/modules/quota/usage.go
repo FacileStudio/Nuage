@@ -24,10 +24,10 @@ func percentOf(used, limit int64) float64 {
 	return min(float64(used)/float64(limit)*100, 100)
 }
 
-// planUsage is the personal usage the plan counts, app-provisioned spaces
-// charged to the person included, against the ceiling uploads are held to:
-// the admin override when there is one (override != 0), else the person's plan,
-// with the Registre page where it is upgraded.
+// planUsage is the personal usage the plan counts, app folders and
+// app-provisioned spaces charged to the person included, against the ceiling
+// uploads are held to: the admin override when there is one (override != 0),
+// else the person's plan, with the Registre page where it is upgraded.
 func (s *Service) planUsage(ctx context.Context, userID int64, override int64) (*UsageResponse, error) {
 	db := s.orm.WithContext(ctx)
 	person, err := s.personTarget(db, userID)
