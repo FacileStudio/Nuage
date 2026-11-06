@@ -933,7 +933,7 @@ func Reference() apiref.Config {
 				},
 				{
 					Name:        "apps",
-					Description: "App folders: each app registered in NUAGE_APPS stores private data per user, counted on that user's personal plan and never shown as a space or in the file tree. The app calls /app with a delegated JWT Registre minted for it by token exchange (sub = the user, aud = Nuage, act.sub = the app's client id); it reaches only that user's folder for its own app. Cookie sessions, API tokens (restricted or not) and JWTs of unregistered actors are refused there with 403, and a registered app's JWT is refused everywhere else.",
+					Description: "App folders: each app registered in NUAGE_APPS stores private data per user, counted on that user's personal plan and never shown as a space or in the file tree. The app calls /app with a delegated JWT Registre minted for it by token exchange (sub = the user, aud = Nuage, act.sub = the app's client id); it reaches only that user's folder for its own app. Cookie sessions, API tokens (restricted or not) and JWTs of other actors are refused there with 403, and a registered app's JWT is refused everywhere else. A delegated JWT whose actor is neither an active registered app nor listed in NUAGE_FULL_ACCESS_ACTORS is refused on every route, and WebDAV refuses every delegated JWT.",
 					Routes: []Route{
 						{
 							Method:       "GET",
@@ -976,7 +976,7 @@ func Reference() apiref.Config {
 						{
 							Method:     "DELETE",
 							Path:       "/app-data/{app}",
-							Summary:    "Delete everything an app stores for the caller. Only the caller's own session may do it: delegated JWTs and API tokens restricted to an app are refused.",
+							Summary:    "Delete everything an app stores for the caller. A sign-in session or an unrestricted personal API token may do it (porte does not tell them apart); delegated JWTs and API tokens restricted to an app are refused.",
 							Auth:       "bearer",
 							PathParams: []Field{{Name: "app", Type: "string", Description: "App key"}},
 							Status:     http.StatusNoContent,

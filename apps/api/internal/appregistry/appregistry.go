@@ -69,6 +69,30 @@ func Parse(raw, ownClientID string) ([]App, error) {
 	return apps, nil
 }
 
+// ParseActors reads NUAGE_FULL_ACCESS_ACTORS: Registre client ids separated
+// by "," or ";". A malformed id, or one that is also a registered app, fails
+// the value: an app is confined to its folder and cannot also have the drive.
+func ParseActors(raw string, apps []App) ([]string, error) {
+	registered := map[string]bool{}
+	for _, app := range apps {
+		registered[app.ClientID] = true
+	}
+	var actors []string
+	for _, actor := range strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ';' }) {
+		actor = strings.TrimSpace(actor)
+		switch {
+		case actor == "":
+			continue
+		case !clientIDPattern.MatchString(actor):
+			return nil, fmt.Errorf("NUAGE_FULL_ACCESS_ACTORS: %q must match %s", actor, clientIDPattern)
+		case registered[actor]:
+			return nil, fmt.Errorf("NUAGE_FULL_ACCESS_ACTORS: %q is a registered app", actor)
+		}
+		actors = append(actors, actor)
+	}
+	return actors, nil
+}
+
 // parseEntry reads one "key:client_id[:Display name]" entry.
 func parseEntry(entry string) (App, error) {
 	parts := strings.SplitN(entry, ":", 3)

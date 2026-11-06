@@ -58,6 +58,11 @@ type Config struct {
 	// NUAGE_APPS. An app acts only through a delegated Registre JWT whose
 	// act.sub is its client id, so they need OIDC_MACHINE_AUDIENCE.
 	Apps []appregistry.App
+
+	// FullAccessActors are the Registre client ids whose delegated JWTs act
+	// with the user's full access, from NUAGE_FULL_ACCESS_ACTORS (Bulle in
+	// production). Any other actor that is not a registered app is refused.
+	FullAccessActors []string
 }
 
 // Load reads the configuration from the environment, failing when a required
@@ -106,29 +111,31 @@ func Load() (Config, error) {
 		}
 	}
 
-	if cfg.Apps, err = loadApps(cfg.OIDC); err != nil {
+	if cfg.Apps, cfg.FullAccessActors, err = loadApps(cfg.OIDC); err != nil {
 		return Config{}, err
 	}
 
 	return cfg, nil
 }
 
-// loadApps reads NUAGE_APPS. Registered apps prove who they are with a
-// delegated JWT, so declaring one without the machine audience that verifies
-// those tokens is refused rather than left unable to act.
-func loadApps(oidc *OIDCConfig) ([]appregistry.App, error) {
+// loadApps reads NUAGE_APPS and NUAGE_FULL_ACCESS_ACTORS. Registered apps
+// prove who they are with a delegated JWT, so declaring one without the
+// machine audience that verifies those tokens is refused rather than left
+// unable to act.
+func loadApps(oidc *OIDCConfig) ([]appregistry.App, []string, error) {
 	ownClientID := ""
 	if oidc != nil {
 		ownClientID = oidc.ClientID
 	}
 	apps, err := appregistry.Parse(troncenv.String("NUAGE_APPS", ""), ownClientID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(apps) > 0 && (oidc == nil || oidc.MachineAudience == "") {
-		return nil, fmt.Errorf("NUAGE_APPS requires OIDC_ISSUER and OIDC_MACHINE_AUDIENCE: apps act through delegated Registre tokens")
+		return nil, nil, fmt.Errorf("NUAGE_APPS requires OIDC_ISSUER and OIDC_MACHINE_AUDIENCE: apps act through delegated Registre tokens")
 	}
-	return apps, nil
+	actors, err := appregistry.ParseActors(troncenv.String("NUAGE_FULL_ACCESS_ACTORS", ""), apps)
+	return apps, actors, err
 }
 
 // loadMinIO requires the endpoint and the credentials. Every file the app

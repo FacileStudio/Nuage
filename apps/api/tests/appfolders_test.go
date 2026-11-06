@@ -71,7 +71,7 @@ func TestAppObjectKeysAndPagesAreValidated(t *testing.T) {
 	alice, _ := registered(t, ts, "keys-app@example.com")
 	plume := verifier.mint(alice, "plume-client")
 
-	for _, key := range []string{"", "/lead", "trail/", "a//b", "a/../b", "./a", "back\\slash", "ctl\x01", strings.Repeat("k", 513)} {
+	for _, key := range []string{"", "/lead", "trail/", "a//b", "a/../b", "./a", "back\\slash", "ctl\x01", "rtl\u202egpj.exe", "zero\u200bwidth", "line\u2028sep", strings.Repeat("k", 513)} {
 		assert.Equal(t, http.StatusBadRequest, putObject(ts, plume, key, "x").StatusCode, "key %q", key)
 	}
 	for i := range 3 {
