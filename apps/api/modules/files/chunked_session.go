@@ -70,7 +70,8 @@ func (s *Service) admitChunk(ctx context.Context, session schemas.UploadSession,
 		return "", errors.Internal("failed to read the upload session", err)
 	}
 	if !lapsed {
-		return replaced, s.orm.WithContext(ctx).Transaction(record)
+		err = s.orm.WithContext(ctx).Transaction(record)
+		return replaced, err
 	}
 	err = s.quota.Readmit(ctx, session.UserID, session.SpaceID, session.TotalSize, record)
 	return replaced, err
