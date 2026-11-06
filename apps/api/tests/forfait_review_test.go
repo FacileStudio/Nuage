@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte/directory"
@@ -114,4 +117,65 @@ func TestParallelChunksCannotStagePastTheDeclaredSize(t *testing.T) {
 	require.NoError(t, e.ts.db.Model(&schemas.UploadChunk{}).Where("session_id = ?", sessionID).
 		Select("COALESCE(SUM(size), 0)").Scan(&staged).Error)
 	assert.LessOrEqual(t, staged, int64(100))
+}
+
+func TestPlanIgnoredSnapshotKeepsTheKnownSubject(t *testing.T) {
+	e := newPlanEnv(t, "pr6-restart@example.com")
+	require.NoError(t, e.ts.db.Exec(
+		"INSERT INTO porte_identities (user_id, provider, subject, synced_at) VALUES (?, ?, 'sub-stale', now())", e.userID, testIssuer).Error)
+	require.NoError(t, e.ts.plans.Apply(context.Background(), directory.Snapshot{Version: 5, EntitlementsRevision: 1,
+		People: []directory.Person{{Subject: "sub-1", Entitlements: storageGB("100")}}}))
+
+	restarted := entitlements.New(e.ts.db, testIssuer, nil)
+	require.NoError(t, restarted.Restore(context.Background()))
+	limitOf := func() int64 {
+		t.Helper()
+		usage, err := quota.NewService(e.ts.db).WithPlans(restarted).GetUsage(context.Background(), e.userID)
+		require.NoError(t, err)
+		return usage.StorageLimit
+	}
+	require.Equal(t, int64(100)<<30, limitOf(), "after a restart the restored people decide the subject")
+
+	stale := directory.Snapshot{Version: 4, EntitlementsRevision: 1,
+		People: []directory.Person{{Subject: "sub-stale", Entitlements: storageGB("1")}}}
+	require.NoError(t, restarted.Apply(context.Background(), stale))
+	assert.Equal(t, int64(100)<<30, limitOf(), "an older snapshot the store ignored must not change the subject")
+}
+
+func TestLateChunkCannotLandDuringAssembly(t *testing.T) {
+	e := newPlanEnv(t, "plan-late-chunk@example.com")
+	sessionID := initSession(t, e.ts, e.token, 100)
+	require.Equal(t, http.StatusCreated, putChunk(e.ts, e.token, sessionID, 1, make([]byte, 50)).StatusCode)
+
+	assembling := e.ts.db.Begin()
+	require.NoError(t, assembling.Error)
+	defer assembling.Rollback()
+	require.NoError(t, assembling.Exec("UPDATE upload_sessions SET status = 'assembling' WHERE id = ?", sessionID).Error)
+
+	late := make(chan int, 1)
+	go func() { late <- putChunk(e.ts, e.token, sessionID, 2, make([]byte, 50)).StatusCode }()
+	time.Sleep(300 * time.Millisecond)
+	require.NoError(t, assembling.Commit().Error)
+
+	assert.Equal(t, http.StatusNotFound, <-late)
+	var parts int64
+	require.NoError(t, e.ts.db.Model(&schemas.UploadChunk{}).Where("session_id = ?", sessionID).Count(&parts).Error)
+	assert.EqualValues(t, 1, parts, "the late chunk is not recorded")
+}
+
+func TestReplacingAPartDeletesOnlyTheOldObject(t *testing.T) {
+	e := newPlanEnv(t, "plan-replace-chunk@example.com")
+	sessionID := initSession(t, e.ts, e.token, 10)
+	require.Equal(t, http.StatusCreated, putChunk(e.ts, e.token, sessionID, 1, []byte("aaaaaaaaaa")).StatusCode)
+	require.Equal(t, http.StatusCreated, putChunk(e.ts, e.token, sessionID, 1, []byte("bbbbbbbbbb")).StatusCode)
+	resp := completeChunked(e.ts, e.token, sessionID)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var result struct {
+		File struct {
+			ID int64 `json:"id"`
+		} `json:"file"`
+	}
+	parseJSON(resp, &result)
+	body, _ := io.ReadAll(doGet(e.ts, fmt.Sprintf("/files/%d/download", result.File.ID), e.token).Body)
+	assert.Equal(t, "bbbbbbbbbb", string(body), "the replacement's bytes are assembled, the old object is gone")
 }

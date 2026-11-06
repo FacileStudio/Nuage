@@ -109,19 +109,11 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 	if partNumber < 1 {
 		return nil, errors.Invalid("part_number must be >= 1")
 	}
-	if err := s.admitChunk(ctx, session, nil); err != nil {
+	if _, err := s.admitChunk(ctx, session, nil); err != nil {
 		return nil, err
 	}
 
-	var existing schemas.UploadChunk
-	if err := s.orm.WithContext(ctx).Where("session_id = ? AND part_number = ?", sessionID, partNumber).First(&existing).Error; err == nil {
-		_ = s.storage.DeleteObject(ctx, existing.BucketKey)
-		if err := s.orm.WithContext(ctx).Delete(&existing).Error; err != nil {
-			return nil, errors.Internal("failed to replace existing chunk", err)
-		}
-	}
-
-	bucketKey := fmt.Sprintf("chunks/%s/%d", sessionID, partNumber)
+	bucketKey := fmt.Sprintf("chunks/%s/%d-%s", sessionID, partNumber, facile.NewID())
 
 	hasher := sha256.New()
 	tee := io.TeeReader(reader, hasher)
@@ -139,7 +131,7 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 
 	var uploadedSize int64
 	if err := s.orm.WithContext(ctx).Model(&schemas.UploadChunk{}).
-		Where("session_id = ?", sessionID).
+		Where("session_id = ? AND part_number <> ?", sessionID, partNumber).
 		Select("COALESCE(SUM(size), 0)").
 		Scan(&uploadedSize).Error; err != nil {
 		_ = s.storage.DeleteObject(ctx, bucketKey)
@@ -158,9 +150,13 @@ func (s *Service) uploadChunk(ctx context.Context, userID int64, sessionID strin
 		Hash:       chunkHash,
 	}
 
-	if err := s.admitChunk(ctx, session, chunk); err != nil {
+	replaced, err := s.admitChunk(ctx, session, chunk)
+	if err != nil {
 		_ = s.storage.DeleteObject(ctx, bucketKey)
 		return nil, recordFailure(err)
+	}
+	if replaced != "" {
+		_ = s.storage.DeleteObject(ctx, replaced)
 	}
 
 	return chunk, nil

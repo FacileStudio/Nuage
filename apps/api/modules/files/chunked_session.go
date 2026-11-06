@@ -50,47 +50,65 @@ func landingSpace(spaceID *int64, target *schemas.File) *int64 {
 	return spaceID
 }
 
-// admitChunk records a chunk's row. A session that lapsed first re-admits its
-// declared size under the plan lock, in the same transaction, so a revived
-// upload cannot stage bytes the plan no longer has room for; the row it
-// inserts makes the session active again.
-func (s *Service) admitChunk(ctx context.Context, session schemas.UploadSession, chunk *schemas.UploadChunk) error {
+// admitChunk records a chunk's row and returns the object key of the part it
+// replaced, for the caller to delete once the row is committed. A session that
+// lapsed first re-admits its declared size under the plan lock, in the same
+// transaction, so a revived upload cannot stage bytes the plan no longer has
+// room for; the row it inserts makes the session active again.
+func (s *Service) admitChunk(ctx context.Context, session schemas.UploadSession, chunk *schemas.UploadChunk) (string, error) {
+	var replaced string
 	record := func(tx *gorm.DB) error {
 		if chunk == nil {
 			return nil
 		}
-		return insertChunk(tx, session, chunk)
+		var err error
+		replaced, err = insertChunk(tx, session, chunk)
+		return err
 	}
 	lapsed, err := schemas.SessionLapsed(s.orm.WithContext(ctx), session.ID)
 	if err != nil {
-		return errors.Internal("failed to read the upload session", err)
+		return "", errors.Internal("failed to read the upload session", err)
 	}
 	if !lapsed {
-		return s.orm.WithContext(ctx).Transaction(record)
+		return replaced, s.orm.WithContext(ctx).Transaction(record)
 	}
-	return s.quota.Readmit(ctx, session.UserID, session.SpaceID, session.TotalSize, record)
+	err = s.quota.Readmit(ctx, session.UserID, session.SpaceID, session.TotalSize, record)
+	return replaced, err
 }
 
-// insertChunk records the chunk under the session's row lock, so parallel
-// chunks of one session are counted one after the other and together can
-// never stage more than the declared total_size. A chunk replacing a part
-// already received takes its place.
-func insertChunk(tx *gorm.DB, session schemas.UploadSession, chunk *schemas.UploadChunk) error {
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", session.ID).Take(&schemas.UploadSession{}).Error; err != nil {
-		return err
+// insertChunk records the chunk under the session's row lock, once it has
+// checked the session is still receiving chunks: a chunk arriving while the
+// session is assembled is refused rather than slipped into the file. Chunks of
+// one session are counted one after the other, so together they never stage
+// more than the declared total_size. A chunk replacing a part already received
+// takes its row, and the replaced object's key is returned.
+func insertChunk(tx *gorm.DB, session schemas.UploadSession, chunk *schemas.UploadChunk) (string, error) {
+	var locked schemas.UploadSession
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", session.ID).Take(&locked).Error; err != nil {
+		return "", err
+	}
+	if locked.Status != "pending" {
+		return "", errors.NotFound("upload session not found or already completed")
 	}
 	var others int64
 	if err := tx.Model(&schemas.UploadChunk{}).Where("session_id = ? AND part_number <> ?", session.ID, chunk.PartNumber).
 		Select("COALESCE(SUM(size), 0)").Scan(&others).Error; err != nil {
-		return err
+		return "", err
 	}
 	if others > session.TotalSize-chunk.Size {
-		return errors.TooLarge("chunks exceed the declared total_size")
+		return "", errors.TooLarge("chunks exceed the declared total_size")
 	}
-	if err := tx.Where("session_id = ? AND part_number = ?", session.ID, chunk.PartNumber).Delete(&schemas.UploadChunk{}).Error; err != nil {
-		return err
+	var previous schemas.UploadChunk
+	err := tx.Where("session_id = ? AND part_number = ?", session.ID, chunk.PartNumber).Limit(1).Find(&previous).Error
+	if err != nil {
+		return "", err
 	}
-	return tx.Create(chunk).Error
+	if previous.ID != 0 {
+		if err := tx.Delete(&previous).Error; err != nil {
+			return "", err
+		}
+	}
+	return previous.BucketKey, tx.Create(chunk).Error
 }
 
 // recordFailure keeps a plan refusal or an API error as it is and wraps any
