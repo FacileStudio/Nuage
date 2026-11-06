@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { PricingPlans } from '@facile/muse';
 	import { backend } from '$lib/backend';
 
 	const TOKEN_KEY = 'nuage.token';
@@ -127,6 +128,13 @@
 				</div>
 			</div>
 		</section>
+
+		<div class="hidden has-[section]:block">
+			<div class="mx-auto max-w-5xl"><div class="h-px bg-border"></div></div>
+			<div id="pricing" class="mx-auto max-w-5xl px-6 py-20">
+				<PricingPlans highlight={['nuage.storage_gb']} />
+			</div>
+		</div>
 
 		<div class="mx-auto max-w-5xl"><div class="h-px bg-border"></div></div>
 
