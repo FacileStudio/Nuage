@@ -132,7 +132,7 @@
 		<div class="hidden has-[section]:block">
 			<div class="mx-auto max-w-5xl"><div class="h-px bg-border"></div></div>
 			<div id="pricing" class="mx-auto max-w-5xl px-6 py-20">
-				<PricingPlans highlight={['nuage.storage_gb']} />
+				<PricingPlans title="Pricing" highlight={['nuage.storage_gb']} />
 			</div>
 		</div>
 
