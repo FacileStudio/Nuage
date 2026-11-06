@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-06
+
 ### Fixed
 
 - **A person's plan is read under the subject Registre knows.** A user holding several
