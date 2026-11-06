@@ -119,7 +119,8 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 // client credentials, and returns nils otherwise: without Registre there is nothing to sync
 // and no nudge route to mount. Every snapshot updates the spaces first, then the plan
 // entitlements; both run even when the other fails, and either failure retries the snapshot.
-func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, appLogger *slog.Logger) (*spaces.Registre, *directory.Syncer) {
+// The snapshot that first makes plans apply also logs who is now over their ceiling.
+func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, quotaService *quota.Service, appLogger *slog.Logger) (*spaces.Registre, *directory.Syncer) {
 	if appEnv.OIDC == nil {
 		return nil, nil
 	}
@@ -131,7 +132,12 @@ func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, app
 			ClientSecret: appEnv.OIDC.ClientSecret,
 		},
 		Apply: func(ctx context.Context, snapshot directory.Snapshot) error {
-			return errors.Join(registre.Apply(ctx, snapshot), plans.Apply(ctx, snapshot))
+			was := plans.Enforcing()
+			err := errors.Join(registre.Apply(ctx, snapshot), plans.Apply(ctx, snapshot))
+			if !was && plans.Enforcing() {
+				go quotaService.ReportOverPlan(context.Background(), appLogger)
+			}
+			return err
 		},
 		Logger: appLogger,
 	}
@@ -294,7 +300,7 @@ func run() int {
 	userService := users.NewService(db, appEnv.StorageDir, authService)
 	plans := newPlans(db, appEnv, appLogger)
 	quotaService := quota.NewService(db).WithPlans(plans)
-	go quotaService.ReportOverFreePlan(context.Background(), appLogger)
+	go reportStorage(quotaService, appLogger)
 	if appEnv.PresignSecret == "" {
 		appLogger.Error("failed to load config", slog.Any("error", errors.New("PRESIGN_SECRET is required: unauthenticated download links are signed with it")))
 		return 1
@@ -307,7 +313,7 @@ func run() int {
 	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
 	spacesService := spaces.NewService(db, storageClient, registreSpacesURL(appEnv))
-	registre, syncer := newDirectory(db, appEnv, plans, appLogger)
+	registre, syncer := newDirectory(db, appEnv, plans, quotaService, appLogger)
 	if err := spacesService.MigrateBuckets(context.Background()); err != nil {
 		appLogger.Error("failed to move space files to their own buckets; serving with the files still in the shared bucket", slog.Any("error", err))
 	}

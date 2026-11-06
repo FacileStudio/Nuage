@@ -25,9 +25,10 @@ func percentOf(used, limit int64) float64 {
 }
 
 // planUsage is the personal usage the plan counts, app-provisioned spaces
-// charged to the person included, against the person's plan
-// ceiling in bytes, with the Registre page where it is upgraded.
-func (s *Service) planUsage(ctx context.Context, userID int64) (*UsageResponse, error) {
+// charged to the person included, against the ceiling uploads are held to:
+// the admin override when there is one (override != 0), else the person's plan,
+// with the Registre page where it is upgraded.
+func (s *Service) planUsage(ctx context.Context, userID int64, override int64) (*UsageResponse, error) {
 	db := s.orm.WithContext(ctx)
 	person, err := s.personTarget(db, userID)
 	if err != nil {
@@ -37,12 +38,15 @@ func (s *Service) planUsage(ctx context.Context, userID int64) (*UsageResponse, 
 	if err != nil {
 		return nil, err
 	}
-	limit := s.plans.LimitBytes(person.scope)
+	source, limit := SourceOverride, override
+	if override == 0 {
+		source, limit = SourcePlan, s.plans.LimitBytes(person.scope)
+	}
 	response := &UsageResponse{
 		UserID: userID, StorageUsed: used, StorageLimit: limit,
-		Percentage: percentOf(used, limit), Source: SourcePlan,
+		Percentage: percentOf(used, limit), Source: source,
 	}
-	if issuer := s.plans.Issuer(); issuer != "" {
+	if issuer := s.plans.Issuer(); issuer != "" && source == SourcePlan {
 		response.UpgradeURL = forfait.UpgradeURL(issuer, "")
 	}
 	return response, nil

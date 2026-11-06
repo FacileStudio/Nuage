@@ -13,13 +13,14 @@ import (
 )
 
 // restoredBytes is what a restore adds to its scope's usage: nothing, since
-// trashed files keep counting until they are purged. The plan check still runs
-// at the restore, so it holds if that accounting ever changes.
+// trashed files keep counting until they are purged. AdmitTx returns at once
+// for zero bytes and takes no plan lock; the call stays so a restore is checked
+// if that accounting ever changes.
 const restoredBytes int64 = 0
 
-// restoreFile takes one file out of the trash. It locks the file row first,
-// then runs the plan check, the same order writeVersion and restoreVersion
-// use, so a restore cannot deadlock against an upload into the same scope.
+// restoreFile takes one file out of the trash. It locks the file row before
+// anything else, so if restores ever take the plan lock they do so after the
+// row lock, the order writeVersion and restoreVersion use.
 func (s *Service) restoreFile(ctx context.Context, userID int64, record *schemas.File, updates map[string]any) error {
 	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.admitRestore(tx, userID, record.SpaceID, "id = ?", record.ID); err != nil {
@@ -31,7 +32,8 @@ func (s *Service) restoreFile(ctx context.Context, userID int64, record *schemas
 }
 
 // admitRestore locks the trashed files a restore brings back, in id order,
-// and then checks the scope's plan for what the restore adds.
+// and then checks the scope's plan for what the restore adds, which is
+// restoredBytes.
 func (s *Service) admitRestore(tx *gorm.DB, userID int64, spaceID *int64, where string, args ...any) error {
 	var locked []int64
 	if err := tx.Model(&schemas.File{}).Where(where, args...).Where("deleted_at IS NOT NULL").

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"log/slog"
+	"maps"
 	"sync/atomic"
 
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -44,6 +45,7 @@ type Plans struct {
 	orm       *gorm.DB
 	logger    *slog.Logger
 	enforcing atomic.Bool
+	subjects  atomic.Pointer[map[string]struct{}]
 }
 
 // New builds the Plans for the given OIDC issuer, which is Registre's origin
@@ -109,34 +111,32 @@ func (p *Plans) Apply(ctx context.Context, snap directory.Snapshot) error {
 	if err := p.refresh(); err != nil {
 		return err
 	}
+	p.learn(snap)
 	return p.persist(ctx)
 }
 
-// refresh reads back whether the Store now holds an authoritative snapshot.
+// refresh reads back whether the Store now holds an authoritative snapshot,
+// and seeds the known subjects from the people it holds values for when no
+// snapshot taught them yet, as after a restart.
 func (p *Plans) refresh() error {
-	revision, err := p.revision()
+	doc, err := p.store.Export()
 	if err != nil {
 		return err
 	}
-	if revision > 0 {
-		p.enforcing.Store(true)
-	}
-	return nil
-}
-
-// revision is the entitlements revision of the state the Store holds.
-func (p *Plans) revision() (int64, error) {
-	doc, err := p.store.Export()
-	if err != nil {
-		return 0, err
-	}
 	var head struct {
-		Revision int64 `json:"entitlements_revision"`
+		Revision int64                      `json:"entitlements_revision"`
+		People   map[string]json.RawMessage `json:"people"`
 	}
 	if err := json.Unmarshal(doc, &head); err != nil {
-		return 0, err
+		return err
 	}
-	return head.Revision, nil
+	if head.Revision > 0 {
+		p.enforcing.Store(true)
+	}
+	if p.subjects.Load() == nil && len(head.People) > 0 {
+		p.remember(maps.Keys(head.People))
+	}
+	return nil
 }
 
 // persist writes the Store's state into the one entitlement_state row. A

@@ -105,6 +105,40 @@ serialize instead of racing. It runs the hand-written `preMigrate` DDL, then `Au
 over sixteen models, then `ensureAdmin`, then backfills user colors. A failure returns
 before the listener binds.
 
+## Plans go-live
+
+Nuage enforces `nuage.storage_gb` only after Registre serves a snapshot with a non-zero
+`entitlements_revision`. From that snapshot on, every person and Registre-linked space reads
+its plan, and anyone without one reads the free 5 GB. Before Ardoise's first entitlements
+push:
+
+1. Read the boot log of the running API: `docker logs nuage-api 2>&1 | grep forfait:`.
+2. For every `forfait: personal storage above the free plan` and
+   `forfait: space storage above the free plan` line, create an Ardoise override at or above
+   `used_bytes` for that subject or Registre space. An admin limit set in Nuage
+   (`admin_override_bytes` other than 0) already covers that person.
+3. For every `forfait: user holds several identities under the issuer` line, check that
+   `plan_subject` is the user's Registre subject. Remove a stale identity by hand only once it
+   is confirmed unused; Nuage never deletes one.
+4. After the push, the first authoritative snapshot logs `forfait: person over their plan`
+   and `forfait: space over its plan` for anyone still over their resolved ceiling. Those
+   are refused new uploads (reads and deletes keep working) until an override or an upgrade
+   covers them.
+
+### After Registre's database is restored from a backup
+
+A restore can lower Registre's `entitlements_revision`. Nuage then refuses every snapshot as
+older than the state it saved, logs a forfait warning on each sync, and keeps enforcing the last
+plans it applied. To recover:
+
+1. Delete the saved state: `DELETE FROM entitlement_state;` on the Nuage database.
+2. Restart the API. With no saved row it fails open (as before the first push) until the next
+   directory pull, which it applies whatever its revision.
+
+Do not empty the row's `document` instead of deleting it: a row that exists but cannot be used
+makes Nuage enforce the free-plan defaults until Registre answers, so it never fails open on a
+damaged row.
+
 ## Health and readiness
 
 `/health` returns `{"status":"ok"}` unconditionally. `/ready` pings Postgres and calls

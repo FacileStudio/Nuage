@@ -10,6 +10,31 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A person's plan is read under the subject Registre knows.** A user holding several
+  identities under the issuer (such as one left from the Authentik era) had their plan read
+  under whichever row Postgres returned first. Nuage now prefers the subject named in the last
+  directory snapshot, else the most recently synced identity. Boot logs
+  `forfait: user holds several identities under the issuer` for each such user; no row is
+  deleted.
+- **Go-live reports.** Boot also logs everyone over the free plan with all their subjects, and
+  the snapshot that first makes plans apply logs every person and space over their resolved
+  ceiling. `docs/deployment.md` lists the steps to create Ardoise overrides before go-live.
+- **A session can no longer find-or-create a space once Registre owns spaces.**
+  `PUT /api/spaces/by-facile-id/{id}` answers 409 for a session caller, as `POST /api/spaces`
+  does; app tokens still provision.
+- **The quota meter under an admin limit** shows the usage plans count (app-provisioned spaces
+  charged to the person included) against that limit.
+- **Parallel chunks cannot stage past `total_size`.** Each chunk is counted and recorded under
+  its session's row lock.
+- porte/directory v0.2.1 and porte/forfait v0.1.1 (restore-safe ordering, serialised sync).
+  An empty saved `entitlement_state` row still makes Nuage enforce the free-plan defaults, not
+  fail open. `docs/deployment.md` documents the recovery after a Registre restore: delete the
+  row and restart.
+- The people over the free plan were counted once per identity, so a user with two subjects
+  showed double usage in the boot report.
+
 ## [0.11.0] - 2026-11-04
 
 ### Added

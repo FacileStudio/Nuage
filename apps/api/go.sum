@@ -2,10 +2,10 @@ github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba h
 github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba/go.mod h1:mb3rZqpSwA4CMrP9LQe2eWdM/4np3xzkRy6l/WWSaUg=
 github.com/FacileStudio/porte v0.7.0 h1:aDZCMbqlVEYx4YGI+D7+rfyuwnzEj28BluXaUbCQdxw=
 github.com/FacileStudio/porte v0.7.0/go.mod h1:iLtV3iaFheNiZWt+wfBF2FKB0XRLxve5GrhmJ6h3X0I=
-github.com/FacileStudio/porte/directory v0.2.0 h1:yP9IJK4TkLqdFC1Pr8KTcMLI3xcqVPrtnulzqSJDGuM=
-github.com/FacileStudio/porte/directory v0.2.0/go.mod h1:i7UxoAqCgqAq4ny9/bbuqT/Z69xD7GYG1w3fpH6EhTw=
-github.com/FacileStudio/porte/forfait v0.1.0 h1:nuOjG6PQ84gnBL1VyUxDIJ9nZawTc0xS/SQThbKOBWg=
-github.com/FacileStudio/porte/forfait v0.1.0/go.mod h1:bsIXW7puRaSm4q8ZCqE/Du1MTpfooPF0PG828QL5yrU=
+github.com/FacileStudio/porte/directory v0.2.1 h1:w/7AhH74OTj/RhMshO2TshQTSZpGek+/HiMi0CNGCnI=
+github.com/FacileStudio/porte/directory v0.2.1/go.mod h1:i7UxoAqCgqAq4ny9/bbuqT/Z69xD7GYG1w3fpH6EhTw=
+github.com/FacileStudio/porte/forfait v0.1.1 h1:eZFT3VIcOmHxbFQsUpQumBeqeBHsM29EYsAIswQo+Jk=
+github.com/FacileStudio/porte/forfait v0.1.1/go.mod h1:B+ki+HU6zT19PAC85ugVzpiJ0nzwolKtvQTtbjxRKD4=
 github.com/FacileStudio/tronc v0.16.0 h1:vfZIBTKrKMTx3hOFxSc2jO4LCZcOBI2sB7XVAjL4b60=
 github.com/FacileStudio/tronc v0.16.0/go.mod h1:n+msHH6RQLvhcIQfFzeWaAgwqL8UkNuLPTqbu+C02so=
 github.com/coreos/go-oidc/v3 v3.20.0 h1:EtE0WIBHk03N+DqGkY4+UONzzZHk7amKt6IyNd7OsZE=

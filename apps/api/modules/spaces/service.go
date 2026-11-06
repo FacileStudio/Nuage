@@ -95,6 +95,9 @@ func (s *Service) ensureSpace(ctx context.Context, userID int64, facileID string
 	if scope != nil && !scope.MayCreate(facileID) {
 		return nil, false, errors.Forbidden("this token cannot access this space")
 	}
+	if scope == nil && s.registre != "" {
+		return nil, false, errors.Conflict("shared spaces are created in Registre: " + s.registre)
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, false, errors.Invalid("name is required")

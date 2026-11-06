@@ -86,13 +86,11 @@ func (s *Service) targetOf(tx *gorm.DB, userID int64, spaceID *int64) (target, e
 // personTarget is the person's plan, read under their Registre subject, or
 // the free plan for an account with no identity under the issuer.
 func (s *Service) personTarget(tx *gorm.DB, personID int64) (target, error) {
-	var subject string
-	err := tx.Table("porte_identities").Select("subject").
-		Where("user_id = ? AND provider = ?", personID, s.plans.Issuer()).Limit(1).Scan(&subject).Error
+	subjects, err := s.subjectsOf(tx, personID)
 	if err != nil {
-		return target{}, errors.Internal("failed to load the identity", err)
+		return target{}, err
 	}
-	return target{scope: forfait.Scope{Subject: subject}, personID: personID}, nil
+	return target{scope: forfait.Scope{Subject: s.pickSubject(subjects)}, personID: personID}, nil
 }
 
 // usageOf sums the stored bytes charged to target.
