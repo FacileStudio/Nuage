@@ -7,6 +7,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
+	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 
 	"gorm.io/gorm"
 )
@@ -29,4 +30,15 @@ func newPlans(db *gorm.DB, appEnv env.Config, appLogger *slog.Logger) *entitleme
 		appLogger.Error("failed to read the saved plan entitlements, retrying", slog.Any("error", err), slog.Duration("retry_in", delay))
 		time.Sleep(delay)
 	}
+}
+
+// reportStorage logs, once at boot, what an operator must settle before plans
+// cut anyone off: users holding several identities under the issuer, everyone
+// over the free plan (to cover with Ardoise overrides before its first push),
+// and, once plans apply, everyone over the ceiling they now resolve to.
+func reportStorage(quotaService *quota.Service, appLogger *slog.Logger) {
+	ctx := context.Background()
+	quotaService.ReportIdentities(ctx, appLogger)
+	quotaService.ReportOverFreePlan(ctx, appLogger)
+	quotaService.ReportOverPlan(ctx, appLogger)
 }

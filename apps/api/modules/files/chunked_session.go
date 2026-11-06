@@ -11,6 +11,7 @@ import (
 	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // maxOpenSessions is how many unexpired pending chunked uploads one user may
@@ -58,16 +59,38 @@ func (s *Service) admitChunk(ctx context.Context, session schemas.UploadSession,
 		if chunk == nil {
 			return nil
 		}
-		return tx.Create(chunk).Error
+		return insertChunk(tx, session, chunk)
 	}
 	lapsed, err := schemas.SessionLapsed(s.orm.WithContext(ctx), session.ID)
 	if err != nil {
 		return errors.Internal("failed to read the upload session", err)
 	}
 	if !lapsed {
-		return record(s.orm.WithContext(ctx))
+		return s.orm.WithContext(ctx).Transaction(record)
 	}
 	return s.quota.Readmit(ctx, session.UserID, session.SpaceID, session.TotalSize, record)
+}
+
+// insertChunk records the chunk under the session's row lock, so parallel
+// chunks of one session are counted one after the other and together can
+// never stage more than the declared total_size. A chunk replacing a part
+// already received takes its place.
+func insertChunk(tx *gorm.DB, session schemas.UploadSession, chunk *schemas.UploadChunk) error {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", session.ID).Take(&schemas.UploadSession{}).Error; err != nil {
+		return err
+	}
+	var others int64
+	if err := tx.Model(&schemas.UploadChunk{}).Where("session_id = ? AND part_number <> ?", session.ID, chunk.PartNumber).
+		Select("COALESCE(SUM(size), 0)").Scan(&others).Error; err != nil {
+		return err
+	}
+	if others > session.TotalSize-chunk.Size {
+		return errors.TooLarge("chunks exceed the declared total_size")
+	}
+	if err := tx.Where("session_id = ? AND part_number = ?", session.ID, chunk.PartNumber).Delete(&schemas.UploadChunk{}).Error; err != nil {
+		return err
+	}
+	return tx.Create(chunk).Error
 }
 
 // recordFailure keeps a plan refusal or an API error as it is and wraps any

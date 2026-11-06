@@ -27,14 +27,16 @@ const chargedBytesSQL = `SELECT CASE WHEN f.space_id IS NULL THEN f.uploaded_by
 	SUM(f.size + COALESCE((SELECT SUM(v.size) FROM file_versions v WHERE v.file_id = f.id), 0)) AS used
 	FROM files f LEFT JOIN spaces sp ON sp.id = f.space_id GROUP BY 1, 2`
 
-// personalOverSQL lists the people whose charged bytes exceed the free plan.
-const personalOverSQL = `SELECT u.id, u.email AS name, COALESCE(i.subject, '') AS ref, SUM(t.used) AS used,
-	COALESCE(MAX(q.storage_limit), 0) AS override
+// personalOverSQL lists the people whose charged bytes exceed the free plan,
+// with every subject they hold under the issuer, most recent first.
+const personalOverSQL = `SELECT u.id, u.email AS name,
+	COALESCE((SELECT string_agg(i.subject, ',' ORDER BY i.synced_at DESC NULLS LAST, i.created_at DESC NULLS LAST)
+		FROM porte_identities i WHERE i.user_id = u.id AND i.provider = ?), '') AS ref,
+	SUM(t.used) AS used,
+	COALESCE((SELECT q.storage_limit FROM user_quotas q WHERE q.user_id = u.id), 0) AS override
 	FROM (` + chargedBytesSQL + `) t
 	JOIN users u ON u.id = t.user_id
-	LEFT JOIN porte_identities i ON i.user_id = u.id AND i.provider = ?
-	LEFT JOIN user_quotas q ON q.user_id = u.id
-	GROUP BY u.id, u.email, i.subject HAVING SUM(t.used) > ? ORDER BY used DESC`
+	GROUP BY u.id, u.email HAVING SUM(t.used) > ? ORDER BY used DESC`
 
 // spaceOverSQL lists the spaces paying for themselves whose bytes exceed the
 // free plan.
@@ -62,7 +64,7 @@ func (s *Service) ReportOverFreePlan(ctx context.Context, logger *slog.Logger) {
 	}
 	for _, row := range people {
 		logger.Warn("forfait: personal storage above the free plan", slog.Int64("user_id", row.ID),
-			slog.String("email", row.Name), slog.String("subject", row.Ref),
+			slog.String("email", row.Name), slog.String("subjects", row.Ref),
 			slog.Int64("used_bytes", row.Used), slog.Int64("admin_override_bytes", row.Override))
 	}
 	for _, row := range spaces {

@@ -153,6 +153,7 @@ func TestPlanTrashKeepsCountingUntilPurged(t *testing.T) {
 func TestPlanUnreadableSavedStateEnforcesDefaults(t *testing.T) {
 	for name, document := range map[string]string{
 		"corrupt":    "not json",
+		"empty":      "",
 		"revision 0": `{"version":1,"snapshot_version":3,"entitlements_revision":0,"spaces":{},"people":{}}`,
 	} {
 		t.Run(name, func(t *testing.T) {

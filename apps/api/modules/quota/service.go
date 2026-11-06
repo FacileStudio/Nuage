@@ -58,8 +58,8 @@ func (s *Service) GetUsage(ctx context.Context, userID int64) (*UsageResponse, e
 	if err != nil {
 		return nil, err
 	}
-	if quota.StorageLimit == 0 && s.plans.Enforcing() {
-		return s.planUsage(ctx, userID)
+	if s.plans.Enforcing() {
+		return s.planUsage(ctx, userID, quota.StorageLimit)
 	}
 	source, limit := SourceOverride, quota.StorageLimit
 	if limit == 0 {

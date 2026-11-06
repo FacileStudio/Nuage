@@ -139,7 +139,11 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	sharingService := sharing.NewService(db, notifier, actLogger)
 	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
-	spacesService := spaces.NewService(db, storageClient, "")
+	registreURL := ""
+	if appEnv.OIDC != nil {
+		registreURL = appEnv.OIDC.Issuer + "/spaces"
+	}
+	spacesService := spaces.NewService(db, storageClient, registreURL)
 	activityService := activitymod.NewService(db)
 
 	router := chi.NewRouter()
