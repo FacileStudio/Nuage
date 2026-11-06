@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-06
+
 ### Added
 
 - **App folders.** Each app registered in the new `NUAGE_APPS` setting
