@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-06
+
 ### Added
 
 - **Pricing on the landing page.** A "Pricing" section shows the live plans from Ardoise's public catalog through muse's `PricingPlans`, with the storage allowance first. It stays hidden while the catalog is empty or unreachable.
