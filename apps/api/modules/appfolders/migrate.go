@@ -30,8 +30,11 @@ type candidate struct {
 // whose key equals the space's provisioned_by label. Without apply it changes
 // nothing and reports what it would do.
 //
-// Only live files with no versions and no share links move; the others stay
-// in the space and are reported, so nothing is lost or silently dropped. A
+// Only live files with no versions and no share links, published by the
+// space's own app (origin_app equals provisioned_by), move; the others stay in
+// the space and are reported, so nothing is lost, silently dropped or handed
+// to an app that did not write it (Plume publishes signed contracts into
+// Ardoise's space). A
 // file keeps its linked_to as its key when that is a valid key, otherwise its
 // folder path and name. A key already holding the same bytes deduplicates; a
 // key holding other bytes is a conflict and the file stays. Moved files leave
@@ -148,6 +151,10 @@ func (r *spaceRun) plan(ctx context.Context, file candidate) FileReport {
 	entry := FileReport{FileID: file.ID, Name: file.Name, Size: file.Size, Action: ActionSkip}
 	if reason := blocked(file); reason != "" {
 		entry.Reason = reason
+		return entry
+	}
+	if file.OriginApp != r.space.ProvisionedBy {
+		entry.Reason = fmt.Sprintf("published by %q, not by the space's app %q", file.OriginApp, r.space.ProvisionedBy)
 		return entry
 	}
 	entry.Key = keyFor(file.File, r.paths)

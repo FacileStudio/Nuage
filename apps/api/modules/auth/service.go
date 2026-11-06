@@ -26,6 +26,7 @@ type Service struct {
 	passwords  *local.Kit
 	logger     *slog.Logger
 	controller *Controller
+	fullAccess map[string]bool
 }
 
 // NewService builds the auth Service over the given database connection,
@@ -117,12 +118,18 @@ func (service *Service) Issue(ctx context.Context, userID int64, label string) (
 }
 
 // AuthenticateRequest resolves the caller of a route that is not mounted
-// behind RequireAuth — the inline-image endpoint, which a browser reaches with
-// an <img src> and therefore with a cookie and no header.
+// behind RequireAuth, which today is WebDAV alone. It accepts only a
+// credential a person holds: a session or an unrestricted API token. A bearer
+// JWT (porte SessionID 0) is another service acting for the user and is
+// refused, because RequireAuth's confinement of delegated tokens does not run
+// here; so is a restricted app token.
 func (service *Service) AuthenticateRequest(w http.ResponseWriter, r *http.Request) (int64, error) {
 	identity, err := service.sessions.Authenticate(w, r)
 	if err != nil {
 		return 0, err
+	}
+	if identity.SessionID == 0 {
+		return 0, errors.Forbidden("a delegated token cannot be used here")
 	}
 	scope, err := service.ScopeForSession(r.Context(), identity.SessionID)
 	if err != nil {
@@ -196,8 +203,24 @@ func (service *Service) SaveScope(ctx context.Context, sessionID int64, app stri
 	return nil
 }
 
-// RegisteredApp returns the active app registered under the Registre client
-// id clientID, or nil when there is none.
-func (service *Service) RegisteredApp(ctx context.Context, clientID string) (*schemas.RegisteredApp, error) {
-	return appregistry.ForClient(ctx, service.orm, clientID)
+// WithFullAccessActors lets delegated JWTs exchanged by these Registre client
+// ids act with the user's full access (NUAGE_FULL_ACCESS_ACTORS), and returns
+// the Service. Every other actor that is not a registered app is refused.
+func (service *Service) WithFullAccessActors(clientIDs []string) *Service {
+	service.fullAccess = make(map[string]bool, len(clientIDs))
+	for _, id := range clientIDs {
+		service.fullAccess[id] = true
+	}
+	return service
+}
+
+// ActorAccess resolves the client a delegated JWT was exchanged by: the
+// active registered app it is, or whether NUAGE_FULL_ACCESS_ACTORS lists it.
+// Neither means the actor may not act at all.
+func (service *Service) ActorAccess(ctx context.Context, clientID string) (*schemas.RegisteredApp, bool, error) {
+	app, err := appregistry.ForClient(ctx, service.orm, clientID)
+	if err != nil {
+		return nil, false, err
+	}
+	return app, service.fullAccess[clientID], nil
 }

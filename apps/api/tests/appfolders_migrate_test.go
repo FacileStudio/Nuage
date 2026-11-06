@@ -67,10 +67,7 @@ func TestMigrationMovesProvisionedSpacesIdempotently(t *testing.T) {
 	require.Equal(t, http.StatusOK, doDelete(ts, fmt.Sprintf("/files/%d", trashed), labelled).StatusCode)
 	fileID(t, uploadFileToSpace(ts, other, "elsewhere.txt", "x", otherSpace))
 
-	var before struct {
-		StorageUsed int64 `json:"storage_used"`
-	}
-	parseJSON(doGet(ts, "/quota/me", session), &before)
+	before := storageUsed(t, ts, session)
 
 	assertDryRun(t, ts, spaceID)
 
@@ -90,11 +87,7 @@ func TestMigrationMovesProvisionedSpacesIdempotently(t *testing.T) {
 	assert.Equal(t, 1, again.Skipped)
 	assert.Len(t, listObjects(t, ts, plume, "").Objects, 2)
 
-	var after struct {
-		StorageUsed int64 `json:"storage_used"`
-	}
-	parseJSON(doGet(ts, "/quota/me", session), &after)
-	assert.Equal(t, before.StorageUsed, after.StorageUsed, "moving keeps the person's usage")
+	assert.Equal(t, before, storageUsed(t, ts, session), "moving keeps the person's usage")
 }
 
 func TestMigrationDeduplicatesAndKeepsConflicts(t *testing.T) {
@@ -122,4 +115,30 @@ func TestMigrationDeduplicatesAndKeepsConflicts(t *testing.T) {
 	assert.Equal(t, int64(1), spaceFileCount(t, ts, spaceID), "the conflicting file stays in its space")
 	_, body := getObject(ts, plume, "clash")
 	assert.Equal(t, "app bytes", body)
+}
+
+func TestMigrationLeavesOtherAppsFilesInPlace(t *testing.T) {
+	ts, verifier := setupAppServer(t)
+	userID, session := registered(t, ts, "migrate-origin@example.com")
+	ardoise := mintProvisionToken(t, ts, session, "ardoise")
+	facileID, spaceID := provisionSpace(t, ts, ardoise)
+	plume := mintProvisionToken(t, ts, session, "plume", facileID)
+
+	fileID(t, publish(ts, ardoise, spaceID, "contract.pdf", "unsigned", "contract-7"))
+	fileID(t, publish(ts, plume, spaceID, "contract-signed.pdf", "signed", "contract-7-signed"))
+
+	report, err := ts.appFolders.Migrate(context.Background(), true)
+	require.NoError(t, err)
+	assert.Equal(t, 1, report.Moved)
+	assert.Equal(t, 1, report.Skipped)
+	for _, file := range report.Spaces[0].Files {
+		if file.Name == "contract-signed.pdf" {
+			assert.Equal(t, appfolders.ActionSkip, file.Action)
+			assert.Contains(t, file.Reason, `published by "plume"`)
+		}
+	}
+	assert.Equal(t, int64(1), spaceFileCount(t, ts, spaceID), "Plume's file stays in the space")
+	status, _ := getObject(ts, verifier.mint(userID, "ardoise-client"), "contract-7-signed")
+	assert.Equal(t, http.StatusNotFound, status, "Ardoise never receives Plume's file")
+	assertObject(t, ts, verifier.mint(userID, "ardoise-client"), "contract-7", "unsigned")
 }

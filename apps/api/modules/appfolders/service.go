@@ -105,28 +105,39 @@ func (s *Service) Delete(ctx context.Context, userID, appID int64, key string) e
 	}
 	var removed []schemas.AppObject
 	err := s.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var folderIDs []int64
-		if err := tx.Model(&schemas.AppFolder{}).Where("user_id = ? AND app_id = ?", userID, appID).
-			Pluck("id", &folderIDs).Error; err != nil {
-			return errors.Internal("failed to read the app folder", err)
-		}
-		if len(folderIDs) == 0 {
-			return nil
-		}
-		if _, err := lockedObject(tx, folderIDs[0], key); err != nil {
-			return err
-		}
-		return tx.Raw("DELETE FROM app_objects WHERE folder_id = ? AND key = ? RETURNING *", folderIDs[0], key).
-			Scan(&removed).Error
+		var err error
+		removed, err = deleteRow(tx, userID, appID, key)
+		return err
 	})
 	if err != nil {
-		return errors.Internal("failed to delete the object", err)
+		return err
 	}
 	if len(removed) == 0 {
 		return errors.NotFound("object not found")
 	}
 	s.refund(ctx, userID, removed)
 	return nil
+}
+
+// deleteRow deletes key's row under its write lock and returns what it removed.
+func deleteRow(tx *gorm.DB, userID, appID int64, key string) ([]schemas.AppObject, error) {
+	var folderIDs []int64
+	if err := tx.Model(&schemas.AppFolder{}).Where("user_id = ? AND app_id = ?", userID, appID).
+		Pluck("id", &folderIDs).Error; err != nil {
+		return nil, errors.Internal("failed to read the app folder", err)
+	}
+	if len(folderIDs) == 0 {
+		return nil, nil
+	}
+	if _, err := lockedObject(tx, folderIDs[0], key); err != nil {
+		return nil, err
+	}
+	var removed []schemas.AppObject
+	if err := tx.Raw("DELETE FROM app_objects WHERE folder_id = ? AND key = ? RETURNING *", folderIDs[0], key).
+		Scan(&removed).Error; err != nil {
+		return nil, errors.Internal("failed to delete the object", err)
+	}
+	return removed, nil
 }
 
 // refund removes the stored bytes of the deleted rows and gives them back to

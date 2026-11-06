@@ -135,7 +135,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	if err != nil {
 		t.Fatalf("build auth: %v", err)
 	}
-	authService := auth.NewService(db, sessions, passwords, slog.Default())
+	authService := auth.NewService(db, sessions, passwords, slog.Default()).WithFullAccessActors(appEnv.FullAccessActors)
 	userService := users.NewService(db, t.TempDir(), authService)
 	plans := entitlements.New(db, testIssuer, slog.Default())
 	quotaService := quota.NewService(db).WithPlans(plans)

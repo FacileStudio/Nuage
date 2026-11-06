@@ -306,7 +306,7 @@ func run() int {
 		appLogger.Error("failed to build authentication", slog.Any("error", err))
 		return 1
 	}
-	authService := auth.NewService(db, sessions, passwords, appLogger)
+	authService := auth.NewService(db, sessions, passwords, appLogger).WithFullAccessActors(appEnv.FullAccessActors)
 	userService := users.NewService(db, appEnv.StorageDir, authService)
 	plans := newPlans(db, appEnv, appLogger)
 	quotaService := quota.NewService(db).WithPlans(plans)

@@ -25,7 +25,7 @@ type Authenticator interface {
 	RequireAuth(http.Handler) http.Handler
 	IdentityForUser(ctx context.Context, userID int64) (id string, email string, isAdmin bool, err error)
 	ScopeForSession(ctx context.Context, sessionID int64) (*tokenscope.Scope, error)
-	RegisteredApp(ctx context.Context, clientID string) (*schemas.RegisteredApp, error)
+	ActorAccess(ctx context.Context, clientID string) (app *schemas.RegisteredApp, fullAccess bool, err error)
 }
 
 // RequireAuth runs porte's middleware and then fills in what porte

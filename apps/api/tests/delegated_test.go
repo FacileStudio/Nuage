@@ -46,7 +46,7 @@ func delegatedEnv() env.Config {
 		SuccessURL:      "https://nuage.example.test",
 		MachineAudience: "nuage-client",
 		ScopePrefix:     "nuage",
-	}}
+	}, FullAccessActors: []string{"bulle"}}
 }
 
 // TestDelegatedTokenScopes checks that a delegated JWT reads with nuage.read,

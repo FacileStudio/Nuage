@@ -26,13 +26,25 @@ tag records what shipped rather than triggering the deploy.
   plan answers 402. Cookie sessions, API tokens (including restricted tokens labelled with an
   app name) and JWTs of unregistered actors get 403 there, and a registered app's JWT gets 403
   everywhere else.
+- **Delegated actors are denied by default.** A delegated JWT whose actor (`act.sub`) is
+  neither an active registered app nor listed in the new `NUAGE_FULL_ACCESS_ACTORS` is refused
+  on every route, so an app removed from `NUAGE_APPS` loses access instead of gaining the whole
+  drive. docker-compose defaults the list to `bulle`, which keeps Bulle working.
 - **App data for users.** `GET /api/app-data` lists per-app usage, and `DELETE
   /api/app-data/{app}` deletes everything that app stores for the caller (own session only).
-  Settings has a new App data section with both.
+  Settings has a new App data section with both. An unrestricted personal API token counts as
+  the person here, since porte does not tell it apart from a sign-in session.
 - **`migrate-app-folders` command.** Moves the files of app-provisioned spaces into the charged
   user's folder for the registered app whose key equals the space's `provisioned_by` label.
   Dry run by default (`--apply` to move), JSON report on stdout, idempotent. Only live files
-  without versions or share links move; the rest stay and are reported. Spaces are not deleted.
+  without versions or share links, published by the space's own app (`origin_app`), move; the
+  rest stay and are reported. It reads the registry the server synced and never writes the
+  schema or the registry. Spaces are not deleted.
+
+### Security
+
+- WebDAV refuses every delegated JWT in the Basic password. WebDAV never runs `RequireAuth`, so
+  any JWT used to reach the whole drive through it, whatever its actor.
 
 ## [0.11.1] - 2026-11-06
 

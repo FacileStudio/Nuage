@@ -7,13 +7,11 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	"github.com/FacileStudio/Nuage/apps/api/modules/appfolders"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
-	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/tronc/logger"
 )
 
@@ -47,9 +45,10 @@ func runAppMigration(args []string, out io.Writer) int {
 	return 0
 }
 
-// migrateAppFolders opens the database and storage from the environment,
-// brings the schema and the registered apps up to date, and runs the
-// migration.
+// migrateAppFolders opens the database and storage from the environment and
+// runs the migration against the registered apps the running server synced.
+// It writes neither the schema nor the registry: an operator running it from
+// a shell with a different NUAGE_APPS must not re-register or retire apps.
 func migrateAppFolders(ctx context.Context, apply bool, appLogger *slog.Logger) (*appfolders.MigrationReport, error) {
 	appEnv, err := env.Load()
 	if err != nil {
@@ -57,12 +56,6 @@ func migrateAppFolders(ctx context.Context, apply bool, appLogger *slog.Logger) 
 	}
 	db, err := database.Open(appEnv.DatabaseURL)
 	if err != nil {
-		return nil, err
-	}
-	if err := schemas.MigrateWithIssuer(db, appEnv.IssuerForMigration()); err != nil {
-		return nil, err
-	}
-	if err := appregistry.Sync(ctx, db, appEnv.Apps); err != nil {
 		return nil, err
 	}
 	store, err := storage.NewClient(storage.MinIOConfig{

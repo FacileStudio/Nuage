@@ -22,7 +22,8 @@ const (
 	genericMime            = "application/octet-stream"
 )
 
-// validKey refuses a key that is empty, too long, not UTF-8, holds a control
+// validKey refuses a key that is empty, too long, not UTF-8, holds a control,
+// invisible format (bidi overrides, zero-width) or line/paragraph separator
 // character or a backslash, starts or ends with "/", or has an empty, "." or
 // ".." segment. Keys are opaque to the server, but they are shown to users
 // and may become paths in a later export, so they must read as one.
@@ -30,8 +31,8 @@ func validKey(key string) error {
 	if key == "" || len(key) > maxKeyBytes || !utf8.ValidString(key) {
 		return errors.Invalid("key must be 1 to 512 bytes of UTF-8")
 	}
-	if strings.IndexFunc(key, unicode.IsControl) >= 0 || strings.ContainsRune(key, '\\') {
-		return errors.Invalid("key must not hold control characters or backslashes")
+	if strings.IndexFunc(key, unprintable) >= 0 || strings.ContainsRune(key, '\\') {
+		return errors.Invalid("key must not hold control or invisible characters or backslashes")
 	}
 	for segment := range strings.SplitSeq(key, "/") {
 		if segment == "" || segment == "." || segment == ".." {
@@ -41,12 +42,18 @@ func validKey(key string) error {
 	return nil
 }
 
+// unprintable reports a character that would hide or reorder what a user
+// reads: controls, format characters (Cf) and line or paragraph separators.
+func unprintable(r rune) bool {
+	return unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp)
+}
+
 // validPrefix accepts an empty prefix or one shaped like the start of a key.
 func validPrefix(prefix string) error {
 	if prefix == "" {
 		return nil
 	}
-	if len(prefix) > maxKeyBytes || !utf8.ValidString(prefix) || strings.IndexFunc(prefix, unicode.IsControl) >= 0 {
+	if len(prefix) > maxKeyBytes || !utf8.ValidString(prefix) || strings.IndexFunc(prefix, unprintable) >= 0 {
 		return errors.Invalid("prefix must be at most 512 bytes of printable UTF-8")
 	}
 	return nil
@@ -60,7 +67,7 @@ func objectName(requested, key string) (string, error) {
 		name = key[strings.LastIndex(key, "/")+1:]
 	}
 	if len(name) > maxNameBytes || !utf8.ValidString(name) ||
-		strings.IndexFunc(name, unicode.IsControl) >= 0 || strings.ContainsAny(name, `/\`) {
+		strings.IndexFunc(name, unprintable) >= 0 || strings.ContainsAny(name, `/\`) {
 		return "", errors.Invalid("name must be at most 255 printable bytes with no slash")
 	}
 	return name, nil
