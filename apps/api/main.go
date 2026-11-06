@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
@@ -23,6 +24,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/tombstone"
 	"github.com/FacileStudio/Nuage/apps/api/internal/version"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
+	"github.com/FacileStudio/Nuage/apps/api/modules/appfolders"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/docs"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
@@ -157,6 +159,9 @@ func main() {
 	if healthcheck.Handle(os.Args) {
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == appMigrationCommand {
+		os.Exit(runAppMigration(os.Args[2:], os.Stdout))
+	}
 
 	os.Exit(run())
 }
@@ -253,6 +258,11 @@ func run() int {
 		return 1
 	}
 
+	if err := appregistry.Sync(context.Background(), db, appEnv.Apps); err != nil {
+		appLogger.Error("failed to register the configured apps", slog.Any("error", err))
+		return 1
+	}
+
 	if err := os.MkdirAll(filepath.Join(appEnv.StorageDir, "avatars"), 0o755); err != nil {
 		appLogger.Error("failed to prepare storage", slog.Any("error", err))
 		return 1
@@ -318,6 +328,7 @@ func run() int {
 		appLogger.Error("failed to move space files to their own buckets; serving with the files still in the shared bucket", slog.Any("error", err))
 	}
 	activityService := activitymod.NewService(db)
+	appFolderService := appfolders.NewService(db, storageClient, quotaService, appLogger)
 
 	router := httpx.NewRouter(httpx.Config{
 		TrustedProxies: appEnv.TrustedProxies,
@@ -361,6 +372,7 @@ func run() int {
 		search.RegisterRoutes(r, searchService, authService)
 		spaces.RegisterRoutes(r, spacesService, authService)
 		activitymod.RegisterRoutes(r, activityService, authService)
+		appfolders.RegisterRoutes(r, appFolderService, authService)
 	})
 
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, appLogger)

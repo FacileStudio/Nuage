@@ -110,6 +110,16 @@ export type ApiToken = {
 	created_at: string;
 };
 
+/** What one registered app stores for the signed-in user: usage only, never content. */
+export type AppData = {
+	app: string;
+	name: string;
+	active: boolean;
+	objects: number;
+	used_bytes: number;
+	created_at: string;
+};
+
 export type QuotaResponse = {
 	user_id: number;
 	storage_used: number;
@@ -525,6 +535,14 @@ export const backend = {
 
 	deleteApiToken(token: string, tokenId: number) {
 		return apiFetch<{}>(`/users/me/api-token/${tokenId}`, { method: 'DELETE' }, token);
+	},
+
+	listAppData(token: string) {
+		return apiFetch<{ apps: AppData[] }>('/app-data', {}, token);
+	},
+
+	deleteAppData(token: string, app: string) {
+		return apiFetch<{}>(`/app-data/${encodeURIComponent(app)}`, { method: 'DELETE' }, token);
 	},
 
 	getQuota(token: string) {

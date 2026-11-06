@@ -11,6 +11,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
+	"github.com/FacileStudio/Nuage/apps/api/modules/appfolders"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/docs"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
@@ -49,6 +50,7 @@ func buildTestRouter() chi.Router {
 		search.RegisterRoutes(r, nil, authService)
 		spaces.RegisterRoutes(r, nil, authService)
 		activitymod.RegisterRoutes(r, nil, authService)
+		appfolders.RegisterRoutes(r, nil, authService)
 	})
 
 	nuagewebdav.RegisterRoutes(router, nil, nil, nil, nil, nil)
@@ -81,6 +83,7 @@ func TestRegistryIsComplete(t *testing.T) {
 		"/users/me/avatar",
 		"/spaces/{id}/leave",
 		"/spaces/{id}/billing/accept",
+		"/app/object",
 	); len(issues) > 0 {
 		t.Errorf("incomplete documentation routes: %v", issues)
 	}

@@ -18,14 +18,16 @@ type overRow struct {
 }
 
 // chargedBytesSQL sums every file's bytes and versions by who pays for them:
-// the person for personal files and app-provisioned spaces charged to them,
-// the space for every other space.
+// the person for personal files, app folders and app-provisioned spaces
+// charged to them, the space for every other space.
 const chargedBytesSQL = `SELECT CASE WHEN f.space_id IS NULL THEN f.uploaded_by
 		WHEN sp.registre_space_id IS NULL AND sp.charged_to IS NOT NULL THEN sp.charged_to END AS user_id,
 	CASE WHEN f.space_id IS NOT NULL AND (sp.registre_space_id IS NOT NULL OR sp.charged_to IS NULL)
 		THEN f.space_id END AS space_id,
 	SUM(f.size + COALESCE((SELECT SUM(v.size) FROM file_versions v WHERE v.file_id = f.id), 0)) AS used
-	FROM files f LEFT JOIN spaces sp ON sp.id = f.space_id GROUP BY 1, 2`
+	FROM files f LEFT JOIN spaces sp ON sp.id = f.space_id GROUP BY 1, 2
+	UNION ALL SELECT af.user_id, NULL::bigint, SUM(o.size)
+	FROM app_objects o JOIN app_folders af ON af.id = o.folder_id GROUP BY af.user_id`
 
 // personalOverSQL lists the people whose charged bytes exceed the free plan,
 // with every subject they hold under the issuer, most recent first.

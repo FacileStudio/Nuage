@@ -18,6 +18,11 @@ import (
 const usageSQL = `SELECT COALESCE((SELECT SUM(f.size) FROM files f WHERE %[1]s), 0)
 	+ COALESCE((SELECT SUM(v.size) FROM file_versions v JOIN files f ON f.id = v.file_id WHERE %[1]s), 0)`
 
+// appUsageSQL is added to a person's usage: the bytes every registered app
+// stores in that person's app folders.
+const appUsageSQL = ` + COALESCE((SELECT SUM(o.size) FROM app_objects o
+	JOIN app_folders af ON af.id = o.folder_id WHERE af.user_id = ?), 0)`
+
 // reservedSQL sums the declared size of the scope's chunked uploads still
 // receiving chunks, idle for less than schemas.SessionIdleWindow. A session
 // being assembled is not counted: its completion
@@ -25,9 +30,9 @@ const usageSQL = `SELECT COALESCE((SELECT SUM(f.size) FROM files f WHERE %[1]s),
 const reservedSQL = `SELECT COALESCE(SUM(s.total_size), 0) FROM upload_sessions s WHERE %s AND %s`
 
 // target is what an addition is charged to: a space linked to Registre, with
-// its own plan, or a person. A person's plan covers their personal files and
-// every app-provisioned space charged to them, all under one lock, so an app
-// cannot give each space it provisions a fresh free plan.
+// its own plan, or a person. A person's plan covers their personal files,
+// their app folders and every app-provisioned space charged to them, all under
+// one lock, so an app cannot give each space or folder a fresh free plan.
 type target struct {
 	scope    forfait.Scope
 	personID int64
@@ -93,11 +98,16 @@ func (s *Service) personTarget(tx *gorm.DB, personID int64) (target, error) {
 	return target{scope: forfait.Scope{Subject: s.pickSubject(subjects)}, personID: personID}, nil
 }
 
-// usageOf sums the stored bytes charged to target.
+// usageOf sums the stored bytes charged to target, app folders included for a
+// person.
 func usageOf(db *gorm.DB, t target) (int64, error) {
 	filter, args := t.filter("f", "uploaded_by")
+	query, args := fmt.Sprintf(usageSQL, filter), append(args, args...)
+	if t.spaceID == 0 {
+		query, args = query+appUsageSQL, append(args, t.personID)
+	}
 	var used int64
-	if err := db.Raw(fmt.Sprintf(usageSQL, filter), append(args, args...)...).Scan(&used).Error; err != nil {
+	if err := db.Raw(query, args...).Scan(&used).Error; err != nil {
 		return 0, errors.Internal("failed to measure storage usage", err)
 	}
 	return used, nil

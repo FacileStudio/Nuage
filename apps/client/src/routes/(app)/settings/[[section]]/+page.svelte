@@ -25,6 +25,7 @@
 	import { ApiError, backend, type ApiToken, type Space, type UserProfile } from '$lib/backend';
 	import { theme, type ThemePreference } from '$lib/theme.svelte';
 	import { formatDate } from '$lib/format';
+	import AppDataSection from '$lib/components/AppDataSection.svelte';
 	import { icons, nuage } from '$lib/icons';
 
 	const app = getContext<{
@@ -37,6 +38,7 @@
 		{ id: 'profile', label: 'Profile', icon: icons.userCircle },
 		{ id: 'appearance', label: 'Appearance', icon: icons.palette },
 		{ id: 'api', label: 'API', icon: icons.key },
+		{ id: 'apps', label: 'App data', icon: icons.widget },
 		{ id: 'nook', label: 'Nook', icon: icons.bolt },
 		{ id: 'advanced', label: 'Advanced', icon: icons.server }
 	] as const;
@@ -359,6 +361,8 @@
 				<SecretField value={`${page.url.origin}/webdav/spaces/`} sensitive={false} />
 			</SettingsRow>
 		</SettingsSection>
+	{:else if section === 'apps'}
+		<AppDataSection token={app.token} />
 	{:else if section === 'nook'}
 		<SettingsSection
 			title="Nook"

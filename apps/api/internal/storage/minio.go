@@ -260,8 +260,14 @@ func (c *Client) CopyObject(ctx context.Context, srcKey, destKey string) error {
 // same key in this client's bucket. The copy runs inside MinIO, so no bytes pass
 // through the API, and repeating it overwrites with identical content.
 func (c *Client) CopyFrom(ctx context.Context, from *Client, key string) error {
-	src := minio.CopySrcOptions{Bucket: from.bucket, Object: key}
-	dst := minio.CopyDestOptions{Bucket: c.bucket, Object: key}
+	return c.CopyFromKey(ctx, from, key, key)
+}
+
+// CopyFromKey copies srcKey in the from client's bucket to destKey in this
+// client's bucket, inside MinIO. Repeating it overwrites with identical content.
+func (c *Client) CopyFromKey(ctx context.Context, from *Client, srcKey, destKey string) error {
+	src := minio.CopySrcOptions{Bucket: from.bucket, Object: srcKey}
+	dst := minio.CopyDestOptions{Bucket: c.bucket, Object: destKey}
 	_, err := c.mc.ComposeObject(ctx, dst, src)
 	return err
 }

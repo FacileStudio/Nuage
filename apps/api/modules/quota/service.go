@@ -113,7 +113,8 @@ func (s *Service) RecalculateUsage(ctx context.Context, userID int64) error {
 	if err := s.orm.WithContext(ctx).Raw(`
 		SELECT COALESCE((SELECT SUM(size) FROM files WHERE uploaded_by = ?), 0)
 			+ COALESCE((SELECT SUM(v.size) FROM file_versions v INNER JOIN files f ON f.id = v.file_id WHERE f.uploaded_by = ?), 0)
-	`, userID, userID).Scan(&totalSize).Error; err != nil {
+			+ COALESCE((SELECT SUM(o.size) FROM app_objects o INNER JOIN app_folders af ON af.id = o.folder_id WHERE af.user_id = ?), 0)
+	`, userID, userID, userID).Scan(&totalSize).Error; err != nil {
 		return errors.Internal("failed to calculate usage", err)
 	}
 

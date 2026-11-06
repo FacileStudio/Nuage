@@ -14,12 +14,14 @@ import (
 	"testing"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
+	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
+	"github.com/FacileStudio/Nuage/apps/api/modules/appfolders"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
@@ -45,9 +47,11 @@ import (
 )
 
 type testServer struct {
-	router *chi.Mux
-	db     *gorm.DB
-	plans  *entitlements.Plans
+	router     *chi.Mux
+	db         *gorm.DB
+	plans      *entitlements.Plans
+	store      *storage.Client
+	appFolders *appfolders.Service
 }
 
 // testIssuer is the OIDC issuer the plan entitlements are built for in tests.
@@ -95,6 +99,9 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	cleanDB(db)
 	if err := schemas.Migrate(db); err != nil {
 		t.Fatalf("migration failed: %v", err)
+	}
+	if err := appregistry.Sync(context.Background(), db, appEnv.Apps); err != nil {
+		t.Fatalf("register apps: %v", err)
 	}
 
 	minioEndpoint := os.Getenv("TEST_MINIO_ENDPOINT")
@@ -145,6 +152,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	}
 	spacesService := spaces.NewService(db, storageClient, registreURL)
 	activityService := activitymod.NewService(db)
+	appFolderService := appfolders.NewService(db, storageClient, quotaService, slog.Default())
 
 	router := chi.NewRouter()
 	router.Use(troncmiddleware.CORS(troncmiddleware.CORSConfig{AllowedOrigins: []string{"*"}}))
@@ -164,6 +172,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	search.RegisterRoutes(router, searchService, authService)
 	spaces.RegisterRoutes(router, spacesService, authService)
 	activitymod.RegisterRoutes(router, activityService, authService)
+	appfolders.RegisterRoutes(router, appFolderService, authService)
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, slog.Default())
 
 	t.Cleanup(func() {
@@ -172,7 +181,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 		sqlDB.Close()
 	})
 
-	return &testServer{router: router, db: db, plans: plans}
+	return &testServer{router: router, db: db, plans: plans, store: storageClient, appFolders: appFolderService}
 }
 
 func cleanDB(db *gorm.DB) {

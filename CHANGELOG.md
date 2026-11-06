@@ -10,6 +10,30 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Added
+
+- **App folders.** Each app registered in the new `NUAGE_APPS` setting
+  (`key:registre_client_id[:Name]`, `;`-separated, needs `OIDC_MACHINE_AUDIENCE`) gets a
+  private folder per user, created on first use. It is never a space, never shows in the file
+  tree, and its bytes count toward the user's personal plan under the same
+  `nuage:plan:user:<id>` lock as personal files, trash, versions, charged spaces and open uploads.
+  Apps are rows in `registered_apps`, seeded from the setting at every boot; an app removed from
+  it stops acting but its users keep their data.
+- **App API (`/api/app`).** `GET /app/objects`, `GET|PUT|DELETE /app/object?key=`. The caller is
+  a registered app acting for one user: a delegated Registre JWT (token exchange, `sub` = the
+  user, `aud` = Nuage, `act.sub` = the app's client id). It reaches only that user's folder for
+  its own app. Objects are at most 100 MiB, replacing a key charges only the growth, and a full
+  plan answers 402. Cookie sessions, API tokens (including restricted tokens labelled with an
+  app name) and JWTs of unregistered actors get 403 there, and a registered app's JWT gets 403
+  everywhere else.
+- **App data for users.** `GET /api/app-data` lists per-app usage, and `DELETE
+  /api/app-data/{app}` deletes everything that app stores for the caller (own session only).
+  Settings has a new App data section with both.
+- **`migrate-app-folders` command.** Moves the files of app-provisioned spaces into the charged
+  user's folder for the registered app whose key equals the space's `provisioned_by` label.
+  Dry run by default (`--apply` to move), JSON report on stdout, idempotent. Only live files
+  without versions or share links move; the rest stay and are reported. Spaces are not deleted.
+
 ## [0.11.1] - 2026-11-06
 
 ### Fixed
