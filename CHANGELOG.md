@@ -10,6 +10,14 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Added
+
+- **Pricing on the landing page.** A "Pricing" section shows the live plans from Ardoise's public catalog through muse's `PricingPlans`, with the storage allowance first. It stays hidden while the catalog is empty or unreachable.
+
+### Changed
+
+- `@facile/muse` v0.8.1 to v0.11.0 (icon set regenerated). Nuage has no locale, so muse's English defaults apply.
+
 ## [0.12.0] - 2026-11-06
 
 ### Added
