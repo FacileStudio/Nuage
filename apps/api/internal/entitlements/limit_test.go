@@ -18,7 +18,7 @@ func applied(t *testing.T, revision int64, gb string) *Plans {
 		EntitlementsRevision: revision,
 		Spaces:               []directory.Space{{ID: "spc_1", Entitlements: map[string]json.RawMessage{StorageKey: json.RawMessage(gb)}}},
 	})
-	if err := p.refresh(); err != nil {
+	if _, err := p.refresh(); err != nil {
 		t.Fatal(err)
 	}
 	return p

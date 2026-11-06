@@ -15,7 +15,8 @@ tag records what shipped rather than triggering the deploy.
 - **A person's plan is read under the subject Registre knows.** A user holding several
   identities under the issuer (such as one left from the Authentik era) had their plan read
   under whichever row Postgres returned first. Nuage now prefers the subject named in the last
-  directory snapshot, else the most recently synced identity. Boot logs
+  directory snapshot (one the plan store accepted, never one it ignored as older), else the
+  most recently synced identity. Boot logs
   `forfait: user holds several identities under the issuer` for each such user; no row is
   deleted.
 - **Go-live reports.** Boot also logs everyone over the free plan with all their subjects, and
@@ -26,8 +27,10 @@ tag records what shipped rather than triggering the deploy.
   does; app tokens still provision.
 - **The quota meter under an admin limit** shows the usage plans count (app-provisioned spaces
   charged to the person included) against that limit.
-- **Parallel chunks cannot stage past `total_size`.** Each chunk is counted and recorded under
-  its session's row lock.
+- **Parallel chunks cannot stage past `total_size`, and a late chunk cannot land during
+  assembly.** Each chunk is stored under its own object key, then counted and recorded under
+  its session's row lock after re-checking the session is still pending; a replaced part's
+  object is deleted only once the new row is committed.
 - porte/directory v0.2.1 and porte/forfait v0.1.1 (restore-safe ordering, serialised sync).
   An empty saved `entitlement_state` row still makes Nuage enforce the free-plan defaults, not
   fail open. `docs/deployment.md` documents the recovery after a Registre restore: delete the

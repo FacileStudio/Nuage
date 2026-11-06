@@ -87,7 +87,7 @@ func (p *Plans) Restore(ctx context.Context) error {
 		return err
 	}
 	importErr := p.store.Import([]byte(row.Document))
-	if err := p.refresh(); err != nil || p.Enforcing() {
+	if _, err := p.refresh(); err != nil || p.Enforcing() {
 		return err
 	}
 	p.logger.Error("forfait: the saved entitlements are unreadable or carry no revision; enforcing plan defaults until Registre answers",
@@ -101,34 +101,45 @@ func (p *Plans) enforceDefaults() error {
 	if err := p.store.Import([]byte(defaultsDocument)); err != nil {
 		return err
 	}
-	return p.refresh()
+	_, err := p.refresh()
+	return err
 }
 
 // Apply hands the snapshot to the Store and saves the resulting state. It is
-// chained into the directory Syncer's Apply, after the spaces.
+// chained into the directory Syncer's Apply, after the spaces. The snapshot's
+// subjects replace the known ones only when the Store accepted it: one it
+// ignored as older must not decide whose plan a user reads.
 func (p *Plans) Apply(ctx context.Context, snap directory.Snapshot) error {
 	p.store.Apply(snap)
-	if err := p.refresh(); err != nil {
-		return err
-	}
-	p.learn(snap)
-	return p.persist(ctx)
-}
-
-// refresh reads back whether the Store now holds an authoritative snapshot,
-// and seeds the known subjects from the people it holds values for when no
-// snapshot taught them yet, as after a restart.
-func (p *Plans) refresh() error {
-	doc, err := p.store.Export()
+	held, err := p.refresh()
 	if err != nil {
 		return err
 	}
-	var head struct {
-		Revision int64                      `json:"entitlements_revision"`
-		People   map[string]json.RawMessage `json:"people"`
+	if held.Version == snap.Version && held.Revision == snap.EntitlementsRevision {
+		p.learn(snap)
+	}
+	return p.persist(ctx)
+}
+
+// heldState is the snapshot version and entitlements revision the Store
+// holds, with the people it holds values for.
+type heldState struct {
+	Version  int64                      `json:"snapshot_version"`
+	Revision int64                      `json:"entitlements_revision"`
+	People   map[string]json.RawMessage `json:"people"`
+}
+
+// refresh reads back what the Store holds and whether it is authoritative,
+// and seeds the known subjects from the people it holds values for when no
+// snapshot taught them yet, as after a restart.
+func (p *Plans) refresh() (heldState, error) {
+	var head heldState
+	doc, err := p.store.Export()
+	if err != nil {
+		return head, err
 	}
 	if err := json.Unmarshal(doc, &head); err != nil {
-		return err
+		return head, err
 	}
 	if head.Revision > 0 {
 		p.enforcing.Store(true)
@@ -136,7 +147,7 @@ func (p *Plans) refresh() error {
 	if p.subjects.Load() == nil && len(head.People) > 0 {
 		p.remember(maps.Keys(head.People))
 	}
-	return nil
+	return head, nil
 }
 
 // persist writes the Store's state into the one entitlement_state row. A
