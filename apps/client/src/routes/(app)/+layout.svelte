@@ -6,7 +6,8 @@
 	import { backend, isAuthError, type QuotaResponse, type Space, type UserProfile } from '$lib/backend';
 	import { rememberLocale, setSessionLocale, t } from '$lib/i18n/index.svelte';
 	import { theme, type ThemePreference } from '$lib/theme.svelte';
-	import { planName, upgradeHref } from '$lib/plan';
+	import { planName } from '$lib/plan';
+	import { REGISTRE_SPACES_URL } from '$lib/registre';
 	import { hasPending, undoLast } from '$lib/undo.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { icons, nuage } from '$lib/icons';
@@ -150,9 +151,8 @@
 		void goto('/login');
 	}
 
-	const upgrade = $derived(upgradeHref(quota));
 	const userMenu = $derived({
-		subscription: upgrade ? { plan: planName(quota), href: upgrade } : null,
+		subscription: { plan: planName(quota), href: REGISTRE_SPACES_URL },
 		helpHref: `${page.url.origin}/docs`,
 		onSignOut: signOut,
 		theme: theme.preference,

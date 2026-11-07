@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Changed
+
+- `@facile/muse` v0.14.1 to v0.14.2: the user menu clamps itself inside the viewport at the right edge of a header.
+- The user menu's Subscription row always shows and opens `https://sso.facile.studio/spaces`, the same address as the plan upgrade link.
+- API tokens: the create drawer has no expiry field and the list has no expiry or last-used column, because Nuage tokens carry neither.
+
 ## [0.13.1] - 2026-11-07
 
 ### Changed
