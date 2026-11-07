@@ -8,7 +8,7 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While on
 Releases are tagged `v*` on `main`. The API deploys from `main` on push, so a
 tag records what shipped rather than triggering the deploy.
 
-## [Unreleased]
+## [0.14.3] - 2026-11-07
 
 ### Changed
 
