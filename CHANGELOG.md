@@ -45,8 +45,9 @@ tag records what shipped rather than triggering the deploy.
   `POST /api/registre/deletions`. A deleted person loses their personal files, folders, app
   folders, tokens, quota and account. Space files and folders they authored stay, attributed to a
   hidden "Deleted user" placeholder, and their public share links are revoked. Replays are
-  no-ops.
-- `ci.yml`: gofmt, vet, build, tests against Postgres and MinIO, client check, tests and build,
+  no-ops. Polls and pushes hold a Postgres advisory lock, so the old and the new process of a
+  start-first deploy never handle deletions at the same time.
+- `ci.yml`: gofmt, vet, build, tests against Postgres and MinIO (three shards), client check, tests and build,
   and filet.
 
 ### Migrations
