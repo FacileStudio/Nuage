@@ -6,7 +6,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/stretchr/testify/require"
@@ -224,16 +223,4 @@ func TestRestrictedTokenLooksUpPublishedFileByKeyInsideItsSpaces(t *testing.T) {
 	var none listing
 	parseJSON(missing, &none)
 	require.Empty(t, none.Files)
-}
-
-func TestFindOrCreateDoesNotConfirmATakenIDToAnOutsider(t *testing.T) {
-	ts := setupTestServer(t)
-	_, owner := registerUser(ts, "cpub-404@example.com", "password12345")
-	_, outsider := registerUser(ts, "cpub-404b@example.com", "password12345")
-	facileID := facile.NewID()
-
-	require.Equal(t, http.StatusCreated, ensureSpace(ts, owner, facileID).StatusCode)
-	resp := ensureSpace(ts, outsider, facileID)
-	require.Equal(t, http.StatusNotFound, resp.StatusCode)
-	require.Equal(t, http.StatusOK, ensureSpace(ts, owner, facileID).StatusCode)
 }

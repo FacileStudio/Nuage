@@ -47,7 +47,6 @@ type CreateAPITokenRequest struct {
 	Name           string   `json:"name" validate:"required"`
 	App            string   `json:"app,omitempty"`
 	SpaceFacileIDs []string `json:"space_facile_ids,omitempty"`
-	Provision      bool     `json:"provision,omitempty"`
 }
 
 type FileResponse struct {
@@ -212,11 +211,6 @@ type SpaceResponse struct {
 
 type CreateSpaceRequest struct {
 	Name string `json:"name" validate:"required"`
-}
-
-type EnsureSpaceRequest struct {
-	Name        string `json:"name" validate:"required"`
-	Description string `json:"description,omitempty"`
 }
 
 type UpdateSpaceRequest struct {
@@ -426,7 +420,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/users/me/api-token",
-							Summary:      "Create a personal API token. With app plus space_facile_ids, provision, or both, the token is restricted: it reaches only the listed spaces through /files and /spaces/by-facile-id, never personal files or other endpoints, and its uploads record app as origin_app. provision: true also lets it create spaces for any well-formed fac_ id and reach every space its app created, never spaces made by users or other apps.",
+							Summary:      "Create a personal API token. With app plus space_facile_ids the token is restricted: it reaches only the listed spaces through /files, never personal files or other endpoints, and its uploads record app as origin_app. provision is retired and answers 400.",
 							Auth:         "bearer",
 							RequestBody:  CreateAPITokenRequest{},
 							ResponseBody: APITokenResponse{},
@@ -718,16 +712,6 @@ func Reference() apiref.Config {
 							Summary:      "Create a new space. Answers 409 with the Registre spaces page when OIDC is configured: shared spaces are created in Registre and mirrored here.",
 							Auth:         "bearer",
 							RequestBody:  CreateSpaceRequest{},
-							ResponseBody: SpaceResponse{},
-							Status:       http.StatusCreated,
-						},
-						{
-							Method:       "PUT",
-							Path:         "/spaces/by-facile-id/{facileId}",
-							Summary:      "Find or create a space by facile_id (fac_ + 24 hex). Idempotent. The caller becomes owner only when the space is created and the bucket is provisioned; an existing space answers 200 to members and 403 to everyone else. Restricted tokens may only name the facile ids they were minted for.",
-							Auth:         "bearer",
-							PathParams:   []Field{{Name: "facileId", Type: "string", Description: "Space facile_id"}},
-							RequestBody:  EnsureSpaceRequest{},
 							ResponseBody: SpaceResponse{},
 							Status:       http.StatusCreated,
 						},

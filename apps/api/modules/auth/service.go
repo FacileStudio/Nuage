@@ -144,9 +144,8 @@ func (service *Service) ScopeForSession(ctx context.Context, sessionID int64) (*
 }
 
 // SaveScope restricts an issued token to the given spaces and stamps its app.
-// With provision the token also reaches the spaces its app label creates.
-func (service *Service) SaveScope(ctx context.Context, sessionID int64, app string, provision bool, spaceFacileIDs []string) error {
-	row := schemas.TokenScope{SessionID: sessionID, App: app, Provision: provision, SpaceFacileIDs: spaceFacileIDs}
+func (service *Service) SaveScope(ctx context.Context, sessionID int64, app string, spaceFacileIDs []string) error {
+	row := schemas.TokenScope{SessionID: sessionID, App: app, SpaceFacileIDs: spaceFacileIDs}
 	if err := service.orm.WithContext(ctx).Create(&row).Error; err != nil {
 		return errors.Internal("failed to save the token scope", err)
 	}

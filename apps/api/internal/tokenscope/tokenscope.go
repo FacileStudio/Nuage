@@ -31,9 +31,10 @@ func ValidFacileID(id string) bool {
 }
 
 // Scope is what a restricted API token may reach. FacileIDs is what the token
-// was minted for. Provision lets it create spaces for ids it was not minted
-// for and reach the ones its app label created. SpaceIDs is everything the
-// token reaches that exists as a space now.
+// was minted for. Provision is only true on a token minted before provisioning
+// was retired: it still reaches the spaces its app label created and can no
+// longer create any. SpaceIDs is everything the token reaches that exists as a
+// space now.
 type Scope struct {
 	App       string
 	Provision bool
@@ -64,20 +65,6 @@ func (s *Scope) AllowsFacileID(id string) bool {
 	return slices.Contains(s.FacileIDs, id)
 }
 
-// AllowsExisting reports whether the token may reach an existing space: it was
-// minted for it, or it holds the provision scope and its app created the space.
-func (s *Scope) AllowsExisting(facileID, provisionedBy string) bool {
-	if s.AllowsFacileID(facileID) {
-		return true
-	}
-	return s.Provision && s.App != "" && provisionedBy == s.App
-}
-
-// MayCreate reports whether the token may create the space facileID.
-func (s *Scope) MayCreate(facileID string) bool {
-	return s.Provision || s.AllowsFacileID(facileID)
-}
-
 // RequireSpace refuses personal scope and any space outside the token's set
 // when the caller holds a restricted token. An unrestricted caller passes.
 func RequireSpace(ctx context.Context, spaceID *int64) error {
@@ -104,14 +91,11 @@ func Origin(ctx context.Context, requested string) string {
 }
 
 // Permits reports whether a restricted token may call the route at all. It is
-// an allowlist: file upload, read and delete, chunked uploads, and the
-// find-or-create of the spaces the token was minted for. Every other route,
+// an allowlist: file upload, read and delete, and chunked uploads. Every other route,
 // including token management and personal-scope features, is refused.
 func Permits(method, path string) bool {
 	path = strings.TrimPrefix(path, "/api")
 	switch {
-	case strings.HasPrefix(path, "/spaces/by-facile-id/"):
-		return method == http.MethodPut
 	case path == "/files" || path == "/files/":
 		return method == http.MethodGet || method == http.MethodPost
 	case strings.HasPrefix(path, "/files/upload/"):

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -15,14 +16,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type provisioned struct {
-	ID       int64  `json:"id"`
-	FacileID string `json:"facile_id"`
-	Role     string `json:"role"`
-}
-
 func ensureSpace(ts *testServer, token, facileID string) *http.Response {
 	return doJSON(ts, "PUT", "/spaces/by-facile-id/"+facileID, map[string]string{"name": "Contracts"}, token)
+}
+
+func mustParseID(t *testing.T, id string) int64 {
+	t.Helper()
+	parsed, err := strconv.ParseInt(id, 10, 64)
+	require.NoError(t, err)
+	return parsed
+}
+
+type legacyOwner struct {
+	userID int64
+	app    string
+}
+
+var legacyTokens sync.Map
+
+func seedProvisionedSpace(t *testing.T, ts *testServer, userID int64, app, facileID string) int64 {
+	t.Helper()
+	require.NoError(t, newTestStorageClient(t).For(storage.SpaceBucket(facileID)).EnsureBucket(context.Background()))
+	space := schemas.Space{FacileID: facileID, Name: "Contracts", ProvisionedBy: app, ChargedTo: &userID}
+	require.NoError(t, ts.db.Create(&space).Error)
+	require.NoError(t, ts.db.Omit("Space", "User").Create(&schemas.SpaceMember{SpaceID: space.ID, UserID: userID, Role: "owner"}).Error)
+	return space.ID
 }
 
 func mintScopedToken(t *testing.T, ts *testServer, token, app string, facileIDs ...string) string {
@@ -39,98 +57,25 @@ func mintScopedToken(t *testing.T, ts *testServer, token, app string, facileIDs 
 	return created.Token
 }
 
-func TestEnsureSpaceIsIdempotent(t *testing.T) {
+func TestFindOrCreateRouteIsRetired(t *testing.T) {
 	ts := setupTestServer(t)
-	store := newTestStorageClient(t)
-	_, token := registerUser(ts, "ensure-owner@example.com", "password12345")
+	_, user := registerUser(ts, "retired-route@example.com", "password12345")
 	facileID := facile.NewID()
 
-	first := ensureSpace(ts, token, facileID)
-	require.Equal(t, http.StatusCreated, first.StatusCode)
-	var created provisioned
-	parseJSON(first, &created)
-	require.Equal(t, facileID, created.FacileID)
-	require.Equal(t, "owner", created.Role)
+	require.Contains(t, []int{http.StatusNotFound, http.StatusMethodNotAllowed}, ensureSpace(ts, user, facileID).StatusCode)
 
-	_, err := store.For(storage.SpaceBucket(facileID)).ListObjects(context.Background(), "")
-	require.NoError(t, err, "provisioning creates the bucket")
-
-	second := ensureSpace(ts, token, facileID)
-	require.Equal(t, http.StatusOK, second.StatusCode)
-	var again provisioned
-	parseJSON(second, &again)
-	require.Equal(t, created.ID, again.ID)
+	scoped := mintScopedToken(t, ts, user, "ardoise", facileID)
+	require.Equal(t, http.StatusForbidden, ensureSpace(ts, scoped, facileID).StatusCode)
 
 	var count int64
 	require.NoError(t, ts.db.Model(&schemas.Space{}).Where("facile_id = ?", facileID).Count(&count).Error)
-	require.EqualValues(t, 1, count)
-}
-
-func TestEnsureSpaceRejectsMalformedFacileID(t *testing.T) {
-	ts := setupTestServer(t)
-	_, token := registerUser(ts, "ensure-bad@example.com", "password12345")
-
-	for _, id := range []string{"fac_short", "FAC_" + "0123456789abcdef01234567", "fac_0123456789abcdef0123456g", "x"} {
-		require.Equal(t, http.StatusBadRequest, ensureSpace(ts, token, id).StatusCode, id)
-	}
-}
-
-func TestEnsureSpaceConcurrentCreateYieldsOneSpace(t *testing.T) {
-	ts := setupTestServer(t)
-	_, token := registerUser(ts, "ensure-race@example.com", "password12345")
-	facileID := facile.NewID()
-
-	const callers = 8
-	statuses := make(chan int, callers)
-	var wg sync.WaitGroup
-	for range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			statuses <- ensureSpace(ts, token, facileID).StatusCode
-		}()
-	}
-	wg.Wait()
-	close(statuses)
-
-	created := 0
-	for status := range statuses {
-		switch status {
-		case http.StatusCreated:
-			created++
-		case http.StatusOK:
-		default:
-			t.Fatalf("unexpected status %d", status)
-		}
-	}
-	require.Equal(t, 1, created)
-
-	var count, owners int64
-	require.NoError(t, ts.db.Model(&schemas.Space{}).Where("facile_id = ?", facileID).Count(&count).Error)
-	require.EqualValues(t, 1, count)
-	require.NoError(t, ts.db.Model(&schemas.SpaceMember{}).Joins("JOIN spaces ON spaces.id = space_members.space_id").
-		Where("spaces.facile_id = ? AND space_members.role = 'owner'", facileID).Count(&owners).Error)
-	require.EqualValues(t, 1, owners)
-}
-
-func TestEnsureSpaceRefusesANonMember(t *testing.T) {
-	ts := setupTestServer(t)
-	_, owner := registerUser(ts, "ensure-a@example.com", "password12345")
-	_, outsider := registerUser(ts, "ensure-b@example.com", "password12345")
-	facileID := facile.NewID()
-
-	require.Equal(t, http.StatusCreated, ensureSpace(ts, owner, facileID).StatusCode)
-	require.Equal(t, http.StatusNotFound, ensureSpace(ts, outsider, facileID).StatusCode)
-
-	var members int64
-	require.NoError(t, ts.db.Model(&schemas.SpaceMember{}).Count(&members).Error)
-	require.EqualValues(t, 1, members, "a refused caller is never added")
+	require.Zero(t, count, "no call created the space")
 }
 
 func TestRestrictedTokenIsConfinedToItsSpaces(t *testing.T) {
 	ts := setupTestServer(t)
-	_, user := registerUser(ts, "scoped-user@example.com", "password12345")
-	allowedID, otherID := facile.NewID(), facile.NewID()
+	userID, user := registerUser(ts, "scoped-user@example.com", "password12345")
+	allowedID := facile.NewID()
 
 	otherSpace := createSpace(t, ts, user, "Other")
 	require.Equal(t, http.StatusCreated, uploadFile(ts, user, "personal.txt", "private", nil).StatusCode)
@@ -139,11 +84,7 @@ func TestRestrictedTokenIsConfinedToItsSpaces(t *testing.T) {
 
 	scoped := mintScopedToken(t, ts, user, "ardoise", allowedID)
 
-	require.Equal(t, http.StatusForbidden, ensureSpace(ts, scoped, otherID).StatusCode, "cannot provision an id it was not minted for")
-	resp := ensureSpace(ts, scoped, allowedID)
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	var space provisioned
-	parseJSON(resp, &space)
+	seedProvisionedSpace(t, ts, mustParseID(t, userID), "ardoise", allowedID)
 
 	require.Equal(t, http.StatusForbidden, uploadFileToSpace(ts, scoped, "x.txt", "x", otherSpace).StatusCode, "another space of the same user")
 	require.Equal(t, http.StatusForbidden, uploadFile(ts, scoped, "x.txt", "x", nil).StatusCode, "personal scope")
@@ -164,13 +105,11 @@ func TestRestrictedTokenIsConfinedToItsSpaces(t *testing.T) {
 func TestRestrictedTokenUploadLandsInTheSpaceBucketWithOrigin(t *testing.T) {
 	ts := setupTestServer(t)
 	store := newTestStorageClient(t)
-	_, user := registerUser(ts, "scoped-upload@example.com", "password12345")
+	userID, user := registerUser(ts, "scoped-upload@example.com", "password12345")
 	facileID := facile.NewID()
 	scoped := mintScopedToken(t, ts, user, "ardoise", facileID)
 
-	var space provisioned
-	parseJSON(ensureSpace(ts, scoped, facileID), &space)
-	require.NotZero(t, space.ID)
+	space := struct{ ID int64 }{seedProvisionedSpace(t, ts, mustParseID(t, userID), "ardoise", facileID)}
 
 	resp := uploadFileWithFields(ts, scoped, "contract.pdf", "pdf bytes", map[string]string{
 		"space_id":   fmt.Sprint(space.ID),

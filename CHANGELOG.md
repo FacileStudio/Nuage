@@ -10,6 +10,11 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** `PUT /api/spaces/by-facile-id/{facile_id}` and the find-or-create behind it. Restricted tokens can no longer create spaces, and the route is no longer on their allowlist. Spaces come from `POST /api/spaces` or Registre.
+- `POST /api/users/me/api-token` refuses `provision: true` with 400. A restricted token needs `app` and `space_facile_ids`. A token minted with `provision` before this release keeps reaching the spaces its app created, and can no longer create any.
+
 ## [0.13.2] - 2026-11-07
 
 ### Changed

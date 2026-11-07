@@ -16,6 +16,7 @@ func TestPermitsKeepsThumbnailsAwayFromRestrictedTokens(t *testing.T) {
 		{http.MethodGet, "/files/12/thumbnail", false},
 		{http.MethodPost, "/api/files/12/presign", true},
 		{http.MethodGet, "/api/folders", false},
+		{http.MethodPut, "/api/spaces/by-facile-id/fac_0123456789abcdef01234567", false},
 	}
 	for _, c := range cases {
 		if got := Permits(c.method, c.path); got != c.want {

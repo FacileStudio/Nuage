@@ -16,26 +16,24 @@ import (
 
 func mintProvisionToken(t *testing.T, ts *testServer, token, app string, facileIDs ...string) string {
 	t.Helper()
-	resp := doJSON(ts, "POST", "/users/me/api-token", map[string]any{
-		"name": app, "app": app, "provision": true, "space_facile_ids": facileIDs,
-	}, token)
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	var created struct {
-		Token string `json:"token"`
+	if len(facileIDs) == 0 {
+		facileIDs = []string{facile.NewID()}
 	}
-	parseJSON(resp, &created)
-	require.NotEmpty(t, created.Token)
-	return created.Token
+	scoped := mintScopedToken(t, ts, token, app, facileIDs...)
+	var session struct{ ID, UserID int64 }
+	require.NoError(t, ts.db.Raw(`SELECT s.id, s.user_id FROM porte_sessions s JOIN api_token_scopes a ON a.session_id = s.id ORDER BY s.id DESC LIMIT 1`).Scan(&session).Error)
+	require.NoError(t, ts.db.Exec(`UPDATE api_token_scopes SET provision = true WHERE session_id = ?`, session.ID).Error)
+	legacyTokens.Store(scoped, legacyOwner{userID: session.UserID, app: app})
+	return scoped
 }
 
 func provisionSpace(t *testing.T, ts *testServer, token string) (string, int64) {
 	t.Helper()
+	owner, ok := legacyTokens.Load(token)
+	require.True(t, ok, "token was not minted by mintProvisionToken")
 	facileID := facile.NewID()
-	resp := ensureSpace(ts, token, facileID)
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	var space provisioned
-	parseJSON(resp, &space)
-	return facileID, space.ID
+	legacy := owner.(legacyOwner)
+	return facileID, seedProvisionedSpace(t, ts, legacy.userID, legacy.app, facileID)
 }
 
 func publish(ts *testServer, token string, spaceID int64, name, content, linkedTo string) *http.Response {
@@ -58,7 +56,6 @@ func TestProvisionTokenCreatesAndReachesItsSpaces(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, uploadFileToSpace(ts, scoped, "a.pdf", "a", spaceID).StatusCode)
 	require.Equal(t, http.StatusOK, doGet(ts, fmt.Sprintf("/files?space_id=%d", spaceID), scoped).StatusCode)
-	require.Equal(t, http.StatusOK, ensureSpace(ts, scoped, facileID).StatusCode)
 	require.Equal(t, http.StatusForbidden, uploadFile(ts, scoped, "p.txt", "p", nil).StatusCode)
 }
 
@@ -67,18 +64,12 @@ func TestProvisionTokenCannotReachForeignSpaces(t *testing.T) {
 	_, user := registerUser(ts, "prov-foreign@example.com", "password12345")
 
 	userSpaceID := createSpace(t, ts, user, "Mine")
-	var userSpace schemas.Space
-	require.NoError(t, ts.db.First(&userSpace, userSpaceID).Error)
 
 	other := mintProvisionToken(t, ts, user, "ardoise")
 	_, otherSpaceID := provisionSpace(t, ts, other)
-	var otherSpace schemas.Space
-	require.NoError(t, ts.db.First(&otherSpace, otherSpaceID).Error)
 
 	plume := mintProvisionToken(t, ts, user, "plume")
 
-	require.Equal(t, http.StatusNotFound, ensureSpace(ts, plume, userSpace.FacileID).StatusCode, "user-created space")
-	require.Equal(t, http.StatusNotFound, ensureSpace(ts, plume, otherSpace.FacileID).StatusCode, "another app's space")
 	require.Equal(t, http.StatusForbidden, uploadFileToSpace(ts, plume, "x.txt", "x", userSpaceID).StatusCode)
 	require.Equal(t, http.StatusForbidden, uploadFileToSpace(ts, plume, "x.txt", "x", otherSpaceID).StatusCode)
 	require.Equal(t, http.StatusForbidden, doGet(ts, fmt.Sprintf("/files?space_id=%d", otherSpaceID), plume).StatusCode)
@@ -92,15 +83,7 @@ func TestProvisionTokenKeepsExplicitList(t *testing.T) {
 	require.NoError(t, ts.db.First(&userSpace, userSpaceID).Error)
 
 	scoped := mintProvisionToken(t, ts, user, "plume", userSpace.FacileID)
-	require.Equal(t, http.StatusOK, ensureSpace(ts, scoped, userSpace.FacileID).StatusCode)
 	require.Equal(t, http.StatusCreated, uploadFileToSpace(ts, scoped, "l.txt", "l", userSpaceID).StatusCode)
-}
-
-func TestNonProvisionTokenCannotCreateUnlistedSpace(t *testing.T) {
-	ts := setupTestServer(t)
-	_, user := registerUser(ts, "prov-none@example.com", "password12345")
-	scoped := mintScopedToken(t, ts, user, "plume", facile.NewID())
-	require.Equal(t, http.StatusForbidden, ensureSpace(ts, scoped, facile.NewID()).StatusCode)
 }
 
 func TestTokenValidationForProvision(t *testing.T) {
@@ -114,7 +97,9 @@ func TestTokenValidationForProvision(t *testing.T) {
 	resp = doJSON(ts, "POST", "/users/me/api-token", map[string]any{"name": "x", "app": "plume"}, user)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "app alone")
 	resp = doJSON(ts, "POST", "/users/me/api-token", map[string]any{"name": "x", "app": "plume", "provision": true}, user)
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "provision is retired")
+	resp = doJSON(ts, "POST", "/users/me/api-token", map[string]any{"name": "x", "app": "plume", "provision": true, "space_facile_ids": []string{facile.NewID()}}, user)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "provision is refused even with a space list")
 }
 
 func countSpaceObjects(t *testing.T, facileID string) int {

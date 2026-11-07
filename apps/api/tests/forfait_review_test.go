@@ -74,9 +74,7 @@ func TestSessionCannotFindOrCreateSpacesRegistreOwns(t *testing.T) {
 	ts := setupTestServerWith(t, delegatedEnv(), delegatedVerifier{userID: new(int64)})
 	_, token := registered(t, ts, "plan-session-space@example.test")
 
-	assert.Equal(t, http.StatusConflict, ensureSpace(ts, token, "fac_0123456789abcdef01234567").StatusCode)
-	app := mintProvisionToken(t, ts, token, "ardoise")
-	assert.Equal(t, http.StatusCreated, ensureSpace(ts, app, "fac_0123456789abcdef01234567").StatusCode)
+	assert.Contains(t, []int{http.StatusNotFound, http.StatusMethodNotAllowed}, ensureSpace(ts, token, "fac_0123456789abcdef01234567").StatusCode)
 }
 
 func TestQuotaMeterUnderAnOverrideShowsChargedUsage(t *testing.T) {
