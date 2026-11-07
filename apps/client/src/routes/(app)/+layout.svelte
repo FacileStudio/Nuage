@@ -4,7 +4,9 @@
 	import { page } from '$app/state';
 	import { Button, MobileNav, SideBar } from '@facile/muse';
 	import { backend, isAuthError, type QuotaResponse, type Space, type UserProfile } from '$lib/backend';
-	import { setSessionLocale, t } from '$lib/i18n/index.svelte';
+	import { rememberLocale, setSessionLocale, t } from '$lib/i18n/index.svelte';
+	import { theme, type ThemePreference } from '$lib/theme.svelte';
+	import { planName, upgradeHref } from '$lib/plan';
 	import { hasPending, undoLast } from '$lib/undo.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { icons, nuage } from '$lib/icons';
@@ -29,7 +31,6 @@
 	}
 
 	async function refreshQuota() {
-		if (!token) return;
 		try {
 			quota = await backend.getQuota(token);
 		} catch {
@@ -72,6 +73,7 @@
 		get user() { return user; },
 		get space() { return spaceStore.current; },
 		get spaceId() { return spaceStore.id; },
+		get quota() { return quota; },
 		setUser,
 		refreshQuota
 	});
@@ -136,9 +138,33 @@
 	   bar takes the short spelling of the same destinations. */
 	const mobilePages = $derived(navPages.map((item) => ({ ...item, label: item.short })));
 
+	/**
+	 * Clears the browser session. The cookie is the half that matters: an SSO sign-in never wrote a
+	 * bearer token, so clearing local state alone would sign the person straight back in. The
+	 * redirect happens either way, so a failed server call still leaves the app.
+	 */
+	async function signOut() {
+		try {
+			await backend.logout();
+		} catch {}
+		void goto('/login');
+	}
+
+	const upgrade = $derived(upgradeHref(quota));
+	const userMenu = $derived({
+		subscription: upgrade ? { plan: planName(quota), href: upgrade } : null,
+		helpHref: `${page.url.origin}/docs`,
+		onSignOut: signOut,
+		theme: theme.preference,
+		onThemeChange: (next: ThemePreference) => theme.set(next),
+		onLocaleChange: rememberLocale
+	});
+
 	const onSettings = $derived(isActive('/settings'));
 	const identity = $derived(
-		user ? { name: user.name?.trim() || user.email, avatar: user.avatar_url || undefined } : undefined
+		user
+			? { name: user.name?.trim() || user.email, email: user.email, avatar: user.avatar_url || undefined }
+			: undefined
 	);
 	const switcherSpaces = $derived(spaces.map((s) => ({ id: String(s.id), name: s.name })));
 	const activeSpaceId = $derived(spaceStore.id === null ? null : String(spaceStore.id));
@@ -170,6 +196,7 @@
 				user={identity}
 				userHref="/settings"
 				userActive={onSettings}
+				{userMenu}
 			/>
 			{#if quota}
 				<QuotaMeter {quota} {collapsed} />
@@ -182,7 +209,7 @@
 		</main>
 	</div>
 
-	<MobileNav items={mobilePages} user={identity} profileHref="/settings" profileActive={onSettings} />
+	<MobileNav items={mobilePages} user={identity} profileHref="/settings" profileActive={onSettings} {userMenu} />
 {:else if failure}
 	<div class="flex h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
 		<p class="text-fc-sm text-fc-fg-muted">{failure}</p>

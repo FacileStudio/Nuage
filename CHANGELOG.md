@@ -10,6 +10,27 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Changed
+
+- **One user menu and one settings shell** (`@facile/muse` v0.13.0 to v0.14.1). The sidebar user
+  card and the mobile avatar open the muse `UserMenu`: account, settings, subscription (when a
+  plan sets the limit), language, theme, help and sign out. The cog link is gone. Settings use
+  `SettingsLayout` with the canonical order: Profile, Preferences, App data, Nook, API tokens,
+  Subscription, Advanced. Profile is read-only and links to Facile; the name form and the
+  in-settings sign-out are removed.
+- The API tokens section is muse `TokensSection`; the API calls are unchanged (a token is still
+  created with `{name}` and never expires, so the expiry choice in the drawer is not sent). The
+  WebDAV URLs stay in that section. The storage limit and plan source moved into the new
+  Subscription section.
+- `appearance` is now `preferences` and `api` is now `tokens`; the old addresses redirect.
+- A language picked in the menu is stored in the `fc_locale` cookie and wins over the Registre
+  profile locale on the next visit.
+
+### Fixed
+
+- The storage meter and plan data never loaded: `refreshQuota` returned early because the
+  bearer token is empty under cookie sign-in.
+
 ## [0.13.0] - 2026-11-07
 
 ### Changed
