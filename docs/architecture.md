@@ -52,11 +52,10 @@ The middleware stack, in the order `main.go` installs it:
 2. `middleware.RealIP` — reads the **rightmost** `X-Forwarded-For` entry, since the leftmost
    is caller-controlled and would let anyone forge an IP
 3. `middleware.CORS(AllowedOrigins)`
-4. `middleware.SecurityHeaders`
+4. tronc's `SecurityHeaders`: HSTS, an enforced anti-framing policy and a report-only CSP, with the client's inline script hashes and the plan catalogue origin added
 5. `middleware.RequestLogger`
 6. `chimiddleware.Recoverer`
 7. `middleware.RateLimitExcept(100, time.Minute, "/files/upload", "/webdav")`
-8. `middleware.RateLimitPaths(10, time.Minute, "/auth/login", "/auth/register")`
 
 Upload and WebDAV paths are exempt from the general limit because one large transfer issues
 hundreds of sequential chunk requests and would otherwise rate-limit itself.
@@ -78,14 +77,15 @@ link work. `middleware.RequireAdmin` sits on top for admin-only routes.
 
 Three credentials exist:
 
-- **Session tokens** from `POST /auth/login` or `/auth/register`, stored in `sessions`.
+- **Session cookies** from a Registre sign-in (`GET /auth/oidc`), stored in `porte_sessions`.
+  Nobody signs in with a local password: there are no `/auth/login` or `/auth/register` routes.
 - **API tokens** from `POST /users/me/api-token`, stored in `api_tokens`. These are also the
   WebDAV password: `requireBasicAuth` ignores the Basic username entirely and authenticates
   on the password alone.
 - **OIDC**, enabled when `OIDC_ISSUER` is set. `GET /auth/oidc` starts the flow,
   `/auth/oidc/callback` completes it and upserts the user, and `POST /auth/sync-profile`
-  refreshes the profile. `SSO_ONLY=true` removes `/auth/register` and `/auth/login` from the
-  router entirely rather than merely hiding them in the UI.
+  refreshes the profile. The email, name, picture and locale come from Registre at every
+  sign-in, so an account cannot edit its address here.
 - **Delegated JWTs**, enabled when `OIDC_MACHINE_AUDIENCE` is Nuage's client id. Registre
   mints them by token exchange for another suite service acting for a user (`act.sub`), and
   porte maps `sub` to the local account. With `OIDC_SCOPE_PREFIX=nuage`, reads need
@@ -113,7 +113,7 @@ unlink anything outside `STORAGE_DIR/avatars`.
 
 | Table | What it holds |
 |---|---|
-| `users` | Email, name, `password_hash`, `is_admin`, color, avatar fields, OIDC tokens and `profile_synced_at` |
+| `users` | Email, name, `locale`, `is_admin`, color, avatar fields and `profile_synced_at` (`password_hash` is a leftover of the retired password sign-in and is not read) |
 | `sessions` | Session token as primary key, `user_id`, `expires_at` |
 | `api_tokens` | Named long-lived tokens, unique `token`, `user_id` |
 | `spaces`, `space_members` | Shared containers and their membership roles, unique on `(space_id, user_id)` |

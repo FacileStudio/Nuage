@@ -23,7 +23,8 @@ and MinIO are internal Docker services.
 - Enforces per-user storage quotas, with an admin view and recalculation
 - Exposes an incremental sync feed with tombstones so offline clients converge
 - Records an activity log, emits events to Nook, and tees its logs to Journal
-- Email and password accounts plus optional OIDC SSO with an `SSO_ONLY` mode
+- Sign-in through Facile's Registre only: no local passwords, API tokens for the CLI and WebDAV
+- The UI in French, English, Spanish and German
 - Gates every space-scoped endpoint on membership, so a caller-supplied `space_id`
   cannot reach another space
 

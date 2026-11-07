@@ -68,7 +68,7 @@ Nuage/
       internal/                    # shared packages
         activity/                  # activity logging
         authcontext/               # request-scoped auth context
-        authcrypto/                # password hashing
+        authcrypto/                # legacy argon2 helpers (no password sign-in any more)
         database/                  # GORM DB connection
         env/                       # config loading from env vars
         errors/                    # error types
@@ -78,7 +78,7 @@ Nuage/
         nook/                      # webhook (Nook) notifier
         storage/                   # MinIO S3 client wrapper
       modules/                     # feature modules (handler + service + routes)
-        auth/                      # login, register, sessions, OIDC, API tokens
+        auth/                      # porte mount (sessions, OIDC), the UserStore that links Registre sign-ins, token scopes
         files/                     # upload, download, versions, chunked uploads
         trash/                     # soft delete, restore, permanent delete
         sharing/                   # public share links, permissions
@@ -100,7 +100,7 @@ Nuage/
         lib/files/                 # file-browser logic: selection, uploads, dnd, tree
         lib/components/files/      # file-browser views: grid, table, preview, share
         routes/
-          +page.svelte             # landing / register page
+          +page.svelte             # landing (muse LandingHeader and LandingFooter)
           login/                   # login page
           (app)/                   # authenticated layout group
             files/                 # main file browser (grid/list, upload, preview)
@@ -148,7 +148,7 @@ credentials.
 - The single Dockerfile lives at the repo root and its context is the repo root: it builds the client from `apps/client/` and the API from `apps/api/` into one image.
 - Tests are integration tests that need real Postgres and MinIO running. There is no mock layer.
 - The client builds with `adapter-static` and is served by the Go binary, so there is no SvelteKit server and no `BODY_SIZE_LIMIT` to raise: upload size is bounded by the API and Traefik alone.
-- Rate limiting is 600 requests/minute per IP on `/api/*` only, skipped for transfer paths (`middleware.IsTransferPath`: chunk uploads, any `/download`, presigned links), plus a stricter 10/minute on `/api/auth/login` and `/api/auth/register`. SPA assets and WebDAV are never counted: a grid of thumbnails or a PDF read as range requests used to exhaust the old 100/minute budget in one page load. The client IP is taken from the *rightmost* `X-Forwarded-For` entry, since the leftmost is caller-controlled.
+- Rate limiting is 600 requests/minute per IP on `/api/*` only, skipped for transfer paths (`middleware.IsTransferPath`: chunk uploads, any `/download`, presigned links), SPA assets and WebDAV are never counted: a grid of thumbnails or a PDF read as range requests used to exhaust the old 100/minute budget in one page load. The client IP is taken from the *rightmost* `X-Forwarded-For` entry, since the leftmost is caller-controlled.
 - Moving an item to the root sends `folder_id: 0` / `parent_id: 0`; a missing or null value means "unchanged". Use `backend.moveItem`. A folder cannot move into its own subtree (REST and WebDAV), and the target must sit in the item's space.
 - `PRESIGN_SECRET` is required: the API refuses to boot without it, because presigned download links are unauthenticated and forgeable if the signing key is guessable.
 - Sync clients feed the previous response's `server_time` back as `since`. That cursor is intentionally dated slightly in the past, so a small window of changes is redelivered — clients must apply changes idempotently by `id`.
@@ -162,12 +162,10 @@ credentials.
   advisory lock with `FOR UPDATE`, so two instances cannot double-refund. A retention change
   applies to items already in the trash: lowering it purges them on the next hourly run.
   `GET /api/trash` returns `retention_days` and a per-item `expires_at`.
-- `/login` and `/` are the **suite reference implementations** of the shared auth/landing
-  convention (see `~/.mycelium/memory/conventions/facile-auth-screen.md`): raw elements, zero
-  component imports, four class constants that are byte-identical across 16 repos. They are
-  deliberately **not** built from muse — porting them breaks a cross-repo invariant. They still
-  match the theme, because `app.css` aliases their `background`/`border-input` names onto muse
-  tokens.
+- **Sign-in is Registre only.** `/login` is muse `AuthScreen` and every "Sign in with Facile" button is `<SignInWithFacile />`. There are no `/auth/register` or `/auth/login` routes, no password UI and no `SSO_ONLY`: with an issuer configured porte mounts no password route. People keep their API tokens (CLI, daemon, WebDAV). `PATCH /users/me` edits name and colour only; the address is Registre's and refreshes at each sign-in. `auth.UserStore.UpsertFromOIDC` applies porte's linking rules (verified email only, refuse when the account already holds another subject of the issuer).
+- **GDPR erasure.** `internal/erasure` wires `directory.Deletions`: it polls Registre and takes the signed push on `POST /api/registre/deletions` (root router, outside session and CSRF). `ErasePerson` purges personal files and folders (`trash.Service.ErasePersonal`), app folders (`appfolders.Service.DeleteAll`), then in one transaction reassigns space authorship (files, versions, folders, tombstones, upload sessions, activity) to the `deleted-user@nuage.invalid` placeholder, drops shares, quota, charges and the account. The placeholder is hidden from `GET /users`. State lives in `directory_deletion_state`. Idempotent: an unknown subject is a no-op.
+- **i18n.** The UI is in fr, en, es and de through typed rows (`src/lib/i18n/messages/*.ts`, `[en, fr, es, de]`), `t()` from `$lib/i18n/index.svelte` and `provideLocale` in the root layout. The locale comes from the Registre profile (`users.locale`, filled from the `locale` claim), then the `fc_locale` cookie, then the browser. `bun run test` also runs `scripts/check-messages.ts`. API error messages stay English. Dates, sizes and relative times use Intl with the session locale.
+- **No borders.** The owner rule: no `border-*`, `divide-*` or `ring-*` on controls, cards or dividers. Use `bg-fc-field`, `bg-fc-surface` and spacing. Muse components are never restyled locally.
 - **One bucket per space.** A space's files, versions and uploads live in `nuage-space-<facile_id>`; personal files stay in the shared bucket. The `bucket` column on `files` and `file_versions` records where an object lives, and an empty value means the shared bucket. Every write goes through `spacebucket.Open`, and `MigrateBuckets` moves legacy space files at boot. Deleting a space is refused (409) while any file row, trashed ones included, still points at it.
 - **App folders replace app-provisioned spaces.** `modules/appfolders`: tables `registered_apps` (seeded from `NUAGE_APPS` by `appregistry.Sync` at boot, never from a token label), `app_folders` (unique `(user_id, app_id)`) and `app_objects` (unique `(folder_id, key)`, bytes in the shared bucket under `apps/<user>/<app>/<fac_id>`). The only way to act as an app is a delegated Registre JWT (porte SessionID 0) whose `Actor` (act.sub) is an active registered client id: `middleware.RequireAuth` resolves it, puts it in `appregistry.With`, and then allows that JWT on `/app/*` only, and nothing else on `/app/*`. App bytes join personal usage in `quota.usageOf` (`appUsageSQL`), the legacy counter, `RecalculateUsage` and the boot over-plan report. Put lock order: folder `KEY SHARE`, per-key advisory lock, plan lock last; deleting an app's data takes the folder `FOR UPDATE`. `DELETE /app-data/{app}` is consent, refused to delegated JWTs in `managesCredentials` (an unrestricted personal API token still counts as the person). Actors are deny-by-default: a JWT whose actor is neither an active registered app nor in `NUAGE_FULL_ACCESS_ACTORS` (compose default `bulle`) gets 403 on every route (`middleware.actingApp`). WebDAV is the one route outside `RequireAuth`; `auth.AuthenticateRequest` refuses every JWT (SessionID 0) there. The migration skips files whose `origin_app` differs from the space's app and only reads `registered_apps`. The rate limiter still counts `/api/app/` per IP, so a busy app server shares one 600/min budget.
 - **App storage cutover order.** 1. deploy app folders with `NUAGE_APPS` set (and Registre `token_exchange` entries giving Plume and Ardoise audience Nuage with `nuage.read`/`nuage.write`); 2. switch the Plume and Ardoise clients to `/api/app/object` with exchanged tokens; 3. run `nuage-api migrate-app-folders` (dry run), read the report, then `--apply`, rerun until only skips remain; 4. retire `PUT /spaces/by-facile-id` and provisioning for restricted tokens, then remove the emptied spaces. Never run step 3 before step 2: an old client would recreate files in the space.
@@ -185,7 +183,7 @@ credentials.
   auth middleware). `Apply` runs in one transaction: link by `registre_space_id`, else the
   oldest unlinked user-made space with the same `lower(name)`, else create; members resolve
   by porte identity, then email, then a pre-provisioned user plus identity row. Removals only
-  touch members holding an identity under the issuer, so local password accounts stay.
+  touch members holding an identity under the issuer, so accounts that never signed in through Registre stay.
   Provisioned spaces (Plume, Ardoise publishing targets) are never imported or linked. A linked
   space answers 409 to `POST /spaces`, rename, delete, member changes and leave; its
   description, folders and files stay Nuage's.
