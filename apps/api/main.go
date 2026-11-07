@@ -81,7 +81,11 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	store := portepg.New(sqlDB)
+	store, err := newPorteStore(sqlDB)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	resealInBackground(ctx, store, appLogger)
 	users := auth.NewUserStore(db, notifier)
 	cfg := appEnv.Porte()
 
