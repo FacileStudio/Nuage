@@ -4,8 +4,12 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/erasure"
 	"github.com/FacileStudio/Nuage/apps/api/modules/trash"
@@ -138,4 +142,44 @@ func TestDeletionStateSurvivesARestart(t *testing.T) {
 	saved, err = state.Load(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "two", string(saved))
+}
+
+func TestDeletionHandlerWaitsForTheAdvisoryLock(t *testing.T) {
+	f := seedErasure(t)
+	sqlDB, err := f.ts.db.DB()
+	require.NoError(t, err)
+	conn, err := sqlDB.Conn(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.ExecContext(context.Background(), "SELECT pg_advisory_lock(4920)")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	request := httptest.NewRequest(http.MethodPost, directory.DeletionsPath, nil).WithContext(ctx)
+	recorder := httptest.NewRecorder()
+	f.deletions.Handler().ServeHTTP(recorder, request)
+	assert.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+
+	_, err = conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock(4920)")
+	require.NoError(t, err)
+	recorder = httptest.NewRecorder()
+	f.deletions.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, directory.DeletionsPath, nil))
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
+func TestConcurrentErasuresOfOneSubjectLeaveOneDeletedUser(t *testing.T) {
+	f := seedErasure(t)
+	var group sync.WaitGroup
+	for range 4 {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			_ = f.deletions.ErasePerson(context.Background(), testIssuer, "sub-gone@example.com")
+		}()
+	}
+	group.Wait()
+	require.NoError(t, f.deletions.ErasePerson(context.Background(), testIssuer, "sub-gone@example.com"))
+	assert.EqualValues(t, 1, count(t, f.ts, `SELECT count(*) FROM users WHERE email = ?`, schemas.DeletedUserEmail))
+	assert.EqualValues(t, 0, count(t, f.ts, `SELECT count(*) FROM users WHERE id = ?`, f.gone))
 }

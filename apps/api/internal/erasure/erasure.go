@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -59,16 +58,6 @@ func New(cfg Config) *Deletions {
 		Logger:          cfg.Logger,
 	}
 	return d
-}
-
-// Run polls until ctx ends. Start it in exactly one replica.
-func (d *Deletions) Run(ctx context.Context) {
-	d.receiver.Run(ctx)
-}
-
-// Handler verifies and applies Registre's signed user.deleted push.
-func (d *Deletions) Handler() http.Handler {
-	return d.receiver.Handler()
 }
 
 type account struct {
