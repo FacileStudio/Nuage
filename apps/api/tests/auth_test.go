@@ -8,58 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRegister(t *testing.T) {
+func TestNoPasswordRoutesExist(t *testing.T) {
 	ts := setupTestServer(t)
 
-	resp := doJSON(ts, "POST", "/auth/register", map[string]string{
-		"email": "test@example.com", "password": "password12345",
-	}, "")
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-	var result struct {
-		UserID string `json:"user_id"`
-		Token  string `json:"token"`
+	for _, path := range []string{"/auth/register", "/auth/login"} {
+		resp := doJSON(ts, "POST", path, map[string]string{"email": "a@example.com", "password": "password12345"}, "")
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode, path)
 	}
-	parseJSON(resp, &result)
-	assert.NotEmpty(t, result.UserID)
-	assert.NotEmpty(t, result.Token)
-}
-
-func TestRegisterDuplicate(t *testing.T) {
-	ts := setupTestServer(t)
-
-	registerUser(ts, "dupe@example.com", "password12345")
-
-	resp := doJSON(ts, "POST", "/auth/register", map[string]string{
-		"email": "dupe@example.com", "password": "password12345",
-	}, "")
-	assert.Equal(t, http.StatusConflict, resp.StatusCode)
-}
-
-func TestLogin(t *testing.T) {
-	ts := setupTestServer(t)
-	registerUser(ts, "login@example.com", "password12345")
-
-	resp := doJSON(ts, "POST", "/auth/login", map[string]string{
-		"email": "login@example.com", "password": "password12345",
-	}, "")
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var result struct {
-		Token string `json:"token"`
-	}
-	parseJSON(resp, &result)
-	assert.NotEmpty(t, result.Token)
-}
-
-func TestLoginWrongPassword(t *testing.T) {
-	ts := setupTestServer(t)
-	registerUser(ts, "wrong@example.com", "password12345")
-
-	resp := doJSON(ts, "POST", "/auth/login", map[string]string{
-		"email": "wrong@example.com", "password": "wrongpassword",
-	}, "")
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
 func TestUnauthenticatedAccess(t *testing.T) {
@@ -77,5 +32,29 @@ func TestAuthConfig(t *testing.T) {
 
 	var result map[string]bool
 	parseJSON(resp, &result)
-	assert.False(t, result["sso_only"])
+	assert.False(t, result["oidc_enabled"])
+}
+
+func TestProfileEditsNameAndColorOnly(t *testing.T) {
+	ts := setupTestServer(t)
+	_, token := registerUser(ts, "me@example.com", "")
+
+	resp := doJSON(ts, "PATCH", "/users/me", map[string]string{"name": "Camille"}, token)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var me struct {
+		User struct{ Name, Email, Locale string } `json:"user"`
+	}
+	parseJSON(resp, &me)
+	assert.Equal(t, "Camille", me.User.Name)
+	assert.Equal(t, "me@example.com", me.User.Email)
+	assert.Equal(t, "en", me.User.Locale)
+
+	for _, body := range []map[string]string{
+		{"email": "other@example.com"},
+		{"password": "another-long-password"},
+		{"current_password": "x"},
+	} {
+		resp := doJSON(ts, "PATCH", "/users/me", body, token)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "%v", body)
+	}
 }

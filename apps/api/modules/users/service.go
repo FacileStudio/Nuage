@@ -5,7 +5,6 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -35,9 +34,6 @@ type Auth interface {
 	Issue(ctx context.Context, userID int64, label string) (string, porte.Session, error)
 	Sessions() *session.Manager
 	SaveScope(ctx context.Context, sessionID int64, app string, provision bool, spaceFacileIDs []string) error
-	SetPassword(ctx context.Context, userID int64, password string) error
-	ChangePassword(ctx context.Context, w http.ResponseWriter, r *http.Request, userID int64, current, next string) (string, int64, error)
-	VerifyPassword(ctx context.Context, email, password string) (int64, error)
 }
 
 // NewService builds a users Service over the given database connection,
@@ -74,7 +70,8 @@ func (service *Service) listUsers(context context.Context) ([]User, error) {
 	}
 
 	var records []schemas.User
-	if err := service.orm.WithContext(context).Order("name asc, email asc, id asc").Find(&records).Error; err != nil {
+	if err := service.orm.WithContext(context).Where("email <> ?", schemas.DeletedUserEmail).
+		Order("name asc, email asc, id asc").Find(&records).Error; err != nil {
 		return nil, errors.Internal("failed to list users", err)
 	}
 
@@ -86,49 +83,8 @@ func (service *Service) listUsers(context context.Context) ([]User, error) {
 	return users, nil
 }
 
-// verifyPassword confirms the caller knows the account's current password, so a
-// stolen session token alone cannot be escalated into a permanent takeover by
-// moving the address the account signs in with.
-//
-// It is porte that answers, not users.password_hash. That column still holds
-// the hash the migration copied out of it, so comparing against it here would
-// keep saying yes to the *old* password after a change.
-//
-// Only the address needs this. A password change confirms itself inside
-// porte's ChangePassword, so asking here as well would hash argon2 twice for
-// one request.
-func (service *Service) verifyPassword(context context.Context, userID string, candidate string) error {
-	id, err := strconv.ParseInt(userID, 10, 64)
-	if err != nil {
-		return errors.Internal("failed to parse user id", err)
-	}
-
-	var record schemas.User
-	if err := service.orm.WithContext(context).Where("id = ?", id).First(&record).Error; err != nil {
-		if stderrors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.NotFound("user not found")
-		}
-		return errors.Internal("failed to read user", err)
-	}
-
-	if _, err := service.tokens.VerifyPassword(context, record.Email, candidate); err != nil {
-		return errors.Unauthorized("current password is incorrect")
-	}
-	return nil
-}
-
-// updateUser applies a partial profile update for a user.
-//
-// The password is not here. Replacing one has to confirm the current
-// password and rotate the caller's session, which porte does through the
-// response writer, so it happens in the handler layer instead.
-//
-// Neither is the address a credential any more. porte v0.2 keyed a local
-// identity on it, so this method used to read the old address, compare it and
-// chase the key with a raw UPDATE against porte's own table; v0.3 keys on the
-// account id, which does not move, so an address change is one write on this
-// app's own row and nothing else.
-func (service *Service) updateUser(context context.Context, userID string, name *string, email *string, color *string) (*User, error) {
+// updateUser applies a partial profile update for a user: name and colour.
+func (service *Service) updateUser(context context.Context, userID string, name *string, color *string) (*User, error) {
 	id, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return nil, errors.Internal("failed to parse user id", err)
@@ -139,9 +95,6 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 		updates["name"] = *name
 	}
 
-	if email != nil {
-		updates["email"] = *email
-	}
 	if color != nil {
 		updates["color"] = *color
 	}
@@ -151,9 +104,6 @@ func (service *Service) updateUser(context context.Context, userID string, name 
 		Where("id = ?", id).
 		Updates(updates)
 	if result.Error != nil {
-		if stderrors.Is(result.Error, gorm.ErrDuplicatedKey) {
-			return nil, errors.Conflict("email already registered")
-		}
 		return nil, errors.Internal("failed to update user", result.Error)
 	}
 	var record schemas.User
@@ -320,6 +270,7 @@ func mapUser(record schemas.User) *User {
 		AvatarURL:    record.Avatar(),
 		AvatarSource: record.AvatarOrigin(),
 		Color:        record.Color,
+		Locale:       record.Locale,
 		CreatedAt:    record.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }

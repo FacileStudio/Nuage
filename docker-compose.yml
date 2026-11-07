@@ -51,6 +51,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-}
     restart: unless-stopped
     expose:
     - '4000'
@@ -95,7 +97,6 @@ services:
       OIDC_SCOPE_PREFIX: ${OIDC_SCOPE_PREFIX:-}
       NUAGE_APPS: ${NUAGE_APPS:-}
       NUAGE_FULL_ACCESS_ACTORS: ${NUAGE_FULL_ACCESS_ACTORS:-bulle}
-      SSO_ONLY: ${SSO_ONLY:-false}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       MINIO_ENDPOINT: nuage-minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-nuage-minio}
