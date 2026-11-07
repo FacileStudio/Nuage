@@ -2,59 +2,13 @@ import type { Row } from '../row';
 
 /** Settings: API tokens, WebDAV, Nook and the instance. */
 export const tokens = {
-	'settings.tokens.title': ['API tokens', 'Jetons d’API', 'Tokens de API', 'API-Token'],
-	'settings.tokens.description': [
-		'Authenticate the CLI, WebDAV clients and integrations. A token’s value is shown once, at creation.',
-		'Authentifient la CLI, les clients WebDAV et les intégrations. La valeur d’un jeton n’est affichée qu’une fois, à la création.',
-		'Autentican la CLI, los clientes WebDAV y las integraciones. El valor de un token se muestra una sola vez, al crearlo.',
-		'Authentifizieren die CLI, WebDAV-Clients und Integrationen. Der Wert eines Tokens wird nur einmal bei der Erstellung angezeigt.'
-	],
-	'settings.tokens.new': ['New token', 'Nouveau jeton', 'Nuevo token', 'Neues Token'],
-	'settings.tokens.emptyTitle': ['No API tokens yet', 'Aucun jeton d’API', 'Aún no hay tokens de API', 'Noch keine API-Token'],
-	'settings.tokens.emptyText': [
-		'Create one to mount Nuage over WebDAV or drive it from the CLI.',
-		'Créez-en un pour monter Nuage en WebDAV ou le piloter depuis la CLI.',
-		'Crea uno para montar Nuage por WebDAV o manejarlo desde la CLI.',
-		'Erstelle eines, um Nuage per WebDAV einzubinden oder über die CLI zu steuern.'
-	],
-	'settings.tokens.created': ['Created', 'Créé', 'Creado', 'Erstellt'],
 	'settings.tokens.actions': ['Actions', 'Actions', 'Acciones', 'Aktionen'],
-	'settings.tokens.createFailed': [
-		'Could not create that token.',
-		'Impossible de créer ce jeton.',
-		'No se pudo crear ese token.',
-		'Dieses Token konnte nicht erstellt werden.'
-	],
 	'settings.tokens.revoked': [
 		'Revoked “{name}”.',
 		'« {name} » révoqué.',
 		'«{name}» revocado.',
 		'„{name}“ widerrufen.'
 	],
-	'settings.tokens.revokeTitle': ['Revoke this token?', 'Révoquer ce jeton ?', '¿Revocar este token?', 'Dieses Token widerrufen?'],
-	'settings.tokens.revokeText': [
-		'Anything still authenticating with “{name}” starts failing immediately, and it cannot be un-revoked.',
-		'Tout ce qui s’authentifie encore avec « {name} » échoue aussitôt, et la révocation est définitive.',
-		'Todo lo que siga autenticándose con «{name}» empieza a fallar de inmediato, y no se puede deshacer.',
-		'Alles, was sich noch mit „{name}“ authentifiziert, schlägt sofort fehl, und das Widerrufen lässt sich nicht rückgängig machen.'
-	],
-	'settings.tokens.drawerTitle': ['New API token', 'Nouveau jeton d’API', 'Nuevo token de API', 'Neues API-Token'],
-	'settings.tokens.copyTitle': ['Copy it now', 'Copiez-le maintenant', 'Cópialo ahora', 'Jetzt kopieren'],
-	'settings.tokens.copyText': [
-		'This is the only time the token is shown. If you lose it, revoke it and make another.',
-		'Le jeton ne s’affiche qu’une seule fois. Si vous le perdez, révoquez-le et créez-en un autre.',
-		'Esta es la única vez que se muestra el token. Si lo pierdes, revócalo y crea otro.',
-		'Das Token wird nur dieses eine Mal angezeigt. Geht es verloren, widerrufe es und erstelle ein neues.'
-	],
-	'settings.tokens.nameHelper': [
-		'Where you intend to use it — “MacBook Finder”, “backup cron”.',
-		'Où vous comptez l’utiliser : « Finder du MacBook », « cron de sauvegarde ».',
-		'Dónde piensas usarlo: «Finder del MacBook», «cron de copias».',
-		'Wo du es verwenden willst: „MacBook-Finder“, „Backup-Cron“.'
-	],
-	'settings.tokens.namePlaceholder': ['MacBook Finder', 'Finder du MacBook', 'Finder del MacBook', 'MacBook-Finder'],
-	'settings.tokens.generate': ['Generate token', 'Générer le jeton', 'Generar token', 'Token erzeugen'],
-	'settings.tokens.generating': ['Generating…', 'Génération…', 'Generando…', 'Wird erzeugt…'],
 	'settings.webdav.title': ['WebDAV', 'WebDAV', 'WebDAV', 'WebDAV'],
 	'settings.webdav.description': [
 		'Mount Nuage in Finder or any WebDAV client.',

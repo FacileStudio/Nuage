@@ -487,17 +487,6 @@ export const backend = {
 		}, token);
 	},
 
-	/*
-	 * Name and colour only. The address belongs to the Facile account and refreshes at each
-	 * sign-in, and the API rejects any other field.
-	 */
-	updateProfile(token: string, data: { name?: string; color?: string }) {
-		return apiFetch<MeResponse>('/users/me', {
-			method: 'PATCH',
-			body: JSON.stringify(data)
-		}, token);
-	},
-
 	getApiToken(token: string) {
 		return apiFetch<{ tokens: ApiToken[] }>('/users/me/api-token', {}, token);
 	},
