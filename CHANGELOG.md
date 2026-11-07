@@ -10,6 +10,56 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Changed
+
+- **Sign-in goes through Registre only.** The local register and login routes, the password
+  and email-change paths and the `SSO_ONLY`/`AllowRegistration` wiring are gone. `/login` is
+  muse `AuthScreen`, and every sign-in button, on the landing page, header and login screen, is
+  `SignInWithFacile`. The landing page uses `LandingHeader` and `LandingFooter`. `/auth/register`
+  and `/auth/login` answer 404. API tokens (CLI, daemon, WebDAV) and delegated JWTs are
+  untouched, and the share links stay public.
+- **The email address is Registre's.** `PATCH /users/me` takes `name` and `color` only and
+  answers 400 to any other field. porte v0.10.0 made `Kit.Verify` refuse under OIDC, which ended
+  the old "confirm with the current password" email change; the address now refreshes from the
+  `email` claim at each sign-in.
+- **Account linking follows porte v0.10.0.** A sign-in links to an existing account only by a
+  verified email, and is refused when the account already holds another subject of the same
+  issuer. `users.locale` stores the `locale` claim.
+- Libraries: porte v0.7.0 to v0.12.1, `porte/directory` v0.2.1 to v0.3.0, tronc v0.16.0 to
+  v0.17.1, `@facile/muse` v0.11.0 to v0.13.0 (borderless, custom `Select`). The local security
+  headers are replaced by tronc's: HSTS, an enforced anti-framing policy and a report-only CSP
+  carrying the client's inline script hashes and the plan catalogue origin. The CSP stays
+  report-only. The client `/docs` route (Scalar from jsDelivr, a stale copy of the server's
+  `/docs`) is removed; `/docs` is served by tronc's `apiref` with its own CSP.
+- `APP_VERSION` is a build argument (compose passes it through) and becomes the version served
+  at `/version` and `/api/version`; without it the commit stamp is used.
+- No borders: the file browser, breadcrumbs, selection toggles, viewers and drop overlay use
+  fills instead.
+
+### Added
+
+- **The UI in French, English, Spanish and German**, from the Registre profile locale, the
+  `fc_locale` cookie or the browser. Dates, sizes and relative times follow the locale. The
+  Spanish and German texts need native review. API error messages stay English.
+- **GDPR deletion.** Nuage polls Registre's deletion list and accepts its signed push on
+  `POST /api/registre/deletions`. A deleted person loses their personal files, folders, app
+  folders, tokens, quota and account. Space files and folders they authored stay, attributed to a
+  hidden "Deleted user" placeholder, and their public share links are revoked. Replays are
+  no-ops.
+- `ci.yml`: gofmt, vet, build, tests against Postgres and MinIO, client check, tests and build,
+  and filet.
+
+### Migrations
+
+All run at boot and are idempotent: `users.locale` (AutoMigrate), `porte_login_codes.provider`
+and `.subject`, and the `directory_deletion_state` table.
+
+### Removed
+
+- `POST /api/auth/register`, `POST /api/auth/login`, the per-IP limit on them, the password
+  fields of `PATCH /users/me` and `SSO_ONLY`. A client that signed in with the account password
+  must use an API token.
+
 ## [0.12.1] - 2026-11-06
 
 ### Added

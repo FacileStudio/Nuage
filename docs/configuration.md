@@ -47,7 +47,6 @@ up on `minioadmin` — that is local-dev behavior, not a supported deployment.
 | `OIDC_SUCCESS_URL` | with issuer | — | Where to send the browser after a successful login |
 | `OIDC_MACHINE_AUDIENCE` | no | — | Nuage's own client id. Arms the bearer path for delegated JWTs Registre mints for another suite service, such as Bulle acting for a signed-in user |
 | `OIDC_SCOPE_PREFIX` | no | — | Set to `nuage` to gate those JWTs: GET, HEAD and OPTIONS need `nuage.read` or `nuage.write`, every other method needs `nuage.write`. Requires `OIDC_MACHINE_AUDIENCE` |
-| `SSO_ONLY` | no | `false` | Only the exact string `true` enables it. Removes `/auth/register` and `/auth/login` from the router |
 
 Setting `OIDC_ISSUER` while leaving any of the four companions empty exits 1 with an
 explicit message. The suite's provider is Authentik at `porte.facile.studio`, with a

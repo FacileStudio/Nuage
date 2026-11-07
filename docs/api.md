@@ -46,18 +46,23 @@ only `/api/*`.
 | Method | Path | Auth |
 |---|---|---|
 | GET | `/auth/config` | public |
-| POST | `/auth/register` | public |
-| POST | `/auth/login` | public |
 | POST | `/auth/logout` | session |
 | GET | `/auth/oidc` | public |
 | GET | `/auth/oidc/callback` | public |
 | POST | `/auth/sync-profile` | session |
 
-`GET /auth/config` returns `{"sso_only":bool,"oidc_enabled":bool}` and drives which options
-the login screen offers.
+`GET /auth/config` returns `{"sso_only":bool,"oidc_enabled":bool}`.
 
-`/auth/register` and `/auth/login` are **not registered at all** when `SSO_ONLY=true`, so
-they answer `404` rather than a policy error. The three OIDC routes are registered only when
+Nuage has no password sign-in: `/auth/register` and `/auth/login` do not exist and answer `404`.
+`PATCH /users/me` accepts `name` and `color` only; any other field, `email` included, answers
+`400`, because the address comes from the Facile account at each sign-in.
+
+`POST /api/registre/deletions` is Registre's signed `user.deleted` notice. It is mounted on the
+root router outside the session and CSRF middleware, verifies the notice's signature itself, and
+erases the person's personal files, folders, app folders and account. Space content they authored
+stays and is shown as written by "Deleted user".
+
+The three OIDC routes are registered only when
 `OIDC_ISSUER` is set and the provider was reached successfully at startup; a discovery
 failure is logged and leaves them unregistered.
 
@@ -317,8 +322,7 @@ with the status the error type maps to: `400` invalid, `401` unauthorized, `403`
 
 | Scope | Limit |
 |---|---|
-| Everything except `/files/upload` and `/webdav` | 100/min per IP |
-| `/auth/login`, `/auth/register` | 10/min per IP |
+| `/api/*` except transfer paths and `/webdav` | 600/min per IP |
 
 The client IP comes from the **rightmost** `X-Forwarded-For` entry, because the leftmost is
 caller-controlled and would otherwise let anyone spoof their way past a limit.

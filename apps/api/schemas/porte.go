@@ -118,15 +118,6 @@ CREATE TABLE IF NOT EXISTS porte_login_codes (
 	consumed_at timestamptz
 );
 ALTER TABLE porte_login_codes ADD COLUMN IF NOT EXISTS consumed_at timestamptz;
-CREATE TABLE IF NOT EXISTS porte_magic_links (
-	token_hash  text PRIMARY KEY,
-	user_id     bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	ip          text NOT NULL DEFAULT '',
-	created_at  timestamptz NOT NULL,
-	expires_at  timestamptz NOT NULL,
-	consumed_at timestamptz
-);
-CREATE INDEX IF NOT EXISTS porte_magic_links_user_idx ON porte_magic_links (user_id, created_at);
 ALTER TABLE porte_login_codes ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT '',
 	ADD COLUMN IF NOT EXISTS subject text NOT NULL DEFAULT '';
 `

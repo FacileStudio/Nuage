@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba
-	github.com/FacileStudio/porte v0.12.0
+	github.com/FacileStudio/porte v0.12.1
 	github.com/FacileStudio/porte/directory v0.3.0
 	github.com/FacileStudio/porte/forfait v0.1.1
 	github.com/FacileStudio/tronc v0.17.1

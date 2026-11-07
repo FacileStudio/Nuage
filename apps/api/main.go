@@ -198,20 +198,25 @@ func runMaintenance(ctx context.Context, db *gorm.DB, trashService *trash.Servic
 	}
 }
 
+// catalogOrigin is where muse's PricingPlans reads the plan catalogue from.
+const catalogOrigin = "https://api-ardoise.facile.studio"
+
 // securityConfig extends tronc's default security headers for the built client:
 // the SvelteKit bootstrap and app.html each carry an inline script, and
-// script-src 'self' would block both once the policy is enforced. The policy
-// stays report-only until a release shows no violation in the console.
+// script-src 'self' would block both once the policy is enforced. The landing
+// page's pricing section fetches the plan catalogue cross-origin, so its origin
+// joins connect-src. The policy stays report-only until a release shows no
+// violation in the console.
 func securityConfig(clientDir string, appLogger *slog.Logger) troncmiddleware.SecurityConfig {
-	if !spa.Available(clientDir) {
-		return troncmiddleware.SecurityConfig{}
+	sources := map[string][]string{"connect-src": {catalogOrigin}}
+	if spa.Available(clientDir) {
+		hashes, err := spa.InlineScriptHashes(clientDir)
+		if err != nil {
+			appLogger.Error("failed to hash the client's inline scripts", slog.Any("error", err))
+		}
+		sources["script-src"] = hashes
 	}
-	hashes, err := spa.InlineScriptHashes(clientDir)
-	if err != nil {
-		appLogger.Error("failed to hash the client's inline scripts", slog.Any("error", err))
-		return troncmiddleware.SecurityConfig{}
-	}
-	return troncmiddleware.SecurityConfig{CSPSources: map[string][]string{"script-src": hashes}}
+	return troncmiddleware.SecurityConfig{CSPSources: sources}
 }
 
 // registerVersionRoute answers /version and /api/version with the version of

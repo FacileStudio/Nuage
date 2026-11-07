@@ -123,8 +123,8 @@ TypeScript, and every API call goes through `src/lib/backend.ts`.
 - **One Dockerfile, one build context.** The root `Dockerfile` builds the client from
   `apps/client` and the API from `apps/api` into one image, and its context is the repo
   root, so the root `.dockerignore` is the only one — and it must not exclude either app.
-- **Rate limits during manual testing.** 100 requests per minute per IP overall, and 10 per
-  minute on `/auth/login` and `/auth/register`. Upload and WebDAV paths are exempt.
+- **Rate limits during manual testing.** 600 requests per minute per IP on `/api/*`. Upload, download
+  and WebDAV paths are exempt.
 - **The sync cursor redelivers.** `server_time` is dated slightly in the past on purpose, so
   a client must apply changes idempotently by `id`. A test that asserts an exact change
   count over consecutive polls will flake.

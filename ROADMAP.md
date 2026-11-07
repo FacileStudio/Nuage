@@ -13,7 +13,7 @@ This roadmap is organized in phases. Each phase builds on the previous one.
 - Grid and list views with image/PDF/video/audio preview
 - Sharing (public links with optional expiration)
 - Trash with restore and permanent delete
-- OIDC/SSO + email/password auth
+- OIDC/SSO through Registre (the local email/password auth was retired)
 - API tokens for programmatic access
 - Nook webhooks (file/folder/share events, HMAC signing)
 - Sync endpoints (full state + incremental changes)
