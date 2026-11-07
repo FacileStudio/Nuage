@@ -8,6 +8,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While on
 Releases are tagged `v*` on `main`. The API deploys from `main` on push, so a
 tag records what shipped rather than triggering the deploy.
 
+## [Unreleased]
+
+### Changed
+
+- Client: `@facile/muse` v0.14.2 to v0.14.4. The language chosen in the user menu now re-renders the whole UI without a reload, and the menu clamps itself at the screen edge.
+
 ## [0.14.1] - 2026-11-07
 
 ### Security
