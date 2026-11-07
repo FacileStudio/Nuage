@@ -196,7 +196,7 @@
 			{#snippet actions()}
 				{#if linked}
 					<Button
-						variant="outline"
+						variant="secondary"
 						href={registreSpaceUrl(space?.registre_space_id)}
 						target="_blank"
 						rel="noopener noreferrer"

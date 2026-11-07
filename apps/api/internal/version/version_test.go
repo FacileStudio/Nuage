@@ -1,7 +1,9 @@
 package version
 
 import (
+	"os"
 	"runtime/debug"
+	"strings"
 	"testing"
 )
 
@@ -37,5 +39,18 @@ func TestAStampOutranksTheToolchain(t *testing.T) {
 	t.Cleanup(func() { stamp = "" })
 	if got := String(); got != "0123456789ab" {
 		t.Fatalf("String = %q, want the linked-in stamp", got)
+	}
+}
+
+func TestTheLinkedStampMatchesTheVersionFile(t *testing.T) {
+	if stamp == "" {
+		t.Skip("built without -X stamp; scripts/check.sh links it from VERSION")
+	}
+	raw, err := os.ReadFile("../../../../VERSION")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "v" + strings.TrimSpace(string(raw)); String() != want {
+		t.Fatalf("String = %q, VERSION file says %q", String(), want)
 	}
 }

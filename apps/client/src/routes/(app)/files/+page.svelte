@@ -516,14 +516,14 @@
 				<span class="text-fc-sm text-fc-fg-muted">{t('files.selected', { count: selection.count })}</span>
 				<div class="flex-1"></div>
 				<Button
-					variant="outline"
+					variant="secondary"
 					class="[@media(pointer:coarse)]:h-11"
 					onclick={() => (selection.all ? selection.clear() : selection.selectAll())}
 				>
 					{selection.all ? t('files.deselectAll') : t('files.selectAll')}
 				</Button>
 				<Button
-					variant="outline"
+					variant="secondary"
 					class="[@media(pointer:coarse)]:h-11"
 					icon={nuage.move}
 					disabled={selection.count === 0}
@@ -542,7 +542,7 @@
 				</Button>
 			{:else}
 				<Button icon={icons.upload} class="[@media(pointer:coarse)]:h-11" onclick={() => fileInput?.click()}>{t('files.upload')}</Button>
-				<Button variant="outline" icon={nuage.newFolder} class="[@media(pointer:coarse)]:h-11" onclick={() => (newFolderOpen = true)}>
+				<Button variant="secondary" icon={nuage.newFolder} class="[@media(pointer:coarse)]:h-11" onclick={() => (newFolderOpen = true)}>
 					{t('files.newFolder')}
 				</Button>
 				<Button variant="ghost" icon={icons.check} class="[@media(pointer:coarse)]:h-11" onclick={() => selection.enter()}>{t('files.select')}</Button>

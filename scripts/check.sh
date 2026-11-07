@@ -69,6 +69,7 @@ for dir in $GO_MODULES; do
 
     "$GO" vet ./... || s=1
     "$GO" test ./... || s=1
+    "$GO" test -count=1 -run TestTheLinkedStampMatchesTheVersionFile -ldflags "-X github.com/FacileStudio/Nuage/apps/api/internal/version.stamp=v$(tr -d '[:space:]' < ../../VERSION)" ./internal/version || s=1
     exit "$s"
   ) || status=1
 done

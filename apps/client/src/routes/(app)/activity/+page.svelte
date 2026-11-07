@@ -193,7 +193,7 @@
 			{#if hasMore}
 				<div class="flex justify-center">
 					<Button
-						variant="outline"
+						variant="secondary"
 						icon={icons.chevronDown}
 						disabled={loadingMore}
 						onclick={loadMore}

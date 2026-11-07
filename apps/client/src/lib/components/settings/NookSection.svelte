@@ -38,7 +38,7 @@
 				{settings.saving ? t('common.saving') : t('common.save')}
 			</Button>
 			<Button
-				variant="outline"
+				variant="secondary"
 				icon={icons.bolt}
 				disabled={settings.testing || !settings.nookWebhookUrl}
 				onclick={() => settings.testNook()}

@@ -1,7 +1,6 @@
 // Package version reports the build's own version. The container build stamps
-// the commit it was built from via -ldflags; everything else falls back to the
-// stamp the toolchain records, because a literal in the source drifts on the
-// first release nobody remembers to bump it for.
+// the release from the VERSION file via -ldflags; everything else falls back to
+// the stamp the toolchain records.
 package version
 
 import "runtime/debug"
@@ -10,9 +9,9 @@ import "runtime/debug"
 // land here: they record no VCS settings and call the main module "(devel)".
 const unknown = "dev"
 
-// stamp is injected at link time (-X .../internal/version.stamp=<commit>). The
-// image build sets it from the repository it was built out of, so a running
-// container can name the revision it is serving.
+// stamp is injected at link time (-X .../internal/version.stamp=<version>). The
+// image build sets it to v plus the VERSION file, so a running container names
+// the release it was built from.
 var stamp = ""
 
 // String returns the version of this build: the stamp when one was linked in,

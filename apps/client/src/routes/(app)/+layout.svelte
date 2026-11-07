@@ -213,6 +213,6 @@
 {:else if failure}
 	<div class="flex h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
 		<p class="text-fc-sm text-fc-fg-muted">{failure}</p>
-		<Button variant="outline" onclick={() => location.reload()}>{t('common.retry')}</Button>
+		<Button variant="secondary" onclick={() => location.reload()}>{t('common.retry')}</Button>
 	</div>
 {/if}
