@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-07
+
 ### Changed
 
 - **One user menu and one settings shell** (`@facile/muse` v0.13.0 to v0.14.1). The sidebar user
