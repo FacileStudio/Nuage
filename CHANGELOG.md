@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-07
+
 ### Removed
 
 - **Breaking:** `PUT /api/spaces/by-facile-id/{facile_id}` and the find-or-create behind it. Restricted tokens can no longer create spaces, and the route is no longer on their allowlist. Spaces come from `POST /api/spaces` or Registre.
