@@ -6,13 +6,6 @@ type CreateSpaceRequest struct {
 	Description string `json:"description"`
 }
 
-// EnsureSpaceRequest is the body used to find or create a space by facile_id.
-// It is applied only when the space does not exist yet.
-type EnsureSpaceRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
 // UpdateSpaceRequest is the body used to update a space.
 type UpdateSpaceRequest struct {
 	Name        *string `json:"name"`

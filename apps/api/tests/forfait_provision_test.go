@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte/directory"
 
@@ -51,16 +50,16 @@ func TestPlanProvisionedSpacesShareTheCreatorsPersonalPlan(t *testing.T) {
 func TestPlanStrangerCannotChargeSomeoneElse(t *testing.T) {
 	e := newPlanEnv(t, "plan-victim@example.com")
 	victimApp := mintProvisionToken(t, e.ts, e.token, "ardoise")
-	victimSpace := ensureSpace(e.ts, victimApp, facile.NewID())
-	require.Equal(t, http.StatusCreated, victimSpace.StatusCode)
-	var space provisioned
-	parseJSON(victimSpace, &space)
+	victimFacileID, victimSpaceID := provisionSpace(t, e.ts, victimApp)
+	space := struct {
+		ID       int64
+		FacileID string
+	}{victimSpaceID, victimFacileID}
 
 	_, strangerToken := registerUser(e.ts, "plan-stranger@example.com", "password12345")
 	strangerApp := mintProvisionToken(t, e.ts, strangerToken, "ardoise")
 	e.enforce(t, 1, "1", "")
 
-	assert.Equal(t, http.StatusNotFound, ensureSpace(e.ts, strangerApp, space.FacileID).StatusCode)
 	assert.NotEqual(t, http.StatusCreated, uploadFileToSpace(e.ts, strangerApp, "x.pdf", "stranger bytes", space.ID).StatusCode)
 	assert.NotEqual(t, http.StatusCreated, uploadFileToSpace(e.ts, strangerToken, "y.pdf", "stranger bytes", space.ID).StatusCode)
 

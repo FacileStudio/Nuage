@@ -33,7 +33,7 @@ type Service struct {
 type Auth interface {
 	Issue(ctx context.Context, userID int64, label string) (string, porte.Session, error)
 	Sessions() *session.Manager
-	SaveScope(ctx context.Context, sessionID int64, app string, provision bool, spaceFacileIDs []string) error
+	SaveScope(ctx context.Context, sessionID int64, app string, spaceFacileIDs []string) error
 }
 
 // NewService builds a users Service over the given database connection,
@@ -289,13 +289,16 @@ func (service *Service) createApiToken(ctx context.Context, userID string, req C
 	if err != nil {
 		return "", nil, errors.Internal("failed to parse user id", err)
 	}
-	restricted := req.App != "" || len(req.SpaceFacileIDs) > 0 || req.Provision
+	if req.Provision {
+		return "", nil, errors.Invalid("provision is retired: name the spaces in space_facile_ids")
+	}
+	restricted := req.App != "" || len(req.SpaceFacileIDs) > 0
 	if restricted {
 		if req.App == "" {
 			return "", nil, errors.Invalid("app is required for a restricted token")
 		}
-		if len(req.SpaceFacileIDs) == 0 && !req.Provision {
-			return "", nil, errors.Invalid("a restricted token needs space_facile_ids or provision")
+		if len(req.SpaceFacileIDs) == 0 {
+			return "", nil, errors.Invalid("a restricted token needs space_facile_ids")
 		}
 		if !tokenscope.ValidApp(req.App) {
 			return "", nil, errors.Invalid("app must be 1 to 32 characters of a-z, 0-9 and hyphen")
@@ -315,7 +318,7 @@ func (service *Service) createApiToken(ctx context.Context, userID string, req C
 		return "", nil, err
 	}
 	if restricted {
-		if err := service.tokens.SaveScope(ctx, issued.ID, req.App, req.Provision, req.SpaceFacileIDs); err != nil {
+		if err := service.tokens.SaveScope(ctx, issued.ID, req.App, req.SpaceFacileIDs); err != nil {
 			_ = service.tokens.Sessions().Revoke(ctx, id, issued.ID)
 			return "", nil, err
 		}
