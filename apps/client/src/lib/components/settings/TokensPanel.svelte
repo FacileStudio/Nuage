@@ -30,7 +30,7 @@
 		}
 	}
 
-	async function createToken(draft: TokenDraft): Promise<string> {
+	async function createToken(draft: Omit<TokenDraft, 'days'>): Promise<string> {
 		const res = await backend.createApiToken(token, { name: draft.name });
 		await loadApiTokens();
 		return res.token ?? '';
@@ -43,7 +43,7 @@
 	}
 </script>
 
-<TokensSection tokens={items} onCreate={createToken} onRevoke={revokeToken}>
+<TokensSection tokens={items} expiry={false} lastUsed={false} onCreate={createToken} onRevoke={revokeToken}>
 	<SettingsSection title={t('settings.webdav.title')} description={t('settings.webdav.description')}>
 		<SettingsRow label={t('settings.webdav.personal')} description={t('settings.webdav.personalText')} stacked>
 			<SecretField value={`${page.url.origin}/webdav`} sensitive={false} />
