@@ -11,6 +11,11 @@ permissions:
 jobs:
   api:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
     defaults:
       run:
         working-directory: apps/api
@@ -48,7 +53,7 @@ jobs:
         run: |
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=nuage-minio -e MINIO_ROOT_PASSWORD=nuage-internal-storage \
-            minio/minio server /data
+            pgsty/minio:RELEASE.2026-06-18T00-00-00Z server /data
           for _ in $(seq 1 30); do
             curl -fs http://127.0.0.1:9000/minio/health/live && exit 0
             sleep 1
@@ -65,8 +70,14 @@ jobs:
       - name: build
         run: go build -o /dev/null .
 
-      - name: tests
-        run: go test -count=1 -timeout 20m ./...
+      - name: unit tests
+        if: matrix.shard == 0
+        run: go test -p 1 -count=1 -timeout 10m $(go list ./... | grep -v '/tests$')
+
+      - name: integration tests (shard ${{ matrix.shard }} of 3)
+        run: |
+          names=$(go test -list '^Test' ./tests | grep '^Test' | awk -v shard=${{ matrix.shard }} 'NR % 3 == shard' | paste -sd'|')
+          go test -p 1 -count=1 -timeout 25m -run "^(${names})\$" ./tests
 
   client:
     runs-on: ubuntu-latest
