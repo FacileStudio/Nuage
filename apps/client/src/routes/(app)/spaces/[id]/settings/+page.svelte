@@ -18,6 +18,7 @@
 	import { backend, type Space } from '$lib/backend';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { icons } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const app = getContext<{ token: string }>('app');
@@ -54,9 +55,9 @@
 				description: description.trim()
 			});
 			if (spaceStore.current?.id === spaceId) spaceStore.set(space);
-			toast.success('Space updated.');
+			toast.success(t('spaceSettings.updated'));
 		} catch (e) {
-			toast.danger(e instanceof Error && e.message ? e.message : 'Could not save that.');
+			toast.danger(e instanceof Error && e.message ? e.message : t('spaceSettings.saveFailed'));
 		}
 		saving = false;
 	}
@@ -65,11 +66,11 @@
 		try {
 			await backend.deleteSpace(app.token, spaceId);
 		} catch (e) {
-			toast.danger(e instanceof Error && e.message ? e.message : 'Could not delete that space.');
+			toast.danger(e instanceof Error && e.message ? e.message : t('spaceSettings.deleteFailed'));
 			throw e;
 		}
 		if (spaceStore.current?.id === spaceId) spaceStore.clear();
-		toast.success('Space deleted.');
+		toast.success(t('spaceSettings.deleted'));
 		goto('/spaces');
 	}
 
@@ -78,7 +79,7 @@
 </script>
 
 <svelte:head>
-	<title>Settings — {space?.name ?? 'Space'} — Nuage</title>
+	<title>{t('spaceSettings.title', { name: space?.name ?? t('space.fallbackName') })}</title>
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-6 md:px-8">
@@ -90,9 +91,9 @@
 			icon={icons.chevronLeft}
 			class="-ml-3 self-start"
 		>
-			{space?.name ?? 'Space'}
+			{space?.name ?? t('space.fallbackName')}
 		</Button>
-		<PageHeader title="Space settings" />
+		<PageHeader title={t('spaceSettings.heading')} />
 	</div>
 
 	{#if loading}
@@ -100,39 +101,35 @@
 	{:else if !space}
 		<EmptyState
 			icon={icons.space}
-			title="Space not found"
-			description="It may have been deleted, or you may no longer be a member."
+			title={t('space.notFound')}
+			description={t('space.notFoundText')}
 		>
-			<Button href="/spaces" icon={icons.chevronLeft}>Back to spaces</Button>
+			<Button href="/spaces" icon={icons.chevronLeft}>{t('space.backToSpaces')}</Button>
 		</EmptyState>
 	{:else}
-		<SettingsSection title="General" description="How this space is labelled everywhere it appears.">
-			<SettingsRow label="Name" stacked>
-				<Field helper={linked ? 'Renamed in Registre, for every Facile app at once.' : undefined}>
-					<Input bind:value={name} placeholder="Design team" disabled={linked} />
+		<SettingsSection title={t('spaceSettings.general')} description={t('spaceSettings.generalText')}>
+			<SettingsRow label={t('common.name')} stacked>
+				<Field helper={linked ? t('spaceSettings.renameInRegistre') : undefined}>
+					<Input bind:value={name} placeholder={t('spaceSettings.namePlaceholder')} disabled={linked} />
 				</Field>
 			</SettingsRow>
-			<SettingsRow label="Description" stacked>
+			<SettingsRow label={t('common.description')} stacked>
 				<Field>
-					<Textarea bind:value={description} rows={3} placeholder="What belongs in here." />
+					<Textarea bind:value={description} rows={3} placeholder={t('spaceSettings.descriptionPlaceholder')} />
 				</Field>
 			</SettingsRow>
 			<SettingsRow>
 				<Button icon={icons.check} disabled={saving} onclick={saveSettings}>
-					{saving ? 'Saving…' : 'Save changes'}
+					{saving ? t('common.saving') : t('spaceSettings.save')}
 				</Button>
 			</SettingsRow>
 		</SettingsSection>
 
 		<SettingsSection
 			title="WebDAV"
-			description="Mount this space on its own in Finder or any WebDAV client."
+			description={t('spaceSettings.webdavText')}
 		>
-			<SettingsRow
-				label="Mount URL"
-				description="Sign in with your email and an API token as the password."
-				stacked
-			>
+			<SettingsRow label={t('spaceSettings.mountUrl')} description={t('settings.webdav.personalText')} stacked>
 				<SecretField value={`${page.url.origin}/webdav/spaces/${spaceId}`} sensitive={false} />
 			</SettingsRow>
 		</SettingsSection>
@@ -141,15 +138,12 @@
 			<!-- Danger zone sits last and never gets a heading of its own above the fold: a
 			     destructive action should cost a scroll (CHARTE §14). -->
 			<SettingsSection
-				title="Danger zone"
-				description="Deleting the space removes every member. Its files and folders survive, but they stop being scoped to a space and only the uploader keeps them."
+				title={t('spaceSettings.danger')}
+				description={t('spaceSettings.dangerText')}
 			>
-				<SettingsRow
-					label="Delete this space"
-					description="There is no undo, and the name is not reserved afterwards."
-				>
+				<SettingsRow label={t('spaceSettings.deleteThis')} description={t('spaceSettings.deleteThisText')}>
 					<Button variant="danger" icon={icons.remove} onclick={() => (deleteOpen = true)}>
-						Delete space
+						{t('spaceSettings.delete')}
 					</Button>
 				</SettingsRow>
 			</SettingsSection>
@@ -159,9 +153,9 @@
 
 <ConfirmModal
 	bind:open={deleteOpen}
-	title="Delete “{space?.name ?? 'this space'}”?"
-	description="Every member loses access at once. The files inside stop being shared and fall back to their uploader. This cannot be undone."
-	confirmLabel="Delete space"
+	title={t('spaceSettings.deleteTitle', { name: space?.name ?? t('space.leaveFallback') })}
+	description={t('spaceSettings.deleteText')}
+	confirmLabel={t('spaceSettings.delete')}
 	tone="danger"
 	onConfirm={confirmDelete}
 />

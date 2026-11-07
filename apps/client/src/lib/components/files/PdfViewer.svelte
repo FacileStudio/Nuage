@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { Spinner } from '@facile/muse';
 	import { icons, nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 	import { openPdf, type PdfSession } from '$lib/files/pdf';
 	import { pinch } from '$lib/files/pinch';
 	import './pdf-viewer.css';
@@ -105,18 +106,18 @@
 <div class="flex h-full w-full flex-col overflow-hidden rounded-fc-lg bg-fc-surface" onkeydown={onKeydown}>
 	<div class="flex flex-wrap items-center gap-1 bg-fc-component px-2 py-1.5 text-fc-fg">
 		<div class="flex items-center gap-1 text-fc-sm">
-			<button type="button" class="viewer-tool" aria-label="Previous page" disabled={pageNum <= 1} onclick={() => goTo(pageNum - 1)}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.prevPage')} disabled={pageNum <= 1} onclick={() => goTo(pageNum - 1)}>
 				<iconify-icon icon={nuage.previous} width="18" height="18" class="block"></iconify-icon>
 			</button>
 			<input
 				bind:value={pageInput}
 				onchange={() => goTo(Number(pageInput))}
 				inputmode="numeric"
-				aria-label="Page number"
-				class="h-8 w-12 rounded-fc-sm [@media(pointer:coarse)]:h-11 border border-fc-border bg-fc-bg text-center text-fc-sm tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+				aria-label={t('viewer.pageNumber')}
+				class="h-8 w-12 rounded-fc-sm [@media(pointer:coarse)]:h-11 bg-fc-field text-center text-fc-sm tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 			/>
 			<span class="text-fc-fg-muted tabular-nums">/ {totalPages || '–'}</span>
-			<button type="button" class="viewer-tool" aria-label="Next page" disabled={pageNum >= totalPages} onclick={() => goTo(pageNum + 1)}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.nextPage')} disabled={pageNum >= totalPages} onclick={() => goTo(pageNum + 1)}>
 				<iconify-icon icon={nuage.next} width="18" height="18" class="block"></iconify-icon>
 			</button>
 		</div>
@@ -131,37 +132,37 @@
 					oninput={() => session?.find(query)}
 					onkeydown={onSearchKeydown}
 					type="search"
-					placeholder="Find in document"
-					aria-label="Find in document"
-					class="h-8 w-36 rounded-fc-sm [@media(pointer:coarse)]:h-11 border border-fc-border bg-fc-bg px-2 text-fc-sm sm:w-48 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+					placeholder={t('viewer.find')}
+					aria-label={t('viewer.find')}
+					class="h-8 w-36 rounded-fc-sm [@media(pointer:coarse)]:h-11 bg-fc-field px-2 text-fc-sm sm:w-48 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 				/>
 				{#if query}
 					<span class="text-fc-xs text-fc-fg-muted tabular-nums">{matches.current}/{matches.total}</span>
 				{/if}
-				<button type="button" class="viewer-tool" aria-label="Previous match" onclick={() => session?.find(query, true, true)}>
+				<button type="button" class="viewer-tool" aria-label={t('viewer.prevMatch')} onclick={() => session?.find(query, true, true)}>
 					<iconify-icon icon={icons.chevronUp} width="18" height="18" class="block"></iconify-icon>
 				</button>
-				<button type="button" class="viewer-tool" aria-label="Next match" onclick={() => session?.find(query, true)}>
+				<button type="button" class="viewer-tool" aria-label={t('viewer.nextMatch')} onclick={() => session?.find(query, true)}>
 					<iconify-icon icon={icons.chevronDown} width="18" height="18" class="block"></iconify-icon>
 				</button>
 			</div>
 		{:else}
-			<button type="button" class="viewer-tool" aria-label="Find in document" onclick={openSearch}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.find')} onclick={openSearch}>
 				<iconify-icon icon={icons.search} width="18" height="18" class="block"></iconify-icon>
 			</button>
 		{/if}
 
-		<span class="mx-1 hidden h-5 w-px bg-fc-border sm:block"></span>
+		<span class="mx-1 hidden h-5 w-px bg-fc-surface sm:block"></span>
 
 		<div class="flex items-center gap-1">
-			<button type="button" class="viewer-tool" aria-label="Zoom out" onclick={() => session?.zoom(-1)}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.zoomOut')} onclick={() => session?.zoom(-1)}>
 				<iconify-icon icon={nuage.zoomOut} width="18" height="18" class="block"></iconify-icon>
 			</button>
 			<span class="w-12 text-center text-fc-xs font-medium tabular-nums">{Math.round(scale * 100)}%</span>
-			<button type="button" class="viewer-tool" aria-label="Zoom in" onclick={() => session?.zoom(1)}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.zoomIn')} onclick={() => session?.zoom(1)}>
 				<iconify-icon icon={nuage.zoomIn} width="18" height="18" class="block"></iconify-icon>
 			</button>
-			<button type="button" class="viewer-tool" aria-label="Fit to width" onclick={() => session?.fitWidth()}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.fitWidth')} onclick={() => session?.fitWidth()}>
 				<iconify-icon icon={nuage.fitWidth} width="18" height="18" class="block"></iconify-icon>
 			</button>
 		</div>
@@ -180,7 +181,7 @@
 			<div class="absolute inset-0 flex items-center justify-center"><Spinner /></div>
 		{:else if failed}
 			<div class="absolute inset-0 flex items-center justify-center p-6 text-center text-fc-sm text-fc-fg-muted">
-				This PDF could not be opened. Download it to view it in another app.
+				{t('viewer.pdfFailed')}
 			</div>
 		{/if}
 	</div>

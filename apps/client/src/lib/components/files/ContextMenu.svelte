@@ -88,7 +88,7 @@
 				<p class="truncate text-fc-xs text-fc-fg-muted">{heading.detail}</p>
 			{/if}
 		</div>
-		<hr class="my-1 border-0 border-t border-fc-border" />
+		<div class="my-1 h-px bg-fc-surface" role="separator"></div>
 	{/if}
 
 	{#each items as item (item.label)}

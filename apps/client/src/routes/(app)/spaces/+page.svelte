@@ -5,6 +5,8 @@
 	import { icons } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
 	import { registreSpaceUrl } from '$lib/registre';
+	import { t } from '$lib/i18n/index.svelte';
+	import { roleLabel } from '$lib/people';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const app = getContext<{ token: string }>('app');
@@ -21,21 +23,21 @@
 			spaces = res.spaces ?? [];
 		} catch {
 			spaces = [];
-			toast.danger('Could not load your spaces.');
+			toast.danger(t('spaces.loadFailed'));
 		}
 		loading = false;
 	}
 </script>
 
 <svelte:head>
-	<title>Spaces — Nuage</title>
+	<title>{t('spaces.title')}</title>
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
-	<PageHeader title="Spaces" description="Shared storage for a team. Files in a space belong to the space, not to you.">
+	<PageHeader title={t('spaces.heading')} description={t('spaces.description')}>
 		{#snippet actions()}
 			<Button href={registreSpaceUrl()} target="_blank" rel="noopener noreferrer" icon={icons.space}>
-				Manage in Registre
+				{t('spaces.manageInRegistre')}
 			</Button>
 		{/snippet}
 	</PageHeader>
@@ -45,11 +47,11 @@
 	{:else if spaces.length === 0}
 		<EmptyState
 			icon={icons.space}
-			title="No spaces yet"
-			description="Spaces are created in Registre and show up here with their members, in every Facile app."
+			title={t('spaces.emptyTitle')}
+			description={t('spaces.emptyText')}
 		>
 			<Button href={registreSpaceUrl()} target="_blank" rel="noopener noreferrer" icon={icons.plus}>
-				Create a space in Registre
+				{t('spaces.create')}
 			</Button>
 		</EmptyState>
 	{:else}
@@ -68,7 +70,7 @@
 							<p class="truncate text-fc-xs text-fc-fg-muted">{space.description}</p>
 						{/if}
 					</div>
-					<Badge tone={roleTone(space.role)}>{space.role}</Badge>
+					<Badge tone={roleTone(space.role)}>{roleLabel(space.role)}</Badge>
 				</Card>
 			{/each}
 		</div>

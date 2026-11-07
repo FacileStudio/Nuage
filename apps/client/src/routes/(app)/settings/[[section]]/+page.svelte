@@ -24,6 +24,7 @@
 	} from '@facile/muse';
 	import { ApiError, backend, type ApiToken, type Space, type UserProfile } from '$lib/backend';
 	import { theme, type ThemePreference } from '$lib/theme.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import { formatDate } from '$lib/format';
 	import AppDataSection from '$lib/components/AppDataSection.svelte';
 	import { icons, nuage } from '$lib/icons';
@@ -35,12 +36,12 @@
 	}>('app');
 
 	const SECTIONS = [
-		{ id: 'profile', label: 'Profile', icon: icons.userCircle },
-		{ id: 'appearance', label: 'Appearance', icon: icons.palette },
-		{ id: 'api', label: 'API', icon: icons.key },
-		{ id: 'apps', label: 'App data', icon: icons.widget },
-		{ id: 'nook', label: 'Nook', icon: icons.bolt },
-		{ id: 'advanced', label: 'Advanced', icon: icons.server }
+		{ id: 'profile', icon: icons.userCircle },
+		{ id: 'appearance', icon: icons.palette },
+		{ id: 'api', icon: icons.key },
+		{ id: 'apps', icon: icons.widget },
+		{ id: 'nook', icon: icons.bolt },
+		{ id: 'advanced', icon: icons.server }
 	] as const;
 
 	/*
@@ -51,7 +52,9 @@
 	const section = $derived(
 		SECTIONS.some((s) => s.id === page.params.section) ? page.params.section! : 'profile'
 	);
-	const tabs = SECTIONS.map((s) => ({ ...s, href: `/settings/${s.id}` }));
+	const tabs = $derived(
+		SECTIONS.map((s) => ({ ...s, label: t(`settings.tab.${s.id}`), href: `/settings/${s.id}` }))
+	);
 
 	let profileName = $state('');
 	let profileSaving = $state(false);
@@ -94,7 +97,7 @@
 			trashRetention = settings.trash_retention_days ?? '30';
 			isAdmin = true;
 		} catch (e) {
-			if (!(e instanceof ApiError && e.status === 403)) toast.danger('Could not load instance settings.');
+			if (!(e instanceof ApiError && e.status === 403)) toast.danger(t('settings.loadFailed'));
 		}
 	}
 
@@ -121,9 +124,9 @@
 		try {
 			const res = await backend.updateProfile(app.token, { name: profileName });
 			app.setUser(res.user);
-			toast.success('Profile updated.');
+			toast.success(t('settings.profileUpdated'));
 		} catch (e) {
-			toast.danger(message(e, 'Could not update your profile.'));
+			toast.danger(message(e, t('settings.profileFailed')));
 		}
 		profileSaving = false;
 	}
@@ -144,7 +147,7 @@
 			createdToken = res.token ?? null;
 			await loadApiTokens();
 		} catch (e) {
-			toast.danger(message(e, 'Could not create that token.'));
+			toast.danger(message(e, t('settings.tokens.createFailed')));
 		}
 		tokenSaving = false;
 	}
@@ -155,7 +158,7 @@
 		await backend.deleteApiToken(app.token, target.id);
 		await loadApiTokens();
 		revoking = null;
-		toast.success(`Revoked “${target.name}”.`);
+		toast.success(t('settings.tokens.revoked', { name: target.name }));
 	}
 
 	async function saveSettings() {
@@ -169,9 +172,9 @@
 			};
 			if (!nookSecret.startsWith('*')) values.nook_webhook_secret = nookSecret;
 			await backend.updateSettings(app.token, values);
-			toast.success('Settings saved.');
+			toast.success(t('settings.saved'));
 		} catch (e) {
-			toast.danger(message(e, 'Could not save settings.'));
+			toast.danger(message(e, t('settings.saveFailed')));
 		}
 		settingsSaving = false;
 	}
@@ -186,7 +189,7 @@
 				enabled: nookEnabled
 			});
 		} catch (e) {
-			nookTestResult = { success: false, message: message(e, 'Connection failed.') };
+			nookTestResult = { success: false, message: message(e, t('settings.nook.failed')) };
 		}
 		testingNook = false;
 	}
@@ -200,9 +203,8 @@
 	 */
 	async function logout() {
 		try {
-			await backend.logout(app.token);
+			await backend.logout();
 		} catch {}
-		localStorage.removeItem('nuage.token');
 		goto('/login');
 	}
 
@@ -210,120 +212,114 @@
 		return error instanceof Error && error.message ? error.message : fallback;
 	}
 
-	const themeOptions = [
-		{ value: 'system', label: 'System', icon: icons.monitor },
-		{ value: 'light', label: 'Light', icon: icons.sun },
-		{ value: 'dark', label: 'Dark', icon: icons.moon }
-	];
+	const themeOptions = $derived([
+		{ value: 'system', label: t('settings.theme.system'), icon: icons.monitor },
+		{ value: 'light', label: t('settings.theme.light'), icon: icons.sun },
+		{ value: 'dark', label: t('settings.theme.dark'), icon: icons.moon }
+	]);
 
 	/*
 	 * Not a boolean: "not connected" hides disabled, never-tested and failing behind one word,
 	 * and those have three different fixes (CHARTE §14).
 	 */
 	const nookStatus = $derived.by(() => {
-		if (!nookEnabled) return { tone: 'neutral' as const, label: 'Disabled', pulse: false };
-		if (testingNook) return { tone: 'info' as const, label: 'Testing the connection…', pulse: true };
-		if (!nookWebhookUrl) return { tone: 'warning' as const, label: 'Enabled, but no URL is set', pulse: false };
-		if (nookTestResult?.success) return { tone: 'success' as const, label: 'Reached the endpoint', pulse: false };
+		if (!nookEnabled) return { tone: 'neutral' as const, label: t('settings.nook.disabled'), pulse: false };
+		if (testingNook) return { tone: 'info' as const, label: t('settings.nook.testing'), pulse: true };
+		if (!nookWebhookUrl) return { tone: 'warning' as const, label: t('settings.nook.noUrl'), pulse: false };
+		if (nookTestResult?.success) return { tone: 'success' as const, label: t('settings.nook.reached'), pulse: false };
 		if (nookTestResult) {
-			return { tone: 'danger' as const, label: nookTestResult.message ?? 'The endpoint did not answer', pulse: false };
+			return { tone: 'danger' as const, label: nookTestResult.message ?? t('settings.nook.noAnswer'), pulse: false };
 		}
-		return { tone: 'neutral' as const, label: 'Enabled — not tested since load', pulse: false };
+		return { tone: 'neutral' as const, label: t('settings.nook.untested'), pulse: false };
 	});
 </script>
 
 <svelte:head>
-	<title>Settings — Nuage</title>
+	<title>{t('settings.title')}</title>
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-6 md:px-8">
 	<div class="flex flex-col gap-4">
-		<h1 class="text-fc-2xl font-semibold text-fc-fg">Settings</h1>
-		<Tabs items={tabs} value={section} label="Settings sections" />
+		<h1 class="text-fc-2xl font-semibold text-fc-fg">{t('settings.heading')}</h1>
+		<Tabs items={tabs} value={section} label={t('settings.sections')} />
 		<Divider />
 	</div>
 
 	{#if section === 'profile'}
-		<SettingsSection title="Picture" description="Shown next to your name across the app.">
+		<SettingsSection title={t('settings.picture.title')} description={t('settings.picture.description')}>
 			<div class="flex flex-wrap items-center gap-4">
 				<Avatar name={profileName || app.user?.email || ''} src={avatarUrl} size="lg" />
 				<div class="flex min-w-0 flex-1 flex-col gap-1">
-					<p class="text-fc-sm text-fc-fg">Your picture comes from your Facile account.</p>
-					<p class="text-fc-xs text-fc-fg-muted">
-						Change it there and it shows here on your next page load.
-					</p>
+					<p class="text-fc-sm text-fc-fg">{t('settings.picture.source')}</p>
+					<p class="text-fc-xs text-fc-fg-muted">{t('settings.picture.hint')}</p>
 				</div>
 				<Button variant="outline" icon={nuage.camera} href={ACCOUNT_URL} target="_blank" rel="noopener">
-					Change picture
+					{t('settings.picture.change')}
 				</Button>
 			</div>
 		</SettingsSection>
 
-		<SettingsSection title="Identity" description="How you appear to everyone sharing a space with you.">
-			<SettingsRow label="Display name" stacked>
+		<SettingsSection title={t('settings.identity.title')} description={t('settings.identity.description')}>
+			<SettingsRow label={t('settings.displayName')} stacked>
 				<Field>
-					<Input bind:value={profileName} placeholder="Your name" />
+					<Input bind:value={profileName} placeholder={t('settings.namePlaceholder')} />
 				</Field>
 			</SettingsRow>
-			<SettingsRow
-				label="Email"
-				description="Managed by single sign-on — change it on the login portal."
-				stacked
-			>
+			<SettingsRow label={t('common.email')} description={t('settings.emailManaged')} stacked>
 				<Field>
 					<Input value={app.user?.email ?? ''} disabled />
 				</Field>
 			</SettingsRow>
 			<SettingsRow>
 				<Button icon={icons.check} disabled={profileSaving} onclick={saveProfile}>
-					{profileSaving ? 'Saving…' : 'Save profile'}
+					{profileSaving ? t('common.saving') : t('settings.saveProfile')}
 				</Button>
 			</SettingsRow>
 		</SettingsSection>
 
-		<SettingsSection title="Session" description="This browser only — your files stay where they are.">
-			<SettingsRow label="Log out" description="You will need to sign in again to reach your files.">
+		<SettingsSection title={t('settings.session.title')} description={t('settings.session.description')}>
+			<SettingsRow label={t('settings.logout')} description={t('settings.logout.description')}>
 				<Button variant="outline" icon={icons.logout} onclick={() => (loggingOut = true)}>
-					Log out
+					{t('settings.logout')}
 				</Button>
 			</SettingsRow>
 		</SettingsSection>
 	{:else if section === 'appearance'}
-		<SettingsSection title="Theme" description="Applied to this browser.">
-			<SettingsRow label="Colour scheme" description="Follow the system setting, or pin one." stacked>
+		<SettingsSection title={t('settings.theme.title')} description={t('settings.theme.description')}>
+			<SettingsRow label={t('settings.theme.scheme')} description={t('settings.theme.schemeHint')} stacked>
 				<OptionCards
 					options={themeOptions}
 					value={theme.preference}
-					label="Colour scheme"
+					label={t('settings.theme.scheme')}
 					onSelect={(value) => theme.set(value as ThemePreference)}
 				/>
 			</SettingsRow>
 		</SettingsSection>
 	{:else if section === 'api'}
 		<SettingsSection
-			title="API tokens"
-			description="Authenticate the CLI, WebDAV clients and integrations. A token's value is shown once, at creation."
+			title={t('settings.tokens.title')}
+			description={t('settings.tokens.description')}
 		>
 			{#snippet actions()}
-				<Button icon={icons.plus} onclick={openTokenDrawer}>New token</Button>
+				<Button icon={icons.plus} onclick={openTokenDrawer}>{t('settings.tokens.new')}</Button>
 			{/snippet}
 
 			{#if apiTokens.length === 0}
 				<EmptyState
 					bare
 					icon={icons.key}
-					title="No API tokens yet"
-					description="Create one to mount Nuage over WebDAV or drive it from the CLI."
+					title={t('settings.tokens.emptyTitle')}
+					description={t('settings.tokens.emptyText')}
 				>
-					<Button icon={icons.plus} onclick={openTokenDrawer}>New token</Button>
+					<Button icon={icons.plus} onclick={openTokenDrawer}>{t('settings.tokens.new')}</Button>
 				</EmptyState>
 			{:else}
 				<Table>
 					<thead>
 						<tr>
-							<th scope="col">Name</th>
-							<th scope="col">Created</th>
-							<th scope="col" class="text-right"><span class="sr-only">Actions</span></th>
+							<th scope="col">{t('common.name')}</th>
+							<th scope="col">{t('settings.tokens.created')}</th>
+							<th scope="col" class="text-right"><span class="sr-only">{t('settings.tokens.actions')}</span></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -338,7 +334,7 @@
 										icon={icons.revoke}
 										onclick={() => (revoking = tok)}
 									>
-										Revoke
+										{t('common.revoke')}
 									</Button>
 								</td>
 							</tr>
@@ -348,16 +344,16 @@
 			{/if}
 		</SettingsSection>
 
-		<SettingsSection title="WebDAV" description="Mount Nuage in Finder or any WebDAV client.">
-			<SettingsRow label="Personal" description="Sign in with your email and an API token as the password." stacked>
+		<SettingsSection title={t('settings.webdav.title')} description={t('settings.webdav.description')}>
+			<SettingsRow label={t('settings.webdav.personal')} description={t('settings.webdav.personalText')} stacked>
 				<SecretField value={`${page.url.origin}/webdav`} sensitive={false} />
 			</SettingsRow>
 			{#each spaces as space (space.id)}
-				<SettingsRow label={space.name} description="Mount this space on its own." stacked>
+				<SettingsRow label={space.name} description={t('settings.webdav.space')} stacked>
 					<SecretField value={`${page.url.origin}/webdav/spaces/${space.id}`} sensitive={false} />
 				</SettingsRow>
 			{/each}
-			<SettingsRow label="Space index" description="Read-only. Lists the spaces you can mount." stacked>
+			<SettingsRow label={t('settings.webdav.index')} description={t('settings.webdav.indexText')} stacked>
 				<SecretField value={`${page.url.origin}/webdav/spaces/`} sensitive={false} />
 			</SettingsRow>
 		</SettingsSection>
@@ -366,26 +362,26 @@
 	{:else if section === 'nook'}
 		<SettingsSection
 			title="Nook"
-			description="Nuage posts file events to a Nook webhook so alerts land where the rest of the suite reports."
+			description={t('settings.nook.description')}
 		>
-			<SettingsRow label="Status">
+			<SettingsRow label={t('settings.nook.status')}>
 				<StatusDot tone={nookStatus.tone} label={nookStatus.label} pulse={nookStatus.pulse} />
 			</SettingsRow>
-			<SettingsRow label="Enabled" description="Stops every outbound event when off.">
-				<Switch bind:checked={nookEnabled} aria-label="Nook integration enabled" />
+			<SettingsRow label={t('settings.nook.enabled')} description={t('settings.nook.enabledText')}>
+				<Switch bind:checked={nookEnabled} aria-label={t('settings.nook.switchLabel')} />
 			</SettingsRow>
-			<SettingsRow label="Webhook URL" stacked>
+			<SettingsRow label={t('settings.nook.url')} stacked>
 				<Field>
 					<Input bind:value={nookWebhookUrl} type="url" placeholder="https://nook.example.com/hooks/nuage" />
 				</Field>
 			</SettingsRow>
-			<SettingsRow label="Shared secret" description="Signs every payload so Nook can tell it came from here." stacked>
-				<SecretField bind:value={nookSecret} editable placeholder="Not set" />
+			<SettingsRow label={t('settings.nook.secret')} description={t('settings.nook.secretText')} stacked>
+				<SecretField bind:value={nookSecret} editable placeholder={t('settings.nook.notSet')} />
 			</SettingsRow>
 			<SettingsRow>
 				<div class="flex flex-wrap gap-2">
 					<Button icon={icons.check} disabled={settingsSaving} onclick={saveSettings}>
-						{settingsSaving ? 'Saving…' : 'Save'}
+						{settingsSaving ? t('common.saving') : t('common.save')}
 					</Button>
 					<Button
 						variant="outline"
@@ -393,22 +389,22 @@
 						disabled={testingNook || !nookWebhookUrl}
 						onclick={testNookConnection}
 					>
-						Test connection
+						{t('settings.nook.test')}
 					</Button>
 				</div>
 			</SettingsRow>
 		</SettingsSection>
 	{:else}
-		<SettingsSection title="Instance" description="Applies to everyone on this Nuage.">
-			<SettingsRow label="Instance name" stacked>
+		<SettingsSection title={t('settings.instance.title')} description={t('settings.instance.description')}>
+			<SettingsRow label={t('settings.instance.name')} stacked>
 				<Field>
-					<Input bind:value={instanceName} placeholder="My Nuage" />
+					<Input bind:value={instanceName} placeholder={t('settings.instancePlaceholder')} />
 				</Field>
 			</SettingsRow>
 			{#if isAdmin}
 				<SettingsRow
-					label="Trash retention"
-					description="Days a deleted item stays in the trash before it is removed for good and its storage is given back. 0 keeps items until someone empties the trash."
+					label={t('settings.retention')}
+					description={t('settings.retention.text')}
 					stacked
 				>
 					<Field>
@@ -419,23 +415,23 @@
 							max="3650"
 							step="1"
 							inputmode="numeric"
-							aria-label="Trash retention in days"
+							aria-label={t('settings.retention.label')}
 						/>
 					</Field>
 				</SettingsRow>
 			{/if}
 			<SettingsRow>
 				<Button icon={icons.check} disabled={settingsSaving} onclick={saveSettings}>
-					{settingsSaving ? 'Saving…' : 'Save'}
+					{settingsSaving ? t('common.saving') : t('common.save')}
 				</Button>
 			</SettingsRow>
 		</SettingsSection>
 
-		<SettingsSection title="About" description="Facts worth having on hand when something breaks.">
-			<SettingsRow label="API documentation" description="Every endpoint this instance serves.">
-				<Button variant="outline" href="/docs" iconRight={icons.arrow}>Open</Button>
+		<SettingsSection title={t('settings.about.title')} description={t('settings.about.description')}>
+			<SettingsRow label={t('settings.about.docs')} description={t('settings.about.docsText')}>
+				<Button variant="outline" href="/docs" data-sveltekit-reload iconRight={icons.arrow}>{t('settings.about.open')}</Button>
 			</SettingsRow>
-			<SettingsRow label="Account created">
+			<SettingsRow label={t('settings.about.created')}>
 				<span class="text-fc-sm text-fc-fg-muted">
 					{app.user?.created_at ? formatDate(app.user.created_at) : '—'}
 				</span>
@@ -444,23 +440,21 @@
 	{/if}
 </div>
 
-<Drawer bind:open={tokenDrawerOpen} title="New API token" showClose>
+<Drawer bind:open={tokenDrawerOpen} title={t('settings.tokens.drawerTitle')} showClose>
 	{#if createdToken}
 		<div class="flex flex-col gap-4">
-			<Alert tone="warning" title="Copy it now">
-				This is the only time the token is shown. If you lose it, revoke it and make another.
-			</Alert>
+			<Alert tone="warning" title={t('settings.tokens.copyTitle')}>{t('settings.tokens.copyText')}</Alert>
 			<SecretField value={createdToken} autoHideMs={0} />
 		</div>
 	{:else}
-		<Field label="Name" helper="Where you intend to use it — “MacBook Finder”, “backup cron”.">
-			<Input bind:value={newTokenName} placeholder="MacBook Finder" />
+		<Field label={t('common.name')} helper={t('settings.tokens.nameHelper')}>
+			<Input bind:value={newTokenName} placeholder={t('settings.tokens.namePlaceholder')} />
 		</Field>
 	{/if}
 
 	{#snippet footer()}
 		{#if createdToken}
-			<Button size="lg" class="w-full" onclick={() => (tokenDrawerOpen = false)}>Done</Button>
+			<Button size="lg" class="w-full" onclick={() => (tokenDrawerOpen = false)}>{t('common.done')}</Button>
 		{:else}
 			<Button
 				size="lg"
@@ -469,7 +463,7 @@
 				disabled={tokenSaving || !newTokenName.trim()}
 				onclick={createToken}
 			>
-				{tokenSaving ? 'Generating…' : 'Generate token'}
+				{tokenSaving ? t('settings.tokens.generating') : t('settings.tokens.generate')}
 			</Button>
 		{/if}
 	{/snippet}
@@ -477,11 +471,9 @@
 
 <ConfirmModal
 	open={revoking !== null}
-	title="Revoke this token?"
-	description={revoking
-		? `Anything still authenticating with “${revoking.name}” starts failing immediately, and it cannot be un-revoked.`
-		: ''}
-	confirmLabel="Revoke"
+	title={t('settings.tokens.revokeTitle')}
+	description={revoking ? t('settings.tokens.revokeText', { name: revoking.name }) : ''}
+	confirmLabel={t('common.revoke')}
 	tone="danger"
 	onConfirm={revokeToken}
 	onCancel={() => (revoking = null)}
@@ -489,8 +481,8 @@
 
 <ConfirmModal
 	bind:open={loggingOut}
-	title="Log out of Nuage?"
-	description="Your files stay where they are. You will need to sign in again on this browser."
-	confirmLabel="Log out"
+	title={t('settings.logout.confirmTitle')}
+	description={t('settings.logout.confirmText')}
+	confirmLabel={t('settings.logout')}
 	onConfirm={logout}
 />

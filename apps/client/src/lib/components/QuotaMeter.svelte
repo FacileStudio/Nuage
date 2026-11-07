@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { QuotaResponse } from '$lib/backend';
 	import { formatSize } from '$lib/format';
+	import { t } from '$lib/i18n/index.svelte';
 	import { isSafeUpgradeUrl } from '$lib/plan-limit';
 	import { nuage } from '$lib/icons';
 
@@ -34,7 +35,7 @@
 <div
 	class="flex shrink-0 flex-col gap-1.5 rounded-fc-md bg-fc-component p-3"
 	role="group"
-	aria-label="Storage usage"
+	aria-label={t('quota.group')}
 >
 	{#if collapsed}
 		<!-- The rail is 44px of content wide here, so the number is all that fits — and the
@@ -45,9 +46,10 @@
 	{:else if hasLimit}
 		<div class="flex items-center justify-between gap-2 text-fc-xs text-fc-fg-muted">
 			<span class="truncate"
-				>{formatSize(quota.storage_used)} of {formatSize(quota.storage_limit)}{quota.source === 'plan'
-					? ' on your plan'
-					: ''}</span
+				>{t(quota.source === 'plan' ? 'quota.ofPlan' : 'quota.of', {
+					used: formatSize(quota.storage_used),
+					limit: formatSize(quota.storage_limit)
+				})}</span
 			>
 			<span class="shrink-0 tabular-nums">{Math.round(percent)}%</span>
 		</div>
@@ -57,7 +59,7 @@
 			aria-valuenow={Math.round(percent)}
 			aria-valuemin={0}
 			aria-valuemax={100}
-			aria-label="Storage used"
+			aria-label={t('quota.usedLabel')}
 		>
 			<div
 				class="h-full rounded-fc-pill transition-[width] duration-300 ease-[var(--ease-fc)] {fill}"
@@ -66,13 +68,13 @@
 		</div>
 		{#if upgrade && percent >= 80}
 			<a class="text-fc-xs font-medium text-fc-accent hover:underline" href={upgrade} rel="noopener noreferrer"
-				>Upgrade plan</a
+				>{t('quota.upgrade')}</a
 			>
 		{/if}
 	{:else}
 		<div class="flex items-center gap-1.5 text-fc-xs text-fc-fg-muted">
 			<iconify-icon icon={nuage.brand} width="14" height="14" class="block shrink-0"></iconify-icon>
-			<span class="truncate">{formatSize(quota.storage_used)} used</span>
+			<span class="truncate">{t('quota.used', { used: formatSize(quota.storage_used) })}</span>
 		</div>
 	{/if}
 </div>

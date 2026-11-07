@@ -1,163 +1,95 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { PricingPlans } from '@facile/muse';
+	import { LandingFooter, LandingHeader, PricingPlans, SignInWithFacile } from '@facile/muse';
 	import { backend } from '$lib/backend';
-
-	const TOKEN_KEY = 'nuage.token';
+	import { nuage, icons } from '$lib/icons';
+	import { rememberLocale, t } from '$lib/i18n/index.svelte';
 
 	let redirecting = $state(true);
-	let ssoOnly = $state(false);
 
-	/*
-	 * This is where the SSO callback lands: OIDC_SUCCESS_URL is the app's origin,
-	 * and porte hands back a session cookie and a 302, nothing in the URL. So the
-	 * only way to tell an arriving SSO user from a stranger is to ask the API —
-	 * a localStorage check sees an empty key and leaves them staring at the
-	 * marketing page they just authenticated their way past.
+	const signInHref = `${backend.baseUrl}/auth/oidc`;
+	const heroLines = $derived(t('landing.heroTitle').split('|'));
+	const features = [
+		{ icon: icons.upload, id: 'upload' },
+		{ icon: icons.folder, id: 'folders' },
+		{ icon: nuage.lock, id: 'hosted' }
+	] as const;
+
+	/**
+	 * This is where the SSO callback lands: OIDC_SUCCESS_URL is the app's origin, and porte hands
+	 * back a session cookie and a 302, nothing in the URL. So the only way to tell an arriving
+	 * SSO user from a stranger is to ask the API.
 	 */
-	async function signedIn(): Promise<boolean> {
-		try {
-			await backend.me(localStorage.getItem(TOKEN_KEY) ?? '');
-			return true;
-		} catch {
-			return false;
-		}
-	}
-
 	onMount(async () => {
-		if (await signedIn()) {
+		try {
+			await backend.me();
 			goto('/files');
 			return;
+		} catch {
+			redirecting = false;
 		}
-
-		try {
-			const cfg = await backend.getAuthConfig();
-			ssoOnly = cfg.sso_only ?? false;
-		} catch {}
-
-		redirecting = false;
 	});
 </script>
 
 <svelte:head>
-	<title>Nuage — Cloud Storage</title>
-	<meta name="description" content="Self-hosted file storage. Upload, organize, and share — your cloud, your rules." />
+	<title>{t('landing.title')}</title>
+	<meta name="description" content={t('landing.description')} />
 </svelte:head>
 
 {#if !redirecting}
-<div class="min-h-screen bg-background text-foreground">
-	<header class="bg-muted">
-		<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-			<div class="flex h-14 items-center gap-3">
-				<iconify-icon icon="solar:cloud-bold-duotone" width="28" class="text-foreground"></iconify-icon>
-				<span class="text-2xl font-bold font-heading tracking-tight">Nuage</span>
-			</div>
-			<div class="flex items-center gap-2">
-				<a href="/login" class="inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground">
-					Log in
-				</a>
-				<a
-					href={ssoOnly ? '/login' : '/login?tab=register'}
-					class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-				>
-					{ssoOnly ? 'Sign in with Facile' : 'Get started'}
-				</a>
-			</div>
-		</div>
-	</header>
+	<div class="min-h-screen bg-fc-page text-fc-fg">
+		<LandingHeader appName="Nuage" icon={nuage.brand} skipHref="#main">
+			{#snippet actions()}
+				<SignInWithFacile href={signInHref} />
+			{/snippet}
+		</LandingHeader>
 
-	<main>
-		<section class="mx-auto max-w-5xl px-6 py-24 text-center">
-			<h1 class="text-5xl font-bold tracking-tight">
-				Your files.<br />Your cloud.
-			</h1>
-			<p class="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
-				Nuage is a self-hosted file storage platform.
-				Upload, organize into folders, share with a link — done.
-			</p>
-			<div class="mt-10 flex justify-center gap-3">
-				<a
-					href={ssoOnly ? '/login' : '/login?tab=register'}
-					class="inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-				>
-					{ssoOnly ? 'Sign in with Facile' : 'Start storing'}
-					<svg class="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-				</a>
-				<a
-					href="/login"
-					class="inline-flex h-11 items-center justify-center rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-				>
-					Log in
-				</a>
-			</div>
-		</section>
-
-		<div class="mx-auto max-w-5xl"><div class="h-px bg-border"></div></div>
-
-		<section class="mx-auto max-w-5xl px-6 py-20">
-			<div class="grid gap-6 md:grid-cols-3">
-				<div class="rounded-lg bg-muted p-6">
-					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-background">
-						<iconify-icon icon="solar:upload-linear" width="20"></iconify-icon>
-					</div>
-					<h3 class="text-base font-semibold">Upload anything</h3>
-					<p class="mt-1.5 text-sm text-muted-foreground">
-						Drag and drop files or click to upload. Any file type, any size.
-					</p>
+		<main id="main">
+			<section class="mx-auto max-w-5xl px-6 py-24 text-center">
+				<h1 class="font-heading text-5xl font-semibold tracking-tight">
+					{heroLines[0]}<br />{heroLines[1]}
+				</h1>
+				<p class="mx-auto mt-6 max-w-xl text-lg text-fc-fg-muted">{t('landing.heroText')}</p>
+				<div class="mt-10 flex justify-center">
+					<SignInWithFacile href={signInHref} size="lg" />
 				</div>
+			</section>
 
-				<div class="rounded-lg bg-muted p-6">
-					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-background">
-						<iconify-icon icon="solar:folder-linear" width="20"></iconify-icon>
-					</div>
-					<h3 class="text-base font-semibold">Organize with folders</h3>
-					<p class="mt-1.5 text-sm text-muted-foreground">
-						Create nested folders, move files around, keep everything tidy.
-					</p>
+			<section class="mx-auto max-w-5xl px-6 py-20">
+				<div class="grid gap-6 md:grid-cols-3">
+					{#each features as feature (feature.id)}
+						<div class="rounded-fc-lg bg-fc-component p-6">
+							<div class="mb-3 flex size-10 items-center justify-center rounded-fc-md bg-fc-surface">
+								<iconify-icon icon={feature.icon} width="20" class="block"></iconify-icon>
+							</div>
+							<h3 class="text-base font-semibold">{t(`landing.feature.${feature.id}.title`)}</h3>
+							<p class="mt-1.5 text-sm text-fc-fg-muted">{t(`landing.feature.${feature.id}.text`)}</p>
+						</div>
+					{/each}
 				</div>
+			</section>
 
-				<div class="rounded-lg bg-muted p-6">
-					<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-background">
-						<iconify-icon icon="solar:lock-linear" width="20"></iconify-icon>
-					</div>
-					<h3 class="text-base font-semibold">Self-hosted</h3>
-					<p class="mt-1.5 text-sm text-muted-foreground">
-						Your files stay on your server. No third-party cloud, no data harvesting.
-					</p>
+			<div class="hidden has-[section]:block">
+				<div id="pricing" class="mx-auto max-w-5xl px-6 py-20">
+					<PricingPlans title={t('landing.pricing')} highlight={['nuage.storage_gb']} />
 				</div>
 			</div>
-		</section>
 
-		<div class="hidden has-[section]:block">
-			<div class="mx-auto max-w-5xl"><div class="h-px bg-border"></div></div>
-			<div id="pricing" class="mx-auto max-w-5xl px-6 py-20">
-				<PricingPlans title="Pricing" highlight={['nuage.storage_gb']} />
-			</div>
-		</div>
+			<section class="mx-auto max-w-5xl px-6 py-20 text-center">
+				<h2 class="font-heading text-3xl font-semibold tracking-tight">{t('landing.ctaTitle')}</h2>
+				<p class="mt-4 text-fc-fg-muted">{t('landing.ctaText')}</p>
+				<div class="mt-8 flex justify-center">
+					<SignInWithFacile href={signInHref} size="lg" />
+				</div>
+			</section>
+		</main>
 
-		<div class="mx-auto max-w-5xl"><div class="h-px bg-border"></div></div>
-
-		<section class="mx-auto max-w-5xl px-6 py-20 text-center">
-			<h2 class="text-3xl font-bold tracking-tight">
-				{ssoOnly ? 'Ready to sign in?' : 'Ready to start?'}
-			</h2>
-			<p class="mt-4 text-muted-foreground">
-				{ssoOnly ? 'Use your Facile SSO to access Nuage.' : 'Free to use. Self-hosted. No credit card required.'}
-			</p>
-			<a
-				href={ssoOnly ? '/login' : '/login?tab=register'}
-				class="mt-8 inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-			>
-				{ssoOnly ? 'Sign in with Facile' : 'Create an account'}
-			</a>
-		</section>
-	</main>
-
-	<footer class="text-center text-muted">
-		<div class="mx-auto max-w-5xl px-6 py-6 text-sm text-muted-foreground">
-			&copy; {new Date().getFullYear()} Nuage by <a href="https://facile.studio" class="underline hover:cursor-pointer font-semibold">Facile.</a>
-		</div>
-	</footer>
-</div>
+		<LandingFooter
+			appName="Nuage"
+			icon={nuage.brand}
+			tagline={t('login.tagline')}
+			legal={{ onLocaleChange: rememberLocale }}
+		/>
+	</div>
 {/if}

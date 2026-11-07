@@ -1,15 +1,29 @@
+import { activeLocale } from '$lib/i18n/active';
+
+const UNITS: Record<string, string[]> = {
+	fr: ['o', 'Ko', 'Mo', 'Go', 'To'],
+	en: ['B', 'KB', 'MB', 'GB', 'TB'],
+	es: ['B', 'KB', 'MB', 'GB', 'TB'],
+	de: ['B', 'KB', 'MB', 'GB', 'TB']
+};
+
 /** Human-readable byte size, e.g. `1.4 GB`. Bytes stay whole; every larger unit gets one decimal. */
 export function formatSize(bytes: number): string {
-	if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-	const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+	const units = UNITS[activeLocale()] ?? UNITS.en;
+	if (!Number.isFinite(bytes) || bytes <= 0) return `0 ${units[0]}`;
 	const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-	return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+	const digits = i > 0 ? 1 : 0;
+	const value = new Intl.NumberFormat(activeLocale(), {
+		minimumFractionDigits: digits,
+		maximumFractionDigits: digits
+	}).format(bytes / Math.pow(1024, i));
+	return `${value} ${units[i]}`;
 }
 
 /** Locale date for a timestamp the API returns as ISO-8601. */
 export function formatDate(iso: string): string {
 	const date = new Date(iso);
-	return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+	return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(activeLocale()).format(date);
 }
 
 /** Locale date and time, for anything where the hour matters. */
@@ -17,7 +31,7 @@ export function formatDateTime(iso: string): string {
 	const date = new Date(iso);
 	return Number.isNaN(date.getTime())
 		? '—'
-		: date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+		: new Intl.DateTimeFormat(activeLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 const RELATIVE_STEPS: [limit: number, unit: Intl.RelativeTimeFormatUnit, per: number][] = [
@@ -39,7 +53,7 @@ export function relativeTime(iso: string): string {
 
 	const seconds = Math.round((then - Date.now()) / 1000);
 	const magnitude = Math.abs(seconds);
-	const format = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+	const format = new Intl.RelativeTimeFormat(activeLocale(), { numeric: 'auto' });
 
 	if (magnitude < 45) return format.format(0, 'second');
 	for (const [limit, unit, per] of RELATIVE_STEPS) {

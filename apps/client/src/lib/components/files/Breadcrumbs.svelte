@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DragMove, DropTarget } from '$lib/files/dnd.svelte';
 	import { icons, nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let {
 		crumbs,
@@ -19,6 +20,8 @@
 	const asTarget = (id: number | null): DropTarget => (id === null ? 'root' : id);
 
 	const isDropping = (id: number | null) => dnd.item !== null && dnd.target === asTarget(id);
+	const nameOf = (crumb: { id: number | null; name: string }) =>
+		crumb.id === null ? t('nav.files') : crumb.name;
 
 	/*
 	 * Dropping onto the crumb you are already in is a no-op, and highlighting it promises a
@@ -56,23 +59,23 @@
 {#snippet up(parent: { id: number | null; name: string })}
 	<button
 		type="button"
-		aria-label="Up to {parent.name}"
-		title="Up to {parent.name} — drop here to move"
+		aria-label={t('files.upTo', { name: nameOf(parent) })}
+		title={t('files.upToDrop', { name: nameOf(parent) })}
 		onclick={() => onNavigate(parent.id)}
-		class="mr-1 inline-flex size-9 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {isDropping(
+		class="mr-1 inline-flex size-9 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {isDropping(
 			parent.id
 		)
-			? 'border-fc-accent bg-fc-accent text-fc-accent-fg'
+			? 'bg-fc-accent text-fc-accent-fg'
 			: dnd.item
-				? 'border-dashed border-fc-accent text-fc-fg'
-				: 'border-fc-border text-fc-fg-muted hover:bg-fc-surface hover:text-fc-fg'}"
+				? 'bg-fc-accent/15 text-fc-fg'
+				: 'bg-fc-surface text-fc-fg-muted hover:text-fc-fg'}"
 		{...dragProps(parent.id, false, 'up')}
 	>
 		<iconify-icon icon={nuage.parent} width="18" height="18" class="block"></iconify-icon>
 	</button>
 {/snippet}
 
-<nav class="flex min-w-0 flex-wrap items-center gap-1 text-fc-sm" aria-label="Breadcrumb">
+<nav class="flex min-w-0 flex-wrap items-center gap-1 text-fc-sm" aria-label={t('files.breadcrumb')}>
 	{#if crumbs.length > 1}
 		{@render up(crumbs[crumbs.length - 2])}
 	{/if}
@@ -92,7 +95,7 @@
 				aria-current="page"
 				{...dragProps(crumb.id, true)}
 			>
-				{crumb.name}
+				{nameOf(crumb)}
 			</span>
 		{:else}
 			<button
@@ -105,7 +108,7 @@
 					: 'text-fc-fg-muted hover:text-fc-fg'}"
 				{...dragProps(crumb.id, false)}
 			>
-				{crumb.name}
+				{nameOf(crumb)}
 			</button>
 		{/if}
 	{/each}

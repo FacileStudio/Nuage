@@ -34,19 +34,29 @@ type Deletions struct {
 	receiver   *directory.Deletions
 }
 
-// New builds the receiver over Nuage's tables. erase is porte's own rows
-// eraser, pg.Store.EraseIdentity.
-func New(
-	orm *gorm.DB, client directory.Client, erase func(context.Context, string, string) error,
-	files PersonalFiles, apps AppData, storageDir string, logger *slog.Logger,
-) *Deletions {
-	d := &Deletions{orm: orm, files: files, apps: apps, storageDir: storageDir}
+// Config wires the receiver to Nuage: the database, Registre's directory client
+// (the same credentials as the snapshot sync), porte's own rows eraser
+// (pg.Store.EraseIdentity), the two stores that hold a person's files, and the
+// directory the avatars live in.
+type Config struct {
+	ORM        *gorm.DB
+	Client     directory.Client
+	Erase      func(ctx context.Context, provider, subject string) error
+	Files      PersonalFiles
+	Apps       AppData
+	StorageDir string
+	Logger     *slog.Logger
+}
+
+// New builds the receiver over Nuage's tables.
+func New(cfg Config) *Deletions {
+	d := &Deletions{orm: cfg.ORM, files: cfg.Files, apps: cfg.Apps, storageDir: cfg.StorageDir}
 	d.receiver = &directory.Deletions{
-		Client:          client,
+		Client:          cfg.Client,
 		OnPersonDeleted: d.ErasePerson,
-		Erase:           erase,
-		State:           NewState(orm),
-		Logger:          logger,
+		Erase:           cfg.Erase,
+		State:           NewState(cfg.ORM),
+		Logger:          cfg.Logger,
 	}
 	return d
 }

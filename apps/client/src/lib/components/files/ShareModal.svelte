@@ -13,6 +13,7 @@
 	import { backend, type Share } from '$lib/backend';
 	import { formatDateTime } from '$lib/format';
 	import { nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let {
 		token,
@@ -47,7 +48,7 @@
 					target.type === 'file' ? s.file_id === target.id : s.folder_id === target.id
 				) ?? null;
 		} catch {
-			toast.danger('Could not check for an existing link.');
+			toast.danger(t('share.checkFailed'));
 		}
 		loading = false;
 	}
@@ -71,9 +72,9 @@
 			}
 
 			share = await backend.createShare(token, data);
-			toast.success('Public link created.');
+			toast.success(t('share.created'));
 		} catch {
-			toast.danger('Could not create that link.');
+			toast.danger(t('share.createFailed'));
 		}
 		working = false;
 	}
@@ -86,9 +87,9 @@
 			share = null;
 			expiry = 'none';
 			revoking = false;
-			toast.success('Link revoked.');
+			toast.success(t('share.revoked'));
 		} catch {
-			toast.danger('Could not revoke that link.');
+			toast.danger(t('share.revokeFailed'));
 		}
 		working = false;
 	}
@@ -96,35 +97,35 @@
 	const url = $derived(share ? `${window.location.origin}/s/${share.token}` : '');
 </script>
 
-<Modal bind:open {onClose} title="Share “{target.name}”" showClose>
+<Modal bind:open {onClose} title={t('share.title', { name: target.name })} showClose>
 	{#if loading}
 		<div class="flex h-32 items-center justify-center"><Spinner /></div>
 	{:else if share}
 		<div class="flex flex-col gap-4">
-			<Alert tone="warning">
-				Anyone with this link can open the {target.type} without signing in.
-			</Alert>
+			<Alert tone="warning">{t(target.type === 'file' ? 'share.warnFile' : 'share.warnFolder')}</Alert>
 
 			<!-- `sensitive={false}`: the URL is meant to be handed out, so masking it would be
 			     theatre. SecretField is still the right control — it owns the copy button, the
 			     confirmation swap and the live region (CHARTE §14). -->
-			<SecretField label="Public link" value={url} sensitive={false} />
+			<SecretField label={t('share.publicLink')} value={url} sensitive={false} />
 
 			<p class="text-fc-sm text-fc-fg-muted">
-				{share.expires_at ? `Expires ${formatDateTime(share.expires_at)}.` : 'This link never expires.'}
+				{share.expires_at
+					? t('share.expiresAt', { date: formatDateTime(share.expires_at) })
+					: t('share.neverExpires')}
 			</p>
 		</div>
 	{:else}
 		<div class="flex flex-col gap-4">
 			<p class="text-fc-sm text-fc-fg-muted">
-				There is no public link for this {target.type} yet.
+				{t(target.type === 'file' ? 'share.noneFile' : 'share.noneFolder')}
 			</p>
-			<Field label="Expires" helper="A link that never lapses is the one nobody remembers to revoke.">
+			<Field label={t('share.expires')} helper={t('share.expiresHelper')}>
 				<Select bind:value={expiry}>
-					<option value="none">Never</option>
-					<option value="1d">In 1 day</option>
-					<option value="7d">In 7 days</option>
-					<option value="30d">In 30 days</option>
+					<option value="none">{t('share.never')}</option>
+					<option value="1d">{t('share.in1d')}</option>
+					<option value="7d">{t('share.in7d')}</option>
+					<option value="30d">{t('share.in30d')}</option>
 				</Select>
 			</Field>
 		</div>
@@ -139,13 +140,13 @@
 					disabled={working}
 					onclick={() => (revoking = true)}
 				>
-					Revoke link
+					{t('share.revokeLink')}
 				</Button>
-				<Button onclick={() => (open = false)}>Done</Button>
+				<Button onclick={() => (open = false)}>{t('common.done')}</Button>
 			{:else if !loading}
-				<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+				<Button variant="ghost" onclick={() => (open = false)}>{t('common.cancel')}</Button>
 				<Button icon={nuage.link} disabled={working} onclick={create}>
-					{working ? 'Creating…' : 'Create public link'}
+					{working ? t('common.creating') : t('share.create')}
 				</Button>
 			{/if}
 		</div>
@@ -154,9 +155,9 @@
 
 <ConfirmModal
 	bind:open={revoking}
-	title="Revoke this link?"
-	description="Anyone still holding it gets a dead page. The {target.type} itself is untouched, and you would have to share it again to undo this."
-	confirmLabel="Revoke"
+	title={t('share.revokeTitle')}
+	description={t(target.type === 'file' ? 'share.revokeFile' : 'share.revokeFolder')}
+	confirmLabel={t('common.revoke')}
 	tone="danger"
 	onConfirm={revoke}
 />

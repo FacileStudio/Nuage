@@ -6,6 +6,7 @@
 	import type { DragMove } from '$lib/files/dnd.svelte';
 	import type { Selection } from '$lib/files/selection.svelte';
 	import { formatSize, relativeTime } from '$lib/format';
+	import { t } from '$lib/i18n/index.svelte';
 	import { nuage } from '$lib/icons';
 	import SelectToggle from './SelectToggle.svelte';
 
@@ -115,9 +116,9 @@
 			onkeydown={onRenameKeydown}
 			onblur={onRenameCancel}
 			onclick={(e) => e.stopPropagation()}
-			aria-label="New name for {entry.name}"
+			aria-label={t('files.newNameFor', { name: entry.name })}
 			autofocus
-			class="h-8 w-full min-w-0 rounded-fc-sm border border-fc-border bg-fc-bg px-2 text-fc-sm text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+			class="h-8 w-full min-w-0 rounded-fc-sm bg-fc-field px-2 text-fc-sm text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 		/>
 	{:else}
 		<span class="block truncate text-fc-sm font-medium text-fc-fg" title={entry.name}>
@@ -131,7 +132,7 @@
 	{#if selection.mode}
 		<SelectToggle
 			checked={selection.has(entry.type, entry.id)}
-			label="Select {entry.name}"
+			label={t('files.selectItem', { name: entry.name })}
 			onToggle={(e) => {
 				e.stopPropagation();
 				onSelect(entry, entries.indexOf(entry), e);
@@ -140,7 +141,7 @@
 	{:else}
 		<button
 			type="button"
-			aria-label="Actions for {entry.name}"
+			aria-label={t('files.actionsFor', { name: entry.name })}
 			onclick={(e) => menuFromButton(e, entry)}
 			class="inline-flex size-8 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill text-fc-fg-muted transition hover:bg-fc-bg hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
 		>
@@ -165,7 +166,7 @@
 		{#if entry.type === 'file'}
 			<button
 				type="button"
-				aria-label="Open {entry.name}"
+				aria-label={t('files.open', { name: entry.name })}
 				onclick={(e) => (selection.mode ? onSelect(entry, index, e) : onOpen(entry))}
 				class="m-2 mb-0 block overflow-hidden rounded-fc-sm bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 			>
@@ -194,7 +195,7 @@
 			{#if entry.type === 'folder'}
 				<button
 					type="button"
-					aria-label="Open {entry.name}"
+					aria-label={t('files.open', { name: entry.name })}
 					onclick={(e) => (selection.mode ? onSelect(entry, index, e) : onOpen(entry))}
 					class="absolute inset-0 rounded-fc-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 				></button>
@@ -222,8 +223,8 @@
 
 <div class="flex flex-col gap-6">
 	{#if folderEntries.length > 0}
-		<section class="flex flex-col gap-3" aria-label="Folders">
-			<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">Folders</h2>
+		<section class="flex flex-col gap-3" aria-label={t('files.folders')}>
+			<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">{t('files.folders')}</h2>
 			<div class="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
 				{#each folderEntries as entry (key(entry))}
 					{@render tile(entry)}
@@ -232,8 +233,8 @@
 		</section>
 	{/if}
 	{#if fileEntries.length > 0}
-		<section class="flex flex-col gap-3" aria-label="Files">
-			<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">Files</h2>
+		<section class="flex flex-col gap-3" aria-label={t('files.files')}>
+			<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">{t('files.files')}</h2>
 			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
 				{#each fileEntries as entry (key(entry))}
 					{@render tile(entry)}

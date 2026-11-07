@@ -187,10 +187,10 @@ func cleanDB(db *gorm.DB) {
 	db.Exec("CREATE SCHEMA public")
 }
 
-// registerUser creates an account the way a Registre sign-in does, through the
-// app's UserStore, links the identity porte would link, and issues a session.
-// The password is ignored: no password sign-in exists any more. The first
-// account created is the instance admin, as in production.
+// registerUser creates an account through the app's UserStore, as a Registre
+// sign-in does, gives it the local identity the retired password sign-up wrote,
+// and issues a session. The password is ignored: no password sign-in exists
+// any more. The first account created is the instance admin, as in production.
 func registerUser(ts *testServer, email, _ string) (string, string) {
 	ctx := context.Background()
 	claims := porte.Claims{Provider: testIssuer, Subject: "sub-" + email, Email: email, EmailVerified: true}
@@ -198,8 +198,8 @@ func registerUser(ts *testServer, email, _ string) (string, string) {
 	if err != nil {
 		panic(err)
 	}
-	err = ts.db.Exec(`INSERT INTO porte_identities (user_id, provider, subject) VALUES (?, ?, ?)
-		ON CONFLICT DO NOTHING`, id, claims.Provider, claims.Subject).Error
+	err = ts.db.Exec(`INSERT INTO porte_identities (user_id, provider, subject) VALUES (?, 'local', ?)
+		ON CONFLICT DO NOTHING`, id, strconv.FormatInt(id, 10)).Error
 	if err != nil {
 		panic(err)
 	}

@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { Spinner } from '@facile/muse';
 	import { nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let {
 		url,
@@ -119,7 +120,7 @@
 			<div class="absolute inset-0 flex items-center justify-center"><Spinner /></div>
 		{/if}
 		{#if failed}
-			<p class="text-fc-sm text-fc-fg-muted">This image could not be displayed.</p>
+			<p class="text-fc-sm text-fc-fg-muted">{t('viewer.imageFailed')}</p>
 		{:else}
 			<img
 				src={url}
@@ -138,20 +139,20 @@
 	<div
 		class="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-fc-pill bg-fc-component/90 p-1 text-fc-fg shadow-lg backdrop-blur"
 	>
-		<button type="button" class="viewer-tool" aria-label="Zoom out" disabled={scale <= MIN} onclick={() => zoomTo(scale / 1.5)}>
+		<button type="button" class="viewer-tool" aria-label={t('viewer.zoomOut')} disabled={scale <= MIN} onclick={() => zoomTo(scale / 1.5)}>
 			<iconify-icon icon={nuage.zoomOut} width="18" height="18" class="block"></iconify-icon>
 		</button>
-		<button type="button" class="viewer-tool w-14 text-fc-xs font-medium tabular-nums" aria-label="Reset zoom" onclick={() => {
+		<button type="button" class="viewer-tool w-14 text-fc-xs font-medium tabular-nums" aria-label={t('viewer.resetZoom')} onclick={() => {
 			zoomTo(1);
 			rotation = 0;
 		}}>
 			{Math.round(scale * 100)}%
 		</button>
-		<button type="button" class="viewer-tool" aria-label="Zoom in" disabled={scale >= MAX} onclick={() => zoomTo(scale * 1.5)}>
+		<button type="button" class="viewer-tool" aria-label={t('viewer.zoomIn')} disabled={scale >= MAX} onclick={() => zoomTo(scale * 1.5)}>
 			<iconify-icon icon={nuage.zoomIn} width="18" height="18" class="block"></iconify-icon>
 		</button>
-		<span class="mx-1 h-5 w-px bg-fc-border"></span>
-		<button type="button" class="viewer-tool" aria-label="Rotate" onclick={() => (rotation = (rotation + 90) % 360)}>
+		<span class="mx-1 h-5 w-px bg-fc-surface"></span>
+		<button type="button" class="viewer-tool" aria-label={t('viewer.rotate')} onclick={() => (rotation = (rotation + 90) % 360)}>
 			<iconify-icon icon={nuage.rotate} width="18" height="18" class="block"></iconify-icon>
 		</button>
 	</div>

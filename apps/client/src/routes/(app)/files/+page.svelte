@@ -17,6 +17,7 @@
 	import { pushUndo } from '$lib/undo.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { icons, nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 	import { isPreviewable, toEntries, type BrowserEntry } from '$lib/files/entries';
 	import { DragMove, isInternalDrag } from '$lib/files/dnd.svelte';
 	import { Selection, itemKey } from '$lib/files/selection.svelte';
@@ -36,7 +37,7 @@
 
 	let files = $state<NuageFile[]>([]);
 	let folders = $state<Folder[]>([]);
-	let breadcrumbs = $state<{ id: number | null; name: string }[]>([{ id: null, name: 'Files' }]);
+	let breadcrumbs = $state<{ id: number | null; name: string }[]>([{ id: null, name: '' }]);
 	let currentFolderId = $state<number | null>(null);
 	let viewMode = $state<'grid' | 'list'>('list');
 	let loading = $state(true);
@@ -124,14 +125,14 @@
 		} catch {
 			files = [];
 			folders = [];
-			toast.danger('Could not load this folder.');
+			toast.danger(t('files.loadFailed'));
 		}
 		loading = false;
 	}
 
 	async function loadBreadcrumbs() {
 		if (currentFolderId == null) {
-			breadcrumbs = [{ id: null, name: 'Files' }];
+			breadcrumbs = [{ id: null, name: '' }];
 			return;
 		}
 		const trail: { id: number | null; name: string }[] = [];
@@ -145,7 +146,7 @@
 				break;
 			}
 		}
-		breadcrumbs = [{ id: null, name: 'Files' }, ...trail];
+		breadcrumbs = [{ id: null, name: '' }, ...trail];
 	}
 
 	const navigateTo = (id: number | null) => goto(id == null ? '/files' : `/files?folder=${id}`);
@@ -196,8 +197,8 @@
 		});
 
 		const failed = uploads.failed.length;
-		if (failed > 0) toast.danger(`${failed} of ${chosen.length} uploads failed.`);
-		else toast.success(chosen.length === 1 ? 'Uploaded.' : `Uploaded ${chosen.length} files.`);
+		if (failed > 0) toast.danger(t('files.uploadsFailed', { failed, total: chosen.length }));
+		else toast.success(chosen.length === 1 ? t('files.uploadedOne') : t('files.uploadedMany', { count: chosen.length }));
 
 		await loadContents();
 		app.refreshQuota();
@@ -219,7 +220,7 @@
 			newFolderOpen = false;
 			await loadContents();
 		} catch {
-			toast.danger('Could not create that folder.');
+			toast.danger(t('files.createFailed'));
 		}
 	}
 
@@ -246,7 +247,7 @@
 			else await backend.updateFolder(app.token, id, { name: next });
 
 			pushUndo({
-				label: `Renamed to ${next}`,
+				label: t('files.renamedTo', { name: next }),
 				async execute() {
 					if (type === 'file') await backend.updateFile(app.token, id, { name: previous });
 					else await backend.updateFolder(app.token, id, { name: previous });
@@ -255,7 +256,7 @@
 			});
 			await loadContents();
 		} catch {
-			toast.danger('Could not rename that.');
+			toast.danger(t('files.renameFailed'));
 		}
 	}
 
@@ -287,11 +288,11 @@
 		if (items.length === 0 || target === currentFolderId) return;
 		const origin = currentFolderId;
 		const { moved, failed } = await moveEntries(app.token, items, target);
-		if (failed > 0) toast.danger(`${failed} ${failed === 1 ? 'item' : 'items'} could not be moved.`);
+		if (failed > 0) toast.danger(t('files.moveFailed', { count: failed }));
 		if (moved.length > 0) {
-			const where = targetName ?? (target === null ? 'Files' : 'folder');
+			const where = targetName || (target === null ? t('nav.files') : t('files.folderFallback'));
 			pushUndo({
-				label: moved.length === 1 ? `Moved to ${where}` : `${moved.length} items moved to ${where}`,
+				label: t('files.movedTo', { count: moved.length, where }),
 				icon: nuage.move,
 				async execute() {
 					await moveEntries(app.token, moved, origin);
@@ -320,10 +321,10 @@
 		if (targets.length === 0) return;
 
 		const results = await Promise.allSettled(
-			targets.map((t) =>
-				t.type === 'file'
-					? backend.deleteFile(app.token, t.id)
-					: backend.deleteFolder(app.token, t.id)
+			targets.map((target) =>
+				target.type === 'file'
+					? backend.deleteFile(app.token, target.id)
+					: backend.deleteFolder(app.token, target.id)
 			)
 		);
 
@@ -331,17 +332,17 @@
 		   to restore a file which was never deleted just produces a second error. */
 		const deleted = targets.filter((_, i) => results[i].status === 'fulfilled');
 		const failed = targets.length - deleted.length;
-		if (failed > 0) toast.danger(`${failed} ${failed === 1 ? 'item' : 'items'} could not be deleted.`);
+		if (failed > 0) toast.danger(t('files.deleteFailed', { count: failed }));
 
 		if (deleted.length > 0) {
 			pushUndo({
 				label:
 					deleted.length === 1
-						? `“${deleted[0].name}” moved to trash`
-						: `${deleted.length} items moved to trash`,
+						? t('files.trashedOne', { name: deleted[0].name })
+						: t('files.trashedMany', { count: deleted.length }),
 				async execute() {
 					await Promise.allSettled(
-						deleted.map((t) => backend.restoreItem(app.token, t.type, t.id))
+						deleted.map((item) => backend.restoreItem(app.token, item.type, item.id))
 					);
 					await loadContents();
 					app.refreshQuota();
@@ -378,8 +379,8 @@
 
 		if (!entry) {
 			return [
-				{ label: 'Upload files', icon: icons.upload, onSelect: () => fileInput?.click() },
-				{ label: 'New folder', icon: nuage.newFolder, onSelect: () => (newFolderOpen = true) }
+				{ label: t('files.uploadFiles'), icon: icons.upload, onSelect: () => fileInput?.click() },
+				{ label: t('files.newFolder'), icon: nuage.newFolder, onSelect: () => (newFolderOpen = true) }
 			];
 		}
 
@@ -388,7 +389,7 @@
 
 		if (!many && entry.type === 'file') {
 			items.push({
-				label: 'Download',
+				label: t('files.menu.download'),
 				icon: icons.download,
 				onSelect: () => {
 					const a = document.createElement('a');
@@ -399,29 +400,29 @@
 			});
 		}
 		if (!many) {
-			items.push({ label: 'Rename', icon: nuage.rename, onSelect: () => startRename(entry) });
+			items.push({ label: t('files.menu.rename'), icon: nuage.rename, onSelect: () => startRename(entry) });
 			items.push({
-				label: 'Share',
+				label: t('files.menu.share'),
 				icon: nuage.share,
 				onSelect: () => (shareTarget = { type: entry.type, id: entry.id, name: entry.name })
 			});
 		}
 		items.push({
-			label: many ? `Move ${selection.count} items…` : 'Move to…',
+			label: many ? t('files.menu.moveMany', { count: selection.count }) : t('files.menu.moveTo'),
 			icon: nuage.move,
 			onSelect: () => requestMove(entry)
 		});
 		if (parentCrumb) {
 			const parent = parentCrumb;
 			items.push({
-				label: `Move to ${parent.name}`,
+				label: t('files.menu.moveParent', { name: parent.name || t('nav.files') }),
 				icon: nuage.parent,
 				onSelect: () =>
 					void moveTo(many ? selectedEntries() : [entry], parent.id, parent.name)
 			});
 		}
 		items.push({
-			label: many ? `Move ${selection.count} items to trash` : 'Move to trash',
+			label: many ? t('files.menu.trashMany', { count: selection.count }) : t('files.moveToTrash'),
 			icon: icons.remove,
 			tone: 'danger',
 			onSelect: () => requestDelete(entry)
@@ -437,7 +438,7 @@
 </script>
 
 <svelte:head>
-	<title>Files — Nuage</title>
+	<title>{t('files.title')}</title>
 </svelte:head>
 
 <!-- The page is a drop surface for uploads. It carries no role on purpose: it is not a widget,
@@ -459,11 +460,11 @@
 >
 	{#if showDropOverlay}
 		<div
-			class="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-fc-lg border-2 border-dashed border-fc-accent bg-fc-accent/5"
+			class="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-fc-lg bg-fc-accent/10"
 		>
 			<div class="flex flex-col items-center gap-2 text-fc-fg">
 				<iconify-icon icon={icons.upload} width="32" height="32" class="block"></iconify-icon>
-				<p class="text-fc-sm font-medium">Drop to upload</p>
+				<p class="text-fc-sm font-medium">{t('files.dropToUpload')}</p>
 			</div>
 		</div>
 	{/if}
@@ -482,16 +483,16 @@
 					></iconify-icon>
 					<input
 						type="search"
-						placeholder="Search files"
-						aria-label="Search files"
+						placeholder={t('files.search')}
+						aria-label={t('files.search')}
 						bind:value={searchQuery}
 						oninput={onSearchInput}
-						class="h-9 [@media(pointer:coarse)]:h-11 w-full rounded-fc-md border border-fc-border bg-fc-bg pr-3 pl-9 text-fc-sm text-fc-fg placeholder:text-fc-fg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring lg:w-56"
+						class="h-9 [@media(pointer:coarse)]:h-11 w-full rounded-fc-md bg-fc-field pr-3 pl-9 text-fc-sm text-fc-fg placeholder:text-fc-fg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring lg:w-56"
 					/>
 				</div>
 
 				<div class="flex overflow-hidden rounded-fc-md bg-fc-surface">
-					{#each [{ mode: 'list', icon: nuage.list, label: 'List view' }, { mode: 'grid', icon: nuage.grid, label: 'Grid view' }] as option (option.mode)}
+					{#each [{ mode: 'list', icon: nuage.list, label: t('files.viewList') }, { mode: 'grid', icon: nuage.grid, label: t('files.viewGrid') }] as option (option.mode)}
 						<button
 							type="button"
 							aria-label={option.label}
@@ -511,15 +512,15 @@
 
 		<div class="flex flex-wrap items-center gap-2">
 			{#if selection.mode}
-				<Button variant="ghost" icon={icons.close} class="[@media(pointer:coarse)]:h-11" onclick={() => selection.exit()}>Done</Button>
-				<span class="text-fc-sm text-fc-fg-muted">{selection.count} selected</span>
+				<Button variant="ghost" icon={icons.close} class="[@media(pointer:coarse)]:h-11" onclick={() => selection.exit()}>{t('common.done')}</Button>
+				<span class="text-fc-sm text-fc-fg-muted">{t('files.selected', { count: selection.count })}</span>
 				<div class="flex-1"></div>
 				<Button
 					variant="outline"
 					class="[@media(pointer:coarse)]:h-11"
 					onclick={() => (selection.all ? selection.clear() : selection.selectAll())}
 				>
-					{selection.all ? 'Deselect all' : 'Select all'}
+					{selection.all ? t('files.deselectAll') : t('files.selectAll')}
 				</Button>
 				<Button
 					variant="outline"
@@ -528,7 +529,7 @@
 					disabled={selection.count === 0}
 					onclick={() => requestMove(null)}
 				>
-					Move
+					{t('files.move')}
 				</Button>
 				<Button
 					variant="danger"
@@ -537,14 +538,14 @@
 					disabled={selection.count === 0}
 					onclick={() => requestDelete(null)}
 				>
-					Move to trash
+					{t('files.moveToTrash')}
 				</Button>
 			{:else}
-				<Button icon={icons.upload} class="[@media(pointer:coarse)]:h-11" onclick={() => fileInput?.click()}>Upload</Button>
+				<Button icon={icons.upload} class="[@media(pointer:coarse)]:h-11" onclick={() => fileInput?.click()}>{t('files.upload')}</Button>
 				<Button variant="outline" icon={nuage.newFolder} class="[@media(pointer:coarse)]:h-11" onclick={() => (newFolderOpen = true)}>
-					New folder
+					{t('files.newFolder')}
 				</Button>
-				<Button variant="ghost" icon={icons.check} class="[@media(pointer:coarse)]:h-11" onclick={() => selection.enter()}>Select</Button>
+				<Button variant="ghost" icon={icons.check} class="[@media(pointer:coarse)]:h-11" onclick={() => selection.enter()}>{t('files.select')}</Button>
 			{/if}
 		</div>
 
@@ -562,13 +563,11 @@
 		{:else if entries.length === 0}
 			<EmptyState
 				icon={searchQuery ? icons.search : nuage.folderOpen}
-				title={searchQuery ? 'Nothing matches that' : 'This folder is empty'}
-				description={searchQuery
-					? 'Try a shorter term — search looks at file names only.'
-					: 'Drop files anywhere on this page, or use the buttons above.'}
+				title={searchQuery ? t('files.noMatchTitle') : t('files.emptyTitle')}
+				description={searchQuery ? t('files.noMatchText') : t('files.emptyText')}
 			>
 				{#if !searchQuery}
-					<Button icon={icons.upload} class="[@media(pointer:coarse)]:h-11" onclick={() => fileInput?.click()}>Upload files</Button>
+					<Button icon={icons.upload} class="[@media(pointer:coarse)]:h-11" onclick={() => fileInput?.click()}>{t('files.uploadFiles')}</Button>
 				{/if}
 			</EmptyState>
 		{:else if viewMode === 'grid'}
@@ -625,7 +624,7 @@
 		y={menu.y}
 		items={menuItems}
 		heading={menu.entry && selection.count <= 1
-			? { title: menu.entry.name, detail: menu.entry.type === 'folder' ? 'Folder' : undefined }
+			? { title: menu.entry.name, detail: menu.entry.type === 'folder' ? t('files.menu.folder') : undefined }
 			: undefined}
 		onClose={closeMenu}
 	/>
@@ -662,23 +661,23 @@
 	/>
 {/if}
 
-<Modal bind:open={newFolderOpen} title="New folder" showClose>
+<Modal bind:open={newFolderOpen} title={t('files.newFolderTitle')} showClose>
 	<form
 		onsubmit={(e) => {
 			e.preventDefault();
 			void createFolder();
 		}}
 	>
-		<Field label="Name">
-			<Input bind:value={newFolderName} placeholder="Invoices" autocomplete="off" />
+		<Field label={t('common.name')}>
+			<Input bind:value={newFolderName} placeholder={t('files.newFolderPlaceholder')} autocomplete="off" />
 		</Field>
 	</form>
 
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button variant="ghost" class="[@media(pointer:coarse)]:h-11" onclick={() => (newFolderOpen = false)}>Cancel</Button>
+			<Button variant="ghost" class="[@media(pointer:coarse)]:h-11" onclick={() => (newFolderOpen = false)}>{t('common.cancel')}</Button>
 			<Button icon={icons.plus} class="[@media(pointer:coarse)]:h-11" disabled={!newFolderName.trim()} onclick={createFolder}>
-				Create
+				{t('common.create')}
 			</Button>
 		</div>
 	{/snippet}
@@ -686,11 +685,11 @@
 
 <ConfirmModal
 	open={pendingDelete !== null}
-	title="Move to trash?"
+	title={t('files.trashTitle')}
 	description={pendingDelete?.length === 1
-		? `“${pendingDelete[0].name}” goes to the trash. You can restore it from there, and nothing is removed from the server yet.`
-		: `${pendingDelete?.length ?? 0} items go to the trash. You can restore them from there, and nothing is removed from the server yet.`}
-	confirmLabel="Move to trash"
+		? t('files.trashOne', { name: pendingDelete[0].name })
+		: t('files.trashMany', { count: pendingDelete?.length ?? 0 })}
+	confirmLabel={t('files.moveToTrash')}
 	tone="danger"
 	onConfirm={confirmDelete}
 	onCancel={() => (pendingDelete = null)}

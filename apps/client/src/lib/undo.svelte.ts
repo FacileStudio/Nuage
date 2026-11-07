@@ -1,4 +1,5 @@
 import { icons, toast } from '@facile/muse';
+import { t } from '$lib/i18n/index.svelte';
 
 export type UndoAction = {
 	label: string;
@@ -27,7 +28,7 @@ export function pushUndo(action: UndoAction) {
 	toastId = toast.neutral(action.label, {
 		icon: action.icon ?? icons.remove,
 		duration: UNDO_WINDOW_MS,
-		action: { label: 'Undo', onClick: () => void undoLast() },
+		action: { label: t('files.undo'), onClick: () => void undoLast() },
 		onDismiss: () => {
 			current = null;
 			toastId = null;
@@ -42,7 +43,7 @@ export async function undoLast() {
 	try {
 		await action.execute();
 	} catch {
-		toast.danger('Could not undo that.');
+		toast.danger(t('files.undoFailed'));
 	}
 }
 

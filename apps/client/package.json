@@ -10,7 +10,7 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"test": "bun test src",
+		"test": "bun test src && bun run scripts/check-messages.ts",
 		"icons": "bun run scripts/build-icons.ts"
 	},
 	"devDependencies": {

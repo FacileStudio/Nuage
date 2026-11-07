@@ -11,6 +11,7 @@
 	import { isPreviewable, previewKind } from '$lib/files/entries';
 	import { formatSize } from '$lib/format';
 	import { fileIcon, fileTypeLabel, icons, nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 	import FileViewer from '$lib/components/files/FileViewer.svelte';
 	import ViewerStage from '$lib/components/files/ViewerStage.svelte';
 
@@ -27,7 +28,7 @@
 
 	let token = $derived(page.params.token ?? '');
 	const previewable = $derived(folderFiles.filter(isPreviewable));
-	const title = $derived(share?.file?.name ?? share?.folder?.name ?? 'Shared');
+	const title = $derived(share?.file?.name ?? share?.folder?.name ?? t('public.shared'));
 
 	onMount(async () => {
 		try {
@@ -37,7 +38,7 @@
 				await loadFolderContents();
 			}
 		} catch {
-			error = 'This link has expired or does not exist';
+			error = t('public.expired');
 		}
 		loading = false;
 	});
@@ -80,7 +81,7 @@
 
 <svelte:head>
 	<meta name="robots" content="noindex, nofollow" />
-	<title>{title} — Nuage</title>
+	<title>{t('public.title', { name: title })}</title>
 </svelte:head>
 
 {#snippet brand()}
@@ -119,7 +120,7 @@
 
 		{#if share?.file}
 			{@const file = share.file}
-			<span class="hidden h-6 w-px shrink-0 bg-fc-border sm:block"></span>
+			<span class="hidden h-6 w-px shrink-0 bg-fc-surface sm:block"></span>
 			<div class="min-w-0 flex-1">
 				<h1 class="truncate text-fc-sm font-semibold sm:text-fc-md" title={file.name}>{file.name}</h1>
 				<p class="truncate text-fc-xs text-fc-fg-muted">
@@ -132,12 +133,12 @@
 				icon={icons.download}
 				class="hidden sm:inline-flex"
 			>
-				Download
+				{t('viewer.download')}
 			</Button>
 			<a
 				href={urlFor(file)}
 				download={file.name}
-				aria-label="Download {file.name}"
+				aria-label={t('public.downloadFile', { name: file.name })}
 				class="viewer-tool size-11 sm:hidden"
 			>
 				<iconify-icon icon={icons.download} width="20" height="20" class="block"></iconify-icon>
@@ -153,7 +154,7 @@
 				bare
 				icon={nuage.shareOff}
 				title={error}
-				description="Check the address, or ask whoever sent it for a fresh link."
+				description={t('public.expiredHint')}
 			/>
 		</main>
 	{:else if share?.file}
@@ -167,7 +168,7 @@
 	{:else if share?.folder}
 		<main class="min-h-0 flex-1 overflow-y-auto">
 			<div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6">
-				<nav class="flex flex-wrap items-center gap-1 text-fc-sm" aria-label="Breadcrumb">
+				<nav class="flex flex-wrap items-center gap-1 text-fc-sm" aria-label={t('files.breadcrumb')}>
 					{#each breadcrumbs as crumb, i (crumb.id ?? 'root')}
 						{#if i > 0}
 							<iconify-icon
@@ -197,19 +198,19 @@
 					<EmptyState
 						bare
 						icon={nuage.folderOpen}
-						title="This folder is empty"
-						description="There is nothing to show here."
+						title={t('public.emptyTitle')}
+						description={t('public.emptyText')}
 					/>
 				{:else}
 					{#if folderFolders.length > 0}
-						<section class="flex flex-col gap-3" aria-label="Folders">
-							<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">Folders</h2>
+						<section class="flex flex-col gap-3" aria-label={t('files.folders')}>
+							<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">{t('files.folders')}</h2>
 							<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
 								{#each folderFolders as folder (folder.id)}
 									<Card class="group relative flex items-center gap-3 p-0 transition-colors hover:bg-fc-surface">
 										<button
 											type="button"
-											aria-label="Open {folder.name}"
+											aria-label={t('files.open', { name: folder.name })}
 											onclick={() => openSubfolder(folder)}
 											class="absolute inset-0 rounded-fc-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 										></button>
@@ -228,15 +229,15 @@
 						</section>
 					{/if}
 					{#if folderFiles.length > 0}
-						<section class="flex flex-col gap-3" aria-label="Files">
-							<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">Files</h2>
+						<section class="flex flex-col gap-3" aria-label={t('files.files')}>
+							<h2 class="text-fc-xs font-medium tracking-wide text-fc-fg-muted uppercase">{t('files.files')}</h2>
 							<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
 								{#each folderFiles as file (file.id)}
 									<Card class="group relative flex flex-col gap-0 p-0 transition-colors hover:bg-fc-surface">
 										{#if isPreviewable(file)}
 											<button
 												type="button"
-												aria-label="Preview {file.name}"
+												aria-label={t('public.preview', { name: file.name })}
 												onclick={() => (viewing = file)}
 												class="m-2 mb-0 block overflow-hidden rounded-fc-sm bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 											>
@@ -246,7 +247,7 @@
 											<a
 												href={urlFor(file)}
 												download={file.name}
-												aria-label="Download {file.name}"
+												aria-label={t('public.downloadFile', { name: file.name })}
 												class="m-2 mb-0 block overflow-hidden rounded-fc-sm bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 											>
 												{@render thumb(file)}
@@ -262,7 +263,7 @@
 											<a
 												href={urlFor(file)}
 												download={file.name}
-												aria-label="Download {file.name}"
+												aria-label={t('public.downloadFile', { name: file.name })}
 												class="viewer-tool size-11 text-fc-fg-muted hover:text-fc-fg"
 											>
 												<iconify-icon icon={icons.download} width="18" height="18" class="block"
