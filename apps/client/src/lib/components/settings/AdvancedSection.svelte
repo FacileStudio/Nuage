@@ -39,7 +39,7 @@
 
 <SettingsSection title={t('settings.about.title')} description={t('settings.about.description')}>
 	<SettingsRow label={t('settings.about.docs')} description={t('settings.about.docsText')}>
-		<Button variant="outline" href="/docs" data-sveltekit-reload iconRight={icons.arrow}>{t('settings.about.open')}</Button>
+		<Button variant="secondary" href="/docs" data-sveltekit-reload iconRight={icons.arrow}>{t('settings.about.open')}</Button>
 	</SettingsRow>
 	<SettingsRow label={t('settings.about.created')}>
 		<span class="text-fc-sm text-fc-fg-muted">{user?.created_at ? formatDate(user.created_at) : '—'}</span>

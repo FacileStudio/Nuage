@@ -8,6 +8,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While on
 Releases are tagged `v*` on `main`. The API deploys from `main` on push, so a
 tag records what shipped rather than triggering the deploy.
 
+## [Unreleased]
+
+### Changed
+
+- Client: `@facile/muse` v0.14.4 to v0.16.1. Secondary buttons use the `secondary` variant in place of the deprecated `outline`. The icon generator accepts Iconify aliases, which the new muse icons need.
+- `GET /version` comes from the `VERSION` file, which the release commit bumps (still `v` plus the number). The `APP_VERSION` build arg and the Dokploy env no longer take part, so a stale env value cannot make the server report an old release. The image build no longer needs `.git`.
+
 ## [0.14.2] - 2026-11-07
 
 ### Changed

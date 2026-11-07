@@ -9,7 +9,6 @@ FROM golang:1.26.8-alpine AS api-build
 
 ARG TARGETOS=linux
 ARG TARGETARCH
-ARG APP_VERSION=
 
 WORKDIR /repo/apps/api
 
@@ -18,19 +17,12 @@ RUN go mod download
 
 COPY apps/api ./
 
-# APP_VERSION, when the build passes it, is the version served at /version. Without
-# it the commit is read from the repository the context was built out of and linked
-# in, so a running container can name the revision it is serving. That is why
-# `.git` is the one thing .dockerignore keeps. -buildvcs=false because the
-# stamp is the answer here, not the toolchain's own guess at a partial checkout.
-COPY .git /repo/.git
-RUN apk add --no-cache git
-
-RUN stamp="${APP_VERSION:-$(git -C /repo rev-parse --short=12 HEAD 2>/dev/null)}"; \
-    ldflags="-s -w"; \
-    [ -z "$stamp" ] || ldflags="$ldflags -X github.com/FacileStudio/Nuage/apps/api/internal/version.stamp=$stamp"; \
+COPY VERSION /repo/VERSION
+RUN stamp="v$(tr -d '[:space:]' < /repo/VERSION)"; \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} \
-    go build -trimpath -buildvcs=false -ldflags="$ldflags" -o bin/api .
+    go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X github.com/FacileStudio/Nuage/apps/api/internal/version.stamp=$stamp" \
+    -o bin/api .
 
 # STORAGE_DIR, which only the API writes to, and only for avatars. distroless
 # has no shell, so it is made here and copied into the final image owned by the

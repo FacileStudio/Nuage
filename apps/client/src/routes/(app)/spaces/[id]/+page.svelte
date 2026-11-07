@@ -99,13 +99,13 @@
 					{isCurrent ? t('space.current') : t('space.switch')}
 				</Button>
 				{#if isOwnerOrAdmin}
-					<Button variant="outline" href="/spaces/{spaceId}/settings" icon={icons.settings}>
+					<Button variant="secondary" href="/spaces/{spaceId}/settings" icon={icons.settings}>
 						{t('space.settings')}
 					</Button>
 				{/if}
 				{#if linked}
 					<Button
-						variant="outline"
+						variant="secondary"
 						href={registreSpaceUrl(space?.registre_space_id)}
 						target="_blank"
 						rel="noopener noreferrer"
@@ -129,7 +129,7 @@
 						<p class="text-fc-sm text-fc-fg-muted">{t('space.membersCount', { count: members.length })}</p>
 					</div>
 					{#if isOwnerOrAdmin && !linked}
-						<Button variant="outline" href="/spaces/{spaceId}/members" icon={nuage.memberAdd}>
+						<Button variant="secondary" href="/spaces/{spaceId}/members" icon={nuage.memberAdd}>
 							{t('space.manage')}
 						</Button>
 					{/if}
