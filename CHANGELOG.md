@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-07
+
 ### Changed
 
 - **Sign-in goes through Registre only.** The local register and login routes, the password
