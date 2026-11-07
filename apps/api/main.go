@@ -18,6 +18,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/database"
 	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
+	"github.com/FacileStudio/Nuage/apps/api/internal/erasure"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
@@ -41,7 +42,6 @@ import (
 
 	"github.com/FacileStudio/Journal/sdk/journal"
 	"github.com/FacileStudio/porte/directory"
-	"github.com/FacileStudio/porte/local"
 	"github.com/FacileStudio/porte/oidc"
 	portepg "github.com/FacileStudio/porte/pg"
 	"github.com/FacileStudio/porte/session"
@@ -65,23 +65,18 @@ const (
 	avatarRoutePrefix = "/avatars/"
 )
 
-// buildAuth constructs porte: one session manager, shared by the OIDC kit and
-// the local login, over the identity tables.
+// buildAuth constructs porte: one session manager, shared by the OIDC kit,
+// over the identity tables.
 //
-// One manager and not two: they would each keep their own idea of the clock
-// and of whether the cookie is Secure, and porte refuses a kit whose config
-// disagrees with its manager's for exactly that reason. Discovery runs here,
-// so an unreachable or half-configured issuer fails at boot rather than on
-// somebody's first login.
+// One manager and not two: porte refuses a kit whose config disagrees with its
+// manager's. Discovery runs here, so an unreachable or half-configured issuer
+// fails at boot rather than on somebody's first login. Sign-in goes through
+// Registre only: with an issuer configured porte mounts no password route.
 //
 // The notifier rides into the UserStore rather than the auth service, because
 // creating an account is the thing that emits user.created and the UserStore
-// is now the only place an account is created.
-//
-// Nuage's floor has always been eight characters. porte defaults to
-// twelve, and raising it here would reject a password this app accepted
-// yesterday — a product decision, not a migration.
-func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *local.Kit, *oidc.Kit, error) {
+// is the only place an account is created.
+func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *oidc.Kit, *portepg.Store, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, nil, nil, err
@@ -104,17 +99,7 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	passwords, err := local.New(local.Config{AllowRegistration: !appEnv.SSOOnly, MinPasswordLength: 8}, local.Deps{
-		Users:      users,
-		Identities: store.Identities(),
-		Sessions:   sessions,
-		Logger:     appLogger,
-		Count:      users.CountUsers,
-	})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return sessions, passwords, kit, nil
+	return sessions, kit, store, nil
 }
 
 // newDirectory builds the Registre space sync when OIDC is configured, using the app's own
@@ -144,6 +129,24 @@ func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, quo
 		Logger: appLogger,
 	}
 	return registre, syncer
+}
+
+// newDeletions builds the GDPR deletion receiver when OIDC is configured, with
+// the same client credentials as the snapshot sync, and returns nil otherwise.
+// Nuage runs as one replica, so the one Run it starts is the only one.
+func newDeletions(
+	db *gorm.DB, appEnv env.Config, store *portepg.Store, files erasure.PersonalFiles,
+	apps erasure.AppData, appLogger *slog.Logger,
+) *erasure.Deletions {
+	if appEnv.OIDC == nil {
+		return nil
+	}
+	client := directory.Client{
+		Issuer:       appEnv.OIDC.Issuer,
+		ClientID:     appEnv.OIDC.ClientID,
+		ClientSecret: appEnv.OIDC.ClientSecret,
+	}
+	return erasure.New(db, client, store.EraseIdentity, files, apps, appEnv.StorageDir, appLogger)
 }
 
 // registreSpacesURL is Registre's spaces page, where shared spaces are managed once OIDC is
@@ -195,6 +198,22 @@ func runMaintenance(ctx context.Context, db *gorm.DB, trashService *trash.Servic
 	} else if purged > 0 {
 		appLogger.Info("purged expired trash", slog.Int("count", purged))
 	}
+}
+
+// securityConfig extends tronc's default security headers for the built client:
+// the SvelteKit bootstrap and app.html each carry an inline script, and
+// script-src 'self' would block both once the policy is enforced. The policy
+// stays report-only until a release shows no violation in the console.
+func securityConfig(clientDir string, appLogger *slog.Logger) troncmiddleware.SecurityConfig {
+	if !spa.Available(clientDir) {
+		return troncmiddleware.SecurityConfig{}
+	}
+	hashes, err := spa.InlineScriptHashes(clientDir)
+	if err != nil {
+		appLogger.Error("failed to hash the client's inline scripts", slog.Any("error", err))
+		return troncmiddleware.SecurityConfig{}
+	}
+	return troncmiddleware.SecurityConfig{CSPSources: map[string][]string{"script-src": hashes}}
 }
 
 // registerVersionRoute answers /version and /api/version with the version of
@@ -301,12 +320,12 @@ func run() int {
 	defer notifier.Stop()
 	actLogger := activity.NewLogger(db)
 
-	sessions, passwords, kit, err := buildAuth(context.Background(), db, notifier, appEnv, appLogger)
+	sessions, kit, porteStore, err := buildAuth(context.Background(), db, notifier, appEnv, appLogger)
 	if err != nil {
 		appLogger.Error("failed to build authentication", slog.Any("error", err))
 		return 1
 	}
-	authService := auth.NewService(db, sessions, passwords, appLogger).WithFullAccessActors(appEnv.FullAccessActors)
+	authService := auth.NewService(db, sessions, appLogger).WithFullAccessActors(appEnv.FullAccessActors)
 	userService := users.NewService(db, appEnv.StorageDir, authService)
 	plans := newPlans(db, appEnv, appLogger)
 	quotaService := quota.NewService(db).WithPlans(plans)
@@ -324,12 +343,14 @@ func run() int {
 	searchService := search.NewService(db)
 	spacesService := spaces.NewService(db, storageClient, registreSpacesURL(appEnv))
 	registre, syncer := newDirectory(db, appEnv, plans, quotaService, appLogger)
+	appFolderService := appfolders.NewService(db, storageClient, quotaService, appLogger)
+	deletions := newDeletions(db, appEnv, porteStore, trashService, appFolderService, appLogger)
 	if err := spacesService.MigrateBuckets(context.Background()); err != nil {
 		appLogger.Error("failed to move space files to their own buckets; serving with the files still in the shared bucket", slog.Any("error", err))
 	}
 	activityService := activitymod.NewService(db)
-	appFolderService := appfolders.NewService(db, storageClient, quotaService, appLogger)
 
+	clientDir := spa.DirFromEnv()
 	router := httpx.NewRouter(httpx.Config{
 		TrustedProxies: appEnv.TrustedProxies,
 		CDNProxies:     appEnv.CDNProxies,
@@ -338,10 +359,9 @@ func run() int {
 		CORS: troncmiddleware.CORSConfig{
 			AllowedOrigins: appEnv.CORSAllowedOrigins,
 		},
+		Security: securityConfig(clientDir, appLogger),
 	})
-	router.Use(middleware.SecurityHeaders)
 	router.Use(middleware.RateLimitAPI(600, time.Minute, apiPrefix+"/", middleware.IsTransferPath))
-	router.Use(middleware.RateLimitPaths(10, time.Minute, "/api/auth/login", "/api/auth/register"))
 
 	health.Mount(router, health.DB(sqlDB), func(ctx context.Context) error {
 		return storageClient.EnsureBucket(ctx)
@@ -349,6 +369,9 @@ func run() int {
 	registerVersionRoute(router)
 	if syncer != nil {
 		router.Method(http.MethodPost, directory.SyncPath, syncer.Handler())
+	}
+	if deletions != nil {
+		router.Method(http.MethodPost, directory.DeletionsPath, deletions.Handler())
 	}
 
 	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
@@ -359,9 +382,7 @@ func run() int {
 			avatarFS.ServeHTTP(w, request)
 		})
 
-		sessions.Mount(r)
-		kit.Mount(r)
-		auth.RegisterRoutes(r, authService, appEnv)
+		auth.RegisterRoutes(r, sessions, kit)
 		users.RegisterRoutes(r, userService, authService)
 		files.RegisterRoutes(r, fileService, authService)
 		trash.RegisterRoutes(r, trashService, authService)
@@ -378,7 +399,6 @@ func run() int {
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, appLogger)
 	docs.Mount(router)
 
-	clientDir := spa.DirFromEnv()
 	if spa.Available(clientDir) {
 		router.Handle("/*", spa.Handler(spa.Config{Dir: clientDir}))
 		appLogger.Info("serving client", slog.String("dir", clientDir))
@@ -404,6 +424,9 @@ func run() int {
 	startMaintenance(shutdownSignal, db, trashService, appLogger)
 	if registre != nil {
 		go registre.Run(shutdownSignal, syncer)
+	}
+	if deletions != nil {
+		go deletions.Run(shutdownSignal)
 	}
 
 	appLogger.Info("server starting", slog.String("addr", addr))

@@ -2,6 +2,7 @@ package appfolders
 
 import (
 	"context"
+	stderrors "errors"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -79,4 +80,27 @@ func lockFolderForDelete(tx *gorm.DB, userID int64, appKey string) (int64, error
 		return 0, errors.NotFound("no data stored for this app")
 	}
 	return folders[0].ID, nil
+}
+
+// DeleteAll deletes every app folder userID holds, active apps or not, with
+// the objects in them. It is the erasure path: a person with no folder is not
+// an error.
+func (s *Service) DeleteAll(ctx context.Context, userID int64) error {
+	var keys []string
+	err := s.orm.WithContext(ctx).Raw(`SELECT a.key FROM app_folders af
+		JOIN registered_apps a ON a.id = af.app_id WHERE af.user_id = ?`, userID).Scan(&keys).Error
+	if err != nil {
+		return errors.Internal("failed to list the app folders", err)
+	}
+	for _, key := range keys {
+		if err := s.DeleteAppData(ctx, userID, key); err != nil && !isNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func isNotFound(err error) bool {
+	var failure *errors.Error
+	return stderrors.As(err, &failure) && failure.Code == "not_found"
 }

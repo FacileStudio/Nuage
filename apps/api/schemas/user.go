@@ -13,6 +13,7 @@ type User struct {
 	OIDCPictureURL   string    `gorm:"column:oidc_picture_url"`
 	OIDCSubject      *string   `gorm:"column:oidc_subject;uniqueIndex"`
 	Color            string    `gorm:"column:color"`
+	Locale           string    `gorm:"column:locale;not null;default:en"`
 	PasswordHash     string    `gorm:"column:password_hash"`
 	IsAdmin          bool      `gorm:"column:is_admin;default:false"`
 	OIDCAccessToken  string    `gorm:"column:oidc_access_token"`

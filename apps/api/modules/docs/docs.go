@@ -15,24 +15,6 @@ type (
 	Error    = apiref.Error
 )
 
-type RegisterRequest struct {
-	Email    string `json:"email" validate:"required"`
-	Password string `json:"password" validate:"required"`
-	Name     string `json:"name" validate:"required"`
-}
-
-type AuthResponse struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
-}
-
-type LoginRequest struct {
-	Email    string `json:"email" validate:"required"`
-	Password string `json:"password" validate:"required"`
-}
-
 type UserResponse struct {
 	ID        string `json:"id"`
 	Email     string `json:"email"`
@@ -394,27 +376,6 @@ func Reference() apiref.Config {
 		Servers:     []string{"/api"},
 		Registry: Registry{
 			Modules: []Module{
-				{
-					Name:        "auth",
-					Description: "Local and OIDC authentication",
-					Routes: []Route{
-						{
-							Method:       "POST",
-							Path:         "/auth/register",
-							Summary:      "Register a new user account",
-							RequestBody:  RegisterRequest{},
-							ResponseBody: AuthResponse{},
-							Status:       http.StatusCreated,
-						},
-						{
-							Method:       "POST",
-							Path:         "/auth/login",
-							Summary:      "Log in with email and password",
-							RequestBody:  LoginRequest{},
-							ResponseBody: AuthResponse{},
-						},
-					},
-				},
 				{
 					Name:        "users",
 					Description: "User accounts, profile management, and API tokens",

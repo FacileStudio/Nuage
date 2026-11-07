@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/activity"
@@ -34,7 +35,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
 	nuagewebdav "github.com/FacileStudio/Nuage/apps/api/modules/webdav"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
-	"github.com/FacileStudio/porte/local"
+	"github.com/FacileStudio/porte"
 	"github.com/FacileStudio/porte/oidc"
 	portepg "github.com/FacileStudio/porte/pg"
 	"github.com/FacileStudio/porte/session"
@@ -49,6 +50,7 @@ import (
 type testServer struct {
 	router     *chi.Mux
 	db         *gorm.DB
+	sessions   *session.Manager
 	plans      *entitlements.Plans
 	store      *storage.Client
 	appFolders *appfolders.Service
@@ -70,7 +72,7 @@ func skipOrFail(t *testing.T, format string, args ...any) {
 
 func setupTestServer(t *testing.T) *testServer {
 	t.Helper()
-	return setupTestServerWith(t, env.Config{SSOOnly: false}, nil)
+	return setupTestServerWith(t, env.Config{}, nil)
 }
 
 // setupTestServerWith builds the server from appEnv. A non-nil verifier stands
@@ -131,11 +133,11 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 
 	notifier := nook.NewNotifier(db)
 	actLogger := activity.NewLogger(db)
-	sessions, passwords, kit, err := buildTestAuth(db, notifier, appEnv, verifier)
+	sessions, kit, err := buildTestAuth(db, notifier, appEnv, verifier)
 	if err != nil {
 		t.Fatalf("build auth: %v", err)
 	}
-	authService := auth.NewService(db, sessions, passwords, slog.Default()).WithFullAccessActors(appEnv.FullAccessActors)
+	authService := auth.NewService(db, sessions, slog.Default()).WithFullAccessActors(appEnv.FullAccessActors)
 	userService := users.NewService(db, t.TempDir(), authService)
 	plans := entitlements.New(db, testIssuer, slog.Default())
 	quotaService := quota.NewService(db).WithPlans(plans)
@@ -157,11 +159,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	router := chi.NewRouter()
 	router.Use(troncmiddleware.CORS(troncmiddleware.CORSConfig{AllowedOrigins: []string{"*"}}))
 
-	sessions.Mount(router)
-	if kit != nil {
-		kit.Mount(router)
-	}
-	auth.RegisterRoutes(router, authService, appEnv)
+	auth.RegisterRoutes(router, sessions, kit)
 	users.RegisterRoutes(router, userService, authService)
 	files.RegisterRoutes(router, fileService, authService)
 	trash.RegisterRoutes(router, trashService, authService)
@@ -181,7 +179,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 		sqlDB.Close()
 	})
 
-	return &testServer{router: router, db: db, plans: plans, store: storageClient, appFolders: appFolderService}
+	return &testServer{router: router, db: db, sessions: sessions, plans: plans, store: storageClient, appFolders: appFolderService}
 }
 
 func cleanDB(db *gorm.DB) {
@@ -189,15 +187,27 @@ func cleanDB(db *gorm.DB) {
 	db.Exec("CREATE SCHEMA public")
 }
 
-func registerUser(ts *testServer, email, password string) (string, string) {
-	body := map[string]string{"email": email, "password": password}
-	resp := doJSON(ts, "POST", "/auth/register", body, "")
-	var result struct {
-		UserID string `json:"user_id"`
-		Token  string `json:"token"`
+// registerUser creates an account the way a Registre sign-in does, through the
+// app's UserStore, links the identity porte would link, and issues a session.
+// The password is ignored: no password sign-in exists any more. The first
+// account created is the instance admin, as in production.
+func registerUser(ts *testServer, email, _ string) (string, string) {
+	ctx := context.Background()
+	claims := porte.Claims{Provider: testIssuer, Subject: "sub-" + email, Email: email, EmailVerified: true}
+	id, err := auth.NewUserStore(ts.db, nil).UpsertFromOIDC(ctx, claims)
+	if err != nil {
+		panic(err)
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return result.UserID, result.Token
+	err = ts.db.Exec(`INSERT INTO porte_identities (user_id, provider, subject) VALUES (?, ?, ?)
+		ON CONFLICT DO NOTHING`, id, claims.Provider, claims.Subject).Error
+	if err != nil {
+		panic(err)
+	}
+	token, _, err := ts.sessions.Issue(ctx, id, "")
+	if err != nil {
+		panic(err)
+	}
+	return strconv.FormatInt(id, 10), token
 }
 
 func doJSON(ts *testServer, method, path string, body any, token string) *http.Response {
@@ -280,10 +290,10 @@ func parseJSON(resp *http.Response, dest any) {
 // With a verifier the manager also takes bearer JWTs and no kit is built.
 func buildTestAuth(
 	db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, verifier session.JWTVerifier,
-) (*session.Manager, *local.Kit, *oidc.Kit, error) {
+) (*session.Manager, *oidc.Kit, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	store := portepg.New(sqlDB)
 	users := auth.NewUserStore(db, notifier)
@@ -291,24 +301,17 @@ func buildTestAuth(
 
 	sessions, err := session.New(cfg, session.Deps{Sessions: store.Sessions(), Logger: slog.Default()})
 	if err != nil {
-		return nil, nil, nil, err
-	}
-	passwords, err := local.New(local.Config{AllowRegistration: true, MinPasswordLength: 8}, local.Deps{
-		Users: users, Identities: store.Identities(), Sessions: sessions,
-		Logger: slog.Default(), Count: users.CountUsers,
-	})
-	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if verifier != nil {
-		return sessions.WithJWT(verifier), passwords, nil, nil
+		return sessions.WithJWT(verifier), nil, nil
 	}
 	kit, err := oidc.New(context.Background(), cfg, oidc.Deps{
 		Users: users, Identities: store.Identities(), Sessions: sessions,
 		Codes: store.LoginCodes(), Logger: slog.Default(),
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	return sessions, passwords, kit, nil
+	return sessions, kit, nil
 }

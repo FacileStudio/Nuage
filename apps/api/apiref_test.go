@@ -34,12 +34,11 @@ func buildTestRouter() chi.Router {
 
 	appEnv := env.Config{}
 	sessions, _ := session.New(appEnv.Porte(), session.Deps{Logger: slog.Default()})
-	authService := auth.NewService(nil, sessions, nil, slog.Default())
+	authService := auth.NewService(nil, sessions, slog.Default())
 
 	router.Route(apiPrefix, func(r chi.Router) {
 		r.Get(avatarRoutePrefix+"*", func(w http.ResponseWriter, request *http.Request) {})
 
-		auth.RegisterRoutes(r, authService, env.Config{})
 		users.RegisterRoutes(r, nil, authService)
 		files.RegisterRoutes(r, nil, authService)
 		trash.RegisterRoutes(r, nil, authService)

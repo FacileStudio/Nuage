@@ -62,6 +62,7 @@ func migrateSchema(db *gorm.DB) error {
 		&NookDelivery{},
 		&Tombstone{},
 		&EntitlementState{},
+		&DirectoryDeletionState{},
 		&RegisteredApp{},
 		&AppFolder{},
 		&AppObject{},

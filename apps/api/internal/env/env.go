@@ -50,7 +50,6 @@ type Config struct {
 	troncenv.Core
 	StorageDir    string
 	OIDC          *OIDCConfig
-	SSOOnly       bool
 	MinIO         MinIOConfig
 	PresignSecret string
 
@@ -83,10 +82,6 @@ func Load() (Config, error) {
 	}
 
 	if cfg.MinIO, err = loadMinIO(); err != nil {
-		return Config{}, err
-	}
-
-	if cfg.SSOOnly, err = troncenv.Bool("SSO_ONLY", false); err != nil {
 		return Config{}, err
 	}
 
@@ -169,12 +164,12 @@ func loadMinIO() (MinIOConfig, error) {
 	}, nil
 }
 
-// Porte is the one configuration porte's session manager, OIDC kit and local
-// login are all built from. They share it because porte refuses at boot a kit
-// whose config disagrees with its manager's — a mismatch would otherwise
-// change silently whether the session cookie is Secure.
+// Porte is the one configuration porte's session manager and OIDC kit are both
+// built from. They share it because porte refuses at boot a kit whose config
+// disagrees with its manager's — a mismatch would otherwise change silently
+// whether the session cookie is Secure.
 func (c Config) Porte() porte.Config {
-	cfg := porte.Config{SSOOnly: c.SSOOnly, AcceptLegacyCookie: true}
+	cfg := porte.Config{AcceptLegacyCookie: true}
 	if c.OIDC == nil {
 		return cfg
 	}

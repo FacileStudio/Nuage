@@ -1,47 +1,19 @@
 package auth
 
 import (
-	"net/http"
-
-	"github.com/FacileStudio/Nuage/apps/api/internal/env"
-	"github.com/FacileStudio/tronc/httpjson"
+	"github.com/FacileStudio/porte/oidc"
+	"github.com/FacileStudio/porte/session"
 
 	"github.com/go-chi/chi/v5"
 )
 
-// RegisterRoutes wires the auth endpoints onto the router, exposing register
-// and login only when SSO is not forced.
-func RegisterRoutes(router chi.Router, service *Service, appEnv env.Config) {
-	router.Route("/auth", func(router chi.Router) {
-		if !appEnv.SSOOnly {
-			router.Post("/register", func(w http.ResponseWriter, request *http.Request) {
-				var req RegisterRequest
-				if err := httpjson.DecodeJSON(w, request, &req); err != nil {
-					httpjson.WriteError(w, err)
-					return
-				}
-				resp, err := service.controller.register(w, request, &req)
-				if err != nil {
-					httpjson.WriteError(w, err)
-					return
-				}
-				httpjson.WriteJSON(w, http.StatusCreated, resp)
-			})
-
-			router.Post("/login", func(w http.ResponseWriter, request *http.Request) {
-				var req LoginRequest
-				if err := httpjson.DecodeJSON(w, request, &req); err != nil {
-					httpjson.WriteError(w, err)
-					return
-				}
-				resp, err := service.controller.login(w, request, &req)
-				if err != nil {
-					httpjson.WriteError(w, err)
-					return
-				}
-				httpjson.WriteJSON(w, http.StatusOK, resp)
-			})
-		}
-
-	})
+// RegisterRoutes mounts the routes porte owns: /auth/config, /auth/logout,
+// /auth/sync-profile and the whole OIDC flow. Nuage has no password route of
+// its own; people sign in through Registre. A nil kit leaves the OIDC flow
+// unmounted.
+func RegisterRoutes(router chi.Router, sessions *session.Manager, kit *oidc.Kit) {
+	sessions.Mount(router)
+	if kit != nil {
+		kit.Mount(router)
+	}
 }

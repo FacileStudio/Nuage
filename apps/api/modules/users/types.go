@@ -8,18 +8,13 @@ type User struct {
 	AvatarURL    string `json:"avatar_url"`
 	AvatarSource string `json:"avatar_source"`
 	Color        string `json:"color"`
+	Locale       string `json:"locale"`
 	CreatedAt    string `json:"created_at"`
 }
 
 // MeResponse wraps the profile of the current user.
-//
-// Token is set only by a successful password change. porte rotates the
-// caller's session and puts the replacement in the cookie, but this client
-// also holds a bearer token in localStorage — the one it was holding is dead
-// by then, so it comes back here for the client to store.
 type MeResponse struct {
-	User  User   `json:"user"`
-	Token string `json:"token,omitempty"`
+	User User `json:"user"`
 }
 
 // ListResponse is a list of user profiles.
@@ -27,18 +22,11 @@ type ListResponse struct {
 	Users []User `json:"users"`
 }
 
-// UpdateRequest is the body used to update the caller's profile.
-//
-// CurrentPassword is what turns Password from "set a first password" into
-// "replace the one there is". An account that already has a password is
-// refused without it, so a session somebody borrowed cannot quietly become a
-// borrowed account. It confirms an Email change for the same reason.
+// UpdateRequest is the body used to update the caller's profile. The email
+// address is not editable: it comes from the Facile account at each sign-in.
 type UpdateRequest struct {
-	Name            *string `json:"name"`
-	Email           *string `json:"email"`
-	Password        *string `json:"password"`
-	CurrentPassword *string `json:"current_password"`
-	Color           *string `json:"color"`
+	Name  *string `json:"name"`
+	Color *string `json:"color"`
 }
 
 // ApiTokenResponse is one named API token.
