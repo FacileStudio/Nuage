@@ -2,8 +2,9 @@
 	import { onMount, setContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { MobileNav, SideBar } from '@facile/muse';
+	import { Button, MobileNav, SideBar } from '@facile/muse';
 	import { backend, isAuthError, type QuotaResponse, type Space, type UserProfile } from '$lib/backend';
+	import { setSessionLocale, t } from '$lib/i18n/index.svelte';
 	import { hasPending, undoLast } from '$lib/undo.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { icons, nuage } from '$lib/icons';
@@ -24,6 +25,7 @@
 
 	function setUser(nextUser: UserProfile) {
 		user = nextUser;
+		setSessionLocale(nextUser.locale);
 	}
 
 	async function refreshQuota() {
@@ -85,11 +87,9 @@
 	}
 
 	/*
-	 * The gate is the API's answer, not what is in localStorage. An SSO callback
-	 * signs the browser in with an HttpOnly cookie and no bearer token, so a
-	 * localStorage check bounces a perfectly authenticated user back to /login
-	 * without ever asking the server. The stored token is still passed, because a
-	 * local password login is the case that has one.
+	 * The gate is the API's answer. An SSO callback signs the browser in with an HttpOnly cookie
+	 * and no bearer token. A token left in localStorage by the retired password login is dropped:
+	 * sent as a bearer header it would shadow the cookie once it expired.
 	 *
 	 * Only a refusal logs anyone out. A 500 or a dead connection says nothing
 	 * about the session, and throwing it away over one strands the user on the
@@ -99,17 +99,16 @@
 		document.addEventListener('keydown', handleUndoKeydown);
 
 		(async () => {
-			const stored = localStorage.getItem(TOKEN_KEY) ?? '';
+			localStorage.removeItem(TOKEN_KEY);
 			try {
-				const result = await backend.me(stored);
-				token = stored;
-				user = result.user;
+				const result = await backend.me();
+				setUser(result.user);
 				loaded = true;
 				refreshQuota();
 				loadSpaces();
 			} catch (error) {
 				if (isAuthError(error)) { goto('/login'); return; }
-				failure = error instanceof Error && error.message ? error.message : 'Could not reach Nuage.';
+				failure = error instanceof Error && error.message ? error.message : t('common.unreachable');
 			}
 		})();
 
@@ -126,16 +125,16 @@
 	 * (CHARTE §14).
 	 */
 	const navPages = $derived([
-		{ href: '/files', label: 'Files', icon: icons.folder },
-		{ href: '/shared', label: 'Shared links', icon: nuage.share },
-		{ href: '/trash', label: 'Trash', icon: icons.remove },
-		{ href: '/activity', label: 'Activity', icon: icons.history },
-		{ href: '/spaces', label: 'Spaces', icon: icons.space }
+		{ href: '/files', label: t('nav.files'), short: t('nav.files'), icon: icons.folder },
+		{ href: '/shared', label: t('nav.shared'), short: t('nav.sharedShort'), icon: nuage.share },
+		{ href: '/trash', label: t('nav.trash'), short: t('nav.trash'), icon: icons.remove },
+		{ href: '/activity', label: t('nav.activity'), short: t('nav.activity'), icon: icons.history },
+		{ href: '/spaces', label: t('nav.spaces'), short: t('nav.spaces'), icon: icons.space }
 	].map((item) => ({ ...item, active: isActive(item.href) })));
 
 	/* MobileNav's ceiling is six targets plus the avatar and its labels are tooltips, so the
 	   bar takes the short spelling of the same destinations. */
-	const mobilePages = $derived(navPages.map((item) => ({ ...item, label: item.label.split(' ')[0] })));
+	const mobilePages = $derived(navPages.map((item) => ({ ...item, label: item.short })));
 
 	const onSettings = $derived(isActive('/settings'));
 	const identity = $derived(
@@ -186,11 +185,7 @@
 	<MobileNav items={mobilePages} user={identity} profileHref="/settings" profileActive={onSettings} />
 {:else if failure}
 	<div class="flex h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
-		<p class="text-sm text-muted-foreground">{failure}</p>
-		<button
-			type="button"
-			class="inline-flex h-9 items-center justify-center rounded-md border border-border px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-			onclick={() => location.reload()}
-		>Retry</button>
+		<p class="text-fc-sm text-fc-fg-muted">{failure}</p>
+		<Button variant="outline" onclick={() => location.reload()}>{t('common.retry')}</Button>
 	</div>
 {/if}

@@ -3,9 +3,8 @@ import { notePlanLimit } from '$lib/plan-limit';
 const backendBaseUrl = '/api';
 
 /*
- * porte carries a session on two transports: an Authorization header, which local
- * login still gets from localStorage, and an HttpOnly cookie, which is all an SSO
- * login leaves behind. The cookie is ambient, so porte refuses a mutating request
+ * porte carries a session on two transports: an Authorization header, which API tokens
+ * use, and an HttpOnly cookie, which is all an SSO login leaves behind. The cookie is ambient, so porte refuses a mutating request
  * that carries one without this header — a browser will not attach a custom header
  * cross-site without a preflight the API never answers. Only its presence is
  * checked, so the value is a constant.
@@ -13,33 +12,18 @@ const backendBaseUrl = '/api';
 const csrfHeader = 'X-Facile-CSRF';
 
 
-export type AuthConfig = {
-	sso_only: boolean;
-	oidc_enabled: boolean;
-};
-
-export type AuthResponse = {
-	user_id: string;
-	token: string;
-};
-
 export type UserProfile = {
 	id: string;
 	email: string;
 	name: string;
 	avatar_url: string;
 	color: string;
+	locale: string;
 	created_at: string;
 };
 
 export type MeResponse = {
 	user: UserProfile;
-	/*
-	 * Only a password change sets this. The server rotates the session, so the
-	 * bearer token this client is holding is dead by the time the response
-	 * arrives and has to be replaced with the one in the body.
-	 */
-	token?: string;
 };
 
 export type NuageFile = {
@@ -250,6 +234,20 @@ export function isAuthError(error: unknown): boolean {
 	return error instanceof ApiError && (error.status === 401 || error.status === 403);
 }
 
+/**
+ * The error for a failed upload request: an ApiError carrying the server's own message when
+ * it sent one, so the UI can show it, and a plain Error otherwise, so the UI shows its own
+ * localised wording instead of this English fallback.
+ */
+function uploadFailure(xhr: XMLHttpRequest, fallback: string): Error {
+	try {
+		const payload = JSON.parse(xhr.responseText);
+		notePlanLimit(xhr.status, payload);
+		if (payload?.error?.message) return new ApiError(payload.error.message, xhr.status);
+	} catch {}
+	return new Error(`${fallback} with status ${xhr.status}`);
+}
+
 async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
 	const headers = new Headers(options.headers);
 	if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
@@ -288,28 +286,10 @@ const isSvg = (file: { name: string; mime_type: string }): boolean =>
 export const backend = {
 	baseUrl: backendBaseUrl,
 
-	getAuthConfig() {
-		return apiFetch<AuthConfig>('/auth/config');
-	},
-
-	register(email: string, password: string) {
-		return apiFetch<AuthResponse>('/auth/register', {
-			method: 'POST',
-			body: JSON.stringify({ email, password })
-		});
-	},
-
-	login(email: string, password: string) {
-		return apiFetch<AuthResponse>('/auth/login', {
-			method: 'POST',
-			body: JSON.stringify({ email, password })
-		});
-	},
-
 	/**
 	 * The authenticated profile, and the only honest answer to "is this browser
-	 * signed in": the credential may be a bearer token from a local login or the
-	 * cookie an SSO callback left behind, and only the server can see both.
+	 * signed in": the credential is the cookie an SSO callback left behind, and
+	 * only the server can see it.
 	 */
 	me(token?: string) {
 		return apiFetch<MeResponse>('/users/me', {}, token);
@@ -353,7 +333,9 @@ export const backend = {
 					payload = undefined;
 				}
 				notePlanLimit(r.status, payload);
-				throw new Error(payload?.error?.message || `Upload failed with status ${r.status}`);
+				throw payload?.error?.message
+					? new ApiError(payload.error.message, r.status)
+					: new Error(`Upload failed with status ${r.status}`);
 			}
 			return (await r.json()) as NuageFile;
 		});
@@ -506,16 +488,10 @@ export const backend = {
 	},
 
 	/*
-	 * current_password is not optional in the way the type suggests: the server
-	 * refuses an email change without it, and refuses a password change on an
-	 * account that already has one. Sending password alone only works for an
-	 * SSO account adding its first.
-	 *
-	 * The field is not additive on an old server either — the API rejects
-	 * unknown JSON fields, so this and the API deploy together or the request
-	 * comes back "invalid JSON body".
+	 * Name and colour only. The address belongs to the Facile account and refreshes at each
+	 * sign-in, and the API rejects any other field.
 	 */
-	updateProfile(token: string, data: { name?: string; email?: string; password?: string; current_password?: string; color?: string }) {
+	updateProfile(token: string, data: { name?: string; color?: string }) {
 		return apiFetch<MeResponse>('/users/me', {
 			method: 'PATCH',
 			body: JSON.stringify(data)
@@ -564,13 +540,7 @@ export const backend = {
 				if (xhr.status >= 200 && xhr.status < 300) {
 					resolve(JSON.parse(xhr.responseText) as NuageFile);
 				} else {
-					let msg = `Upload failed with status ${xhr.status}`;
-					try {
-						const payload = JSON.parse(xhr.responseText);
-						notePlanLimit(xhr.status, payload);
-						if (payload?.error?.message) msg = payload.error.message;
-					} catch {}
-					reject(new Error(msg));
+					reject(uploadFailure(xhr, 'Upload failed'));
 				}
 			});
 			xhr.addEventListener('error', () => reject(new Error('Upload network error')));
@@ -597,13 +567,7 @@ export const backend = {
 				if (xhr.status >= 200 && xhr.status < 300) {
 					resolve(JSON.parse(xhr.responseText) as ChunkResponse);
 				} else {
-					let msg = `Chunk upload failed with status ${xhr.status}`;
-					try {
-						const payload = JSON.parse(xhr.responseText);
-						notePlanLimit(xhr.status, payload);
-						if (payload?.error?.message) msg = payload.error.message;
-					} catch {}
-					reject(new Error(msg));
+					reject(uploadFailure(xhr, 'Chunk upload failed'));
 				}
 			});
 			xhr.addEventListener('error', () => reject(new Error('Chunk upload network error')));

@@ -4,6 +4,7 @@
 	import { backend, type AppData } from '$lib/backend';
 	import { formatSize } from '$lib/format';
 	import { icons } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { token }: { token: string } = $props();
 
@@ -26,9 +27,9 @@
 		if (!target) return;
 		try {
 			await backend.deleteAppData(token, target.app);
-			toast.success(`Deleted what ${target.name} stored.`);
+			toast.success(t('appdata.deleted', { name: target.name }));
 		} catch (e) {
-			toast.danger(e instanceof Error && e.message ? e.message : 'Could not delete that app data.');
+			toast.danger(e instanceof Error && e.message ? e.message : t('appdata.deleteFailed'));
 		}
 		deletingApp = null;
 		await loadAppData();
@@ -36,24 +37,24 @@
 </script>
 
 <SettingsSection
-	title="App data"
-	description="Private storage other Facile apps keep for you. It counts toward your storage plan and is never shown as a folder or a space."
+	title={t('appdata.title')}
+	description={t('appdata.description')}
 >
 	{#if appData.length === 0}
 		<EmptyState
 			bare
 			icon={icons.widget}
-			title="No app data"
-			description="When an app such as Plume or Ardoise stores something for you, it shows here."
+			title={t('appdata.emptyTitle')}
+			description={t('appdata.emptyText')}
 		/>
 	{:else}
 		<Table>
 			<thead>
 				<tr>
-					<th scope="col">App</th>
-					<th scope="col">Items</th>
-					<th scope="col">Used</th>
-					<th scope="col" class="text-right"><span class="sr-only">Actions</span></th>
+					<th scope="col">{t('appdata.app')}</th>
+					<th scope="col">{t('appdata.items')}</th>
+					<th scope="col">{t('appdata.used')}</th>
+					<th scope="col" class="text-right"><span class="sr-only">{t('settings.tokens.actions')}</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -69,7 +70,7 @@
 								icon={icons.remove}
 								onclick={() => (deletingApp = entry)}
 							>
-								Delete
+								{t('common.delete')}
 							</Button>
 						</td>
 					</tr>
@@ -81,11 +82,11 @@
 
 <ConfirmModal
 	open={deletingApp !== null}
-	title="Delete this app's data?"
+	title={t('appdata.confirmTitle')}
 	description={deletingApp
-		? `Everything ${deletingApp.name} stored for you (${formatSize(deletingApp.used_bytes)}) is deleted for good. The app may lose documents it relies on, and this cannot be undone.`
+		? t('appdata.confirmText', { name: deletingApp.name, size: formatSize(deletingApp.used_bytes) })
 		: ''}
-	confirmLabel="Delete"
+	confirmLabel={t('common.delete')}
 	tone="danger"
 	onConfirm={deleteAppData}
 	onCancel={() => (deletingApp = null)}

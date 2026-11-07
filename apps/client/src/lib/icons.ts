@@ -1,4 +1,5 @@
 import { icons } from '@facile/muse';
+import { t } from '$lib/i18n/index.svelte';
 
 /**
  * Glyphs muse's shared set does not carry because they only mean something in a file
@@ -119,28 +120,17 @@ export function fileIcon(name: string, mime = ''): string {
 	return FILE_TYPES[EXTENSION_TYPES[extension] ?? 'file'];
 }
 
-const TYPE_LABELS: Record<keyof typeof FILE_TYPES, string> = {
-	image: 'Image',
-	video: 'Video',
-	audio: 'Audio',
-	pdf: 'PDF',
-	archive: 'Archive',
-	sheet: 'Spreadsheet',
-	slides: 'Presentation',
-	document: 'Document',
-	code: 'Code',
-	file: 'File'
-};
+const typeLabel = (type: keyof typeof FILE_TYPES): string => t(`type.${type}`);
 
 /** The human name for whatever `fileIcon` classified the file as. */
 export function fileTypeLabel(name: string, mime = ''): string {
-	if (mime.startsWith('image/')) return TYPE_LABELS.image;
-	if (mime.startsWith('video/')) return TYPE_LABELS.video;
-	if (mime.startsWith('audio/')) return TYPE_LABELS.audio;
-	if (mime === 'application/pdf') return TYPE_LABELS.pdf;
+	if (mime.startsWith('image/')) return typeLabel('image');
+	if (mime.startsWith('video/')) return typeLabel('video');
+	if (mime.startsWith('audio/')) return typeLabel('audio');
+	if (mime === 'application/pdf') return typeLabel('pdf');
 
 	const extension = name.split('.').pop()?.toLowerCase() ?? '';
-	return TYPE_LABELS[EXTENSION_TYPES[extension] ?? 'file'];
+	return typeLabel(EXTENSION_TYPES[extension] ?? 'file');
 }
 
 export { icons };

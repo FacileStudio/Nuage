@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { fileIcon, nuage } from '$lib/icons';
 	import { formatDuration } from '$lib/format';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { url, kind, name }: { url: string; kind: 'audio' | 'video'; name: string } = $props();
 
@@ -73,7 +74,7 @@
 			<span class="w-10 shrink-0 text-right text-fc-xs text-fc-fg-muted tabular-nums sm:hidden">
 				{formatDuration(currentTime)}
 			</span>
-			<div class="relative h-1.5 min-w-0 flex-1 rounded-fc-pill bg-fc-border">
+			<div class="relative h-1.5 min-w-0 flex-1 rounded-fc-pill bg-fc-surface">
 				<div class="absolute inset-y-0 left-0 rounded-fc-pill bg-fc-fg-muted/40" style="width: {loaded}%"></div>
 				<div class="absolute inset-y-0 left-0 rounded-fc-pill bg-fc-accent" style="width: {played}%"></div>
 				<input
@@ -82,8 +83,8 @@
 					max={duration || 0}
 					step="0.1"
 					bind:value={currentTime}
-					aria-label="Seek"
-					aria-valuetext="{formatDuration(currentTime)} of {formatDuration(duration)}"
+					aria-label={t('viewer.seek')}
+					aria-valuetext="{formatDuration(currentTime)} / {formatDuration(duration)}"
 					class="absolute -inset-y-2 inset-x-0 w-full cursor-pointer opacity-0 [@media(pointer:coarse)]:-inset-y-4"
 				/>
 			</div>
@@ -92,28 +93,28 @@
 			</span>
 		</div>
 		<div class="flex items-center gap-1 text-fc-fg">
-			<button type="button" class="viewer-tool" aria-label="Back 10 seconds" onclick={() => skip(-10)}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.back10')} onclick={() => skip(-10)}>
 				<iconify-icon icon={nuage.back10} width="20" height="20" class="block"></iconify-icon>
 			</button>
 			<button
 				type="button"
 				class="mx-1 inline-flex size-11 shrink-0 items-center justify-center rounded-fc-pill bg-fc-accent text-fc-accent-fg transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
-				aria-label={paused ? 'Play' : 'Pause'}
+				aria-label={paused ? t('viewer.play') : t('viewer.pause')}
 				onclick={toggle}
 			>
 				<iconify-icon icon={paused ? nuage.play : nuage.pause} width="20" height="20" class="block"></iconify-icon>
 			</button>
-			<button type="button" class="viewer-tool" aria-label="Forward 10 seconds" onclick={() => skip(10)}>
+			<button type="button" class="viewer-tool" aria-label={t('viewer.forward10')} onclick={() => skip(10)}>
 				<iconify-icon icon={nuage.forward10} width="20" height="20" class="block"></iconify-icon>
 			</button>
 			<span class="ml-2 hidden shrink-0 whitespace-nowrap text-fc-xs text-fc-fg-muted tabular-nums sm:inline">
 				{formatDuration(currentTime)} / {formatDuration(duration)}
 			</span>
 			<div class="min-w-0 flex-1"></div>
-			<button type="button" class="viewer-tool w-auto px-2 text-fc-xs font-medium whitespace-nowrap tabular-nums" aria-label="Playback speed" onclick={cycleRate}>
+			<button type="button" class="viewer-tool w-auto px-2 text-fc-xs font-medium whitespace-nowrap tabular-nums" aria-label={t('viewer.speed')} onclick={cycleRate}>
 				{playbackRate}×
 			</button>
-			<button type="button" class="viewer-tool" aria-label={muted ? 'Unmute' : 'Mute'} onclick={() => (muted = !muted)}>
+			<button type="button" class="viewer-tool" aria-label={muted ? t('viewer.unmute') : t('viewer.mute')} onclick={() => (muted = !muted)}>
 				<iconify-icon icon={muted || volume === 0 ? nuage.muted : nuage.volume} width="20" height="20" class="block"></iconify-icon>
 			</button>
 			<input
@@ -122,11 +123,11 @@
 				max="1"
 				step="0.05"
 				bind:value={volume}
-				aria-label="Volume"
+				aria-label={t('viewer.volume')}
 				class="hidden w-20 accent-fc-accent sm:block"
 			/>
 			{#if kind === 'video'}
-				<button type="button" class="viewer-tool" aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} onclick={toggleFullscreen}>
+				<button type="button" class="viewer-tool" aria-label={fullscreen ? t('viewer.exitFullscreen') : t('viewer.fullscreen')} onclick={toggleFullscreen}>
 					<iconify-icon icon={fullscreen ? nuage.exitFullscreen : nuage.fullscreen} width="20" height="20" class="block"></iconify-icon>
 				</button>
 			{/if}
@@ -135,13 +136,13 @@
 {/snippet}
 
 {#if failed}
-	<p class="text-fc-sm text-fc-fg-muted">This file cannot be played in the browser. Download it to open it.</p>
+	<p class="text-fc-sm text-fc-fg-muted">{t('viewer.cannotPlay')}</p>
 {:else if kind === 'video'}
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 	<div
 		bind:this={wrapper}
 		role="group"
-		aria-label="Video player: {name}"
+		aria-label={t('viewer.videoPlayer', { name })}
 		tabindex="0"
 		class="group relative flex h-full w-full items-center justify-center overflow-hidden rounded-fc-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {hideChrome ? 'cursor-none' : ''}"
 		onkeydown={onKeydown}
@@ -170,7 +171,7 @@
 		{#if paused}
 			<button
 				type="button"
-				aria-label="Play"
+				aria-label={t('viewer.play')}
 				onclick={toggle}
 				class="absolute inset-0 m-auto flex size-16 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-transform hover:scale-105"
 			>
@@ -189,7 +190,7 @@
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 	<div
 		role="group"
-		aria-label="Audio player: {name}"
+		aria-label={t('viewer.audioPlayer', { name })}
 		tabindex="0"
 		onkeydown={onKeydown}
 		class="flex w-full max-w-md flex-col gap-4 rounded-fc-lg bg-fc-component p-4 sm:gap-6 sm:p-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
@@ -204,7 +205,7 @@
 		</div>
 		<div class="min-w-0">
 			<p class="truncate text-fc-lg font-semibold text-fc-fg" title={name}>{name}</p>
-			<p class="text-fc-sm text-fc-fg-muted">{paused ? 'Paused' : 'Playing'}</p>
+			<p class="text-fc-sm text-fc-fg-muted">{paused ? t('viewer.paused') : t('viewer.playing')}</p>
 		</div>
 		<audio
 			bind:this={media}

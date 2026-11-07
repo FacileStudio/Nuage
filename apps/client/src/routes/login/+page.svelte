@@ -2,204 +2,43 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { Alert, AuthScreen } from '@facile/muse';
 	import { backend } from '$lib/backend';
+	import { nuage } from '$lib/icons';
+	import { rememberLocale, t } from '$lib/i18n/index.svelte';
 
-	const TOKEN_KEY = 'nuage.token';
+	let failed = $state(false);
 
-	const inputClass =
-		'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
-	const labelClass = 'text-sm font-medium leading-none';
-	const primaryButtonClass =
-		'inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50';
-	let tab = $state<'login' | 'register'>('login');
-	let email = $state('');
-	let password = $state('');
-	let message = $state('');
-	let busy = $state(false);
-	let ssoOnly = $state(false);
-	let oidcEnabled = $state(false);
-	let configLoaded = $state(false);
-
-	/*
-	 * Already signed in? Ask the API, because the credential may be the cookie an
-	 * SSO callback left behind rather than a bearer token in localStorage. This
-	 * page is where porte's failed-login redirect lands too, so the probe runs
-	 * before anything is rendered and after the error is read.
+	/**
+	 * Already signed in? Ask the API, because the credential is the cookie an SSO callback left
+	 * behind. This page is also where porte's failed-login redirect lands, so the error is read
+	 * before the probe decides to leave.
 	 */
-	async function signedIn(): Promise<boolean> {
-		try {
-			await backend.me(localStorage.getItem(TOKEN_KEY) ?? '');
-			return true;
-		} catch {
-			return false;
-		}
-	}
-
 	onMount(async () => {
-		if (await signedIn()) {
+		failed = page.url.searchParams.has('error');
+		try {
+			await backend.me();
 			goto('/files');
+		} catch {
 			return;
 		}
-		const raw = page.url.searchParams.get('tab');
-		if (raw === 'register') tab = 'register';
-		const oidcError = page.url.searchParams.get('error');
-		if (oidcError) message = oidcError;
-
-		try {
-			const cfg = await backend.getAuthConfig();
-			ssoOnly = cfg.sso_only ?? false;
-			oidcEnabled = cfg.oidc_enabled ?? false;
-			if (ssoOnly) tab = 'login';
-		} catch {}
-		configLoaded = true;
 	});
-
-	async function submit(e: Event) {
-		e.preventDefault();
-		busy = true;
-		message = '';
-		try {
-			const resp =
-				tab === 'register'
-					? await backend.register(email, password)
-					: await backend.login(email, password);
-			localStorage.setItem(TOKEN_KEY, resp.token);
-			goto('/files');
-		} catch (err) {
-			message = err instanceof Error ? err.message : 'Something went wrong';
-		} finally {
-			busy = false;
-		}
-	}
 </script>
 
 <svelte:head>
-	<title>{!ssoOnly && tab === 'register' ? 'Create account' : 'Log in'} — Nuage</title>
+	<title>{t('login.title')}</title>
 </svelte:head>
 
-<div class="flex min-h-screen">
-	<div class="hidden lg:flex lg:w-1/2 flex-col bg-black px-12 py-10">
-		<a href="/" class="flex items-center gap-3 mb-auto">
-			<iconify-icon icon="solar:cloud-bold-duotone" width="28" class="text-white"></iconify-icon>
-			<span class="text-xl font-bold font-heading tracking-tight text-white">Nuage</span>
-		</a>
-
-		<div class="mb-auto">
-			<h2 class="text-4xl font-bold font-heading text-white leading-tight tracking-tight">
-				Your files.<br />Your cloud.
-			</h2>
-			<p class="mt-4 text-sm text-white/50 max-w-xs leading-relaxed">
-				Self-hosted file storage for your organization.
-			</p>
-		</div>
-
-		<p class="text-xs text-white/30">
-			&copy; {new Date().getFullYear()} Nuage by Facile.
-		</p>
-	</div>
-
-	<div class="flex w-full lg:w-1/2 flex-col items-center justify-center px-8 py-12 bg-background">
-		<div class="w-full max-w-sm">
-			<div class="mb-8">
-				<h1 class="text-2xl font-bold font-heading tracking-tight text-foreground">
-					{!ssoOnly && tab === 'register' ? 'Create account' : 'Welcome back'}
-				</h1>
-				<p class="mt-1.5 text-sm text-muted-foreground">
-					{!ssoOnly && tab === 'register'
-						? 'Sign up to start storing files.'
-						: ssoOnly
-							? 'Sign in with your Facile account to access Nuage.'
-							: 'Log in to your Nuage account.'}
-				</p>
-			</div>
-
-			{#if !configLoaded}
-				<div class="h-40"></div>
-			{:else}
-				{#if message}
-					<p class="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-						{message}
-					</p>
-				{/if}
-
-				{#if oidcEnabled}
-					<a href="/api/auth/oidc" data-sveltekit-reload class={primaryButtonClass}>
-						<iconify-icon icon="solar:key-minimalistic-square-bold-duotone" width="18" class="mr-2"
-						></iconify-icon>
-						Sign in with Facile
-					</a>
-					{#if !ssoOnly}
-						<div class="my-6 flex items-center gap-3">
-							<span class="h-px flex-1 bg-border"></span>
-							<span class="text-xs uppercase tracking-wide text-muted-foreground">or</span>
-							<span class="h-px flex-1 bg-border"></span>
-						</div>
-					{/if}
-				{/if}
-
-				{#if !ssoOnly}
-					<div class="mb-6 flex rounded-lg bg-muted p-1 gap-1" role="tablist">
-						<button
-							type="button"
-							role="tab"
-							aria-selected={tab === 'login'}
-							class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors {tab === 'login'
-								? 'bg-background text-foreground shadow-sm'
-								: 'text-muted-foreground hover:text-foreground'}"
-							onclick={() => { tab = 'login'; message = ''; }}
-						>Log in</button>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={tab === 'register'}
-							class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors {tab === 'register'
-								? 'bg-background text-foreground shadow-sm'
-								: 'text-muted-foreground hover:text-foreground'}"
-							onclick={() => { tab = 'register'; message = ''; }}
-						>Register</button>
-					</div>
-
-					<form onsubmit={submit} class="space-y-4">
-						<div class="space-y-1.5">
-							<label for="email" class={labelClass}>Email</label>
-							<input
-								id="email"
-								type="email"
-								bind:value={email}
-								placeholder="you@example.com"
-								autocomplete="email"
-								required
-								disabled={busy}
-								class={inputClass}
-							/>
-						</div>
-
-						<div class="space-y-1.5">
-							<label for="password" class={labelClass}>Password</label>
-							<input
-								id="password"
-								type="password"
-								bind:value={password}
-								placeholder="••••••••"
-								autocomplete={tab === 'register' ? 'new-password' : 'current-password'}
-								required
-								disabled={busy}
-								class={inputClass}
-							/>
-						</div>
-
-						<button type="submit" disabled={busy} class={primaryButtonClass}>
-							{busy
-								? tab === 'register' ? 'Creating account…' : 'Logging in…'
-								: tab === 'register' ? 'Create account' : 'Log in'}
-						</button>
-					</form>
-				{/if}
-
-				{#if ssoOnly && !oidcEnabled}
-					<p class="text-sm text-destructive">SSO is not configured. Contact your administrator.</p>
-				{/if}
-			{/if}
-		</div>
-	</div>
-</div>
+<AuthScreen appName="Nuage" href="{backend.baseUrl}/auth/oidc" onLocaleChange={rememberLocale}>
+	{#snippet logo()}
+		<iconify-icon icon={nuage.brand} width="40" height="40" class="block text-fc-fg"></iconify-icon>
+	{/snippet}
+	{#snippet tagline()}
+		{t('login.tagline')}
+	{/snippet}
+	{#snippet notice()}
+		{#if failed}
+			<Alert tone="danger">{t('login.failed')}</Alert>
+		{/if}
+	{/snippet}
+</AuthScreen>

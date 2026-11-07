@@ -1,4 +1,5 @@
-import { backend } from '$lib/backend';
+import { ApiError, backend } from '$lib/backend';
+import { t } from '$lib/i18n/index.svelte';
 
 export type UploadStatus = 'pending' | 'uploading' | 'done' | 'error';
 
@@ -67,7 +68,7 @@ export class UploadQueue {
 			} catch (e) {
 				this.#patch(id, {
 					status: 'error',
-					error: e instanceof Error && e.message ? e.message : 'Upload failed'
+					error: e instanceof ApiError && e.message ? e.message : t('files.uploadFailed')
 				});
 			}
 		}

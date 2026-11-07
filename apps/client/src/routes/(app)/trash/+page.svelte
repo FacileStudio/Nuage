@@ -5,6 +5,7 @@
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { formatDate, formatSize } from '$lib/format';
 	import { fileIcon, icons, nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const app = getContext<{ token: string }>('app');
@@ -30,7 +31,7 @@
 			retentionDays = res.retention_days ?? 0;
 		} catch {
 			items = [];
-			toast.danger('Could not load the trash.');
+			toast.danger(t('trash.loadFailed'));
 		}
 		loading = false;
 	}
@@ -40,9 +41,9 @@
 		try {
 			await backend.restoreItem(app.token, item.type, item.id);
 			await loadTrash();
-			toast.success(`Restored “${item.name}”.`);
+			toast.success(t('trash.restored', { name: item.name }));
 		} catch {
-			toast.danger(`Could not restore “${item.name}”.`);
+			toast.danger(t('trash.restoreFailed', { name: item.name }));
 		}
 		busy = false;
 	}
@@ -55,9 +56,9 @@
 			await backend.permanentDelete(app.token, target.type, target.id);
 			deleteTarget = null;
 			await loadTrash();
-			toast.success(`Deleted “${target.name}” for good.`);
+			toast.success(t('trash.deletedForGood', { name: target.name }));
 		} catch {
-			toast.danger(`Could not delete “${target.name}”.`);
+			toast.danger(t('trash.deleteFailed', { name: target.name }));
 		}
 		busy = false;
 	}
@@ -68,9 +69,9 @@
 			await backend.emptyTrash(app.token);
 			emptying = false;
 			await loadTrash();
-			toast.success('Trash emptied.');
+			toast.success(t('trash.emptied'));
 		} catch {
-			toast.danger('Could not empty the trash.');
+			toast.danger(t('trash.emptyFailed'));
 		}
 		busy = false;
 	}
@@ -90,27 +91,23 @@
 			: null;
 
 	const expiryLabel = (days: number) =>
-		days === 0
-			? 'Removed for good within the hour'
-			: `Removed for good in ${days} ${days === 1 ? 'day' : 'days'}`;
+		days === 0 ? t('trash.expiresNow') : t('trash.expiresIn', { count: days });
 
 	const description = $derived.by(() => {
 		const keep =
-			retentionDays > 0
-				? `Deleted items are removed for good after ${retentionDays} ${retentionDays === 1 ? 'day' : 'days'}.`
-				: 'Deleted items stay here until you remove them.';
+			retentionDays > 0 ? t('trash.keepFor', { count: retentionDays }) : t('trash.keepForever');
 		return reclaimable > 0
-			? `${keep} Emptying the trash would give back at least ${formatSize(reclaimable)}.`
-			: `${keep} Until then they still count against your storage.`;
+			? t('trash.reclaim', { keep, size: formatSize(reclaimable) })
+			: t('trash.stillCounts', { keep });
 	});
 </script>
 
 <svelte:head>
-	<title>Trash — Nuage</title>
+	<title>{t('trash.title')}</title>
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
-	<PageHeader title="Trash" {description}>
+	<PageHeader title={t('trash.heading')} {description}>
 		{#snippet actions()}
 			{#if !loading && items.length > 0}
 				<Button
@@ -120,7 +117,7 @@
 					disabled={busy}
 					onclick={() => (emptying = true)}
 				>
-					Empty trash
+					{t('trash.empty')}
 				</Button>
 			{/if}
 		{/snippet}
@@ -131,17 +128,17 @@
 	{:else if items.length === 0}
 		<EmptyState
 			icon={icons.remove}
-			title="Trash is empty"
-			description="Deleted files and folders land here, so a wrong click is never the end of the story."
+			title={t('trash.emptyTitle')}
+			description={t('trash.emptyText')}
 		/>
 	{:else}
 		<Table>
 			<thead>
 				<tr>
-					<th scope="col">Name</th>
-					<th scope="col" class="hidden sm:table-cell">Size</th>
-					<th scope="col" class="hidden md:table-cell">Deleted</th>
-					<th scope="col" class="text-right"><span class="sr-only">Actions</span></th>
+					<th scope="col">{t('common.name')}</th>
+					<th scope="col" class="hidden sm:table-cell">{t('common.size')}</th>
+					<th scope="col" class="hidden md:table-cell">{t('trash.deleted')}</th>
+					<th scope="col" class="text-right"><span class="sr-only">{t('settings.tokens.actions')}</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -180,7 +177,7 @@
 									disabled={busy}
 									onclick={() => restoreItem(item)}
 								>
-									<span class="max-sm:sr-only">Restore</span>
+									<span class="max-sm:sr-only">{t('trash.restore')}</span>
 								</Button>
 								<!-- ghost-danger, not danger: a column of permanently red buttons turns a
 								     list into a hazard sign (CHARTE §2). -->
@@ -192,7 +189,7 @@
 									disabled={busy}
 									onclick={() => (deleteTarget = item)}
 								>
-									<span class="max-sm:sr-only">Delete</span>
+									<span class="max-sm:sr-only">{t('common.delete')}</span>
 								</Button>
 							</div>
 						</td>
@@ -205,20 +202,18 @@
 
 <ConfirmModal
 	bind:open={emptying}
-	title="Empty the trash?"
-	description="All {items.length} {items.length === 1 ? 'item' : 'items'} go for good, and the files come off the server. There is no undo."
-	confirmLabel="Empty trash"
+	title={t('trash.emptyConfirmTitle')}
+	description={t('trash.emptyConfirmText', { count: items.length })}
+	confirmLabel={t('trash.empty')}
 	tone="danger"
 	onConfirm={doEmptyTrash}
 />
 
 <ConfirmModal
 	open={deleteTarget !== null}
-	title="Delete permanently?"
-	description={deleteTarget
-		? `“${deleteTarget.name}” comes off the server for good. There is no undo, and any share link pointing at it stops working.`
-		: ''}
-	confirmLabel="Delete forever"
+	title={t('trash.deleteConfirmTitle')}
+	description={deleteTarget ? t('trash.deleteConfirmText', { name: deleteTarget.name }) : ''}
+	confirmLabel={t('trash.deleteForever')}
 	tone="danger"
 	onConfirm={doDelete}
 	onCancel={() => (deleteTarget = null)}

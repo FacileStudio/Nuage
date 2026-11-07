@@ -6,6 +6,7 @@
 	import type { Folder } from '$lib/backend';
 	import { formatDate, formatSize } from '$lib/format';
 	import { nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 	import SelectToggle from './SelectToggle.svelte';
 
 	let {
@@ -52,16 +53,16 @@
 						<SelectToggle
 							checked={selection.all}
 							indeterminate={selection.count > 0 && !selection.all}
-							label="Select everything in this folder"
+							label={t('files.selectEverything')}
 							onToggle={() => (selection.all ? selection.clear() : selection.selectAll())}
 						/>
 					{/if}
-					Name
+					{t('common.name')}
 				</div>
 			</th>
-			<th scope="col" class="hidden sm:table-cell">Size</th>
-			<th scope="col" class="hidden md:table-cell">Modified</th>
-			<th scope="col" class="w-12 text-right"><span class="sr-only">Actions</span></th>
+			<th scope="col" class="hidden sm:table-cell">{t('common.size')}</th>
+			<th scope="col" class="hidden md:table-cell">{t('common.modified')}</th>
+			<th scope="col" class="w-12 text-right"><span class="sr-only">{t('files.actions')}</span></th>
 		</tr>
 	</thead>
 	<tbody>
@@ -101,7 +102,7 @@
 						{#if selection.mode}
 							<SelectToggle
 								checked={selected}
-								label="Select {entry.name}"
+								label={t('files.selectItem', { name: entry.name })}
 								onToggle={(e) => {
 									e.stopPropagation();
 									onSelect(entry, i, e);
@@ -122,9 +123,9 @@
 								onkeydown={onRenameKeydown}
 								onblur={onRenameCancel}
 								onclick={(e) => e.stopPropagation()}
-								aria-label="New name for {entry.name}"
+								aria-label={t('files.newNameFor', { name: entry.name })}
 								autofocus
-								class="h-8 min-w-0 flex-1 rounded-fc-sm border border-fc-border bg-fc-bg px-2 text-fc-sm text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+								class="h-8 min-w-0 flex-1 rounded-fc-sm bg-fc-field px-2 text-fc-sm text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 							/>
 						{:else}
 							<!-- The name is the button, not the row: a click handler on a <tr> is
@@ -146,7 +147,7 @@
 				<td class="text-right">
 					<button
 						type="button"
-						aria-label="Actions for {entry.name}"
+						aria-label={t('files.actionsFor', { name: entry.name })}
 						onclick={(e) => {
 							e.stopPropagation();
 							onMenu(e, entry);

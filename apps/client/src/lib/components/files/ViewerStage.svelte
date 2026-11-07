@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '@facile/muse';
 	import { previewKind, type ViewerFile } from '$lib/files/entries';
+	import { t } from '$lib/i18n/index.svelte';
 	import { fileIcon, fileTypeLabel, icons } from '$lib/icons';
 	import ImageViewer from './ImageViewer.svelte';
 	import MediaPlayer from './MediaPlayer.svelte';
@@ -30,9 +31,9 @@
 		<div class="flex min-w-0 flex-col gap-1">
 			<p class="text-fc-lg font-semibold break-all text-fc-fg">{file.name}</p>
 			<p class="text-fc-sm text-fc-fg-muted">
-				{fileTypeLabel(file.name, file.mime_type)} · No preview available
+				{fileTypeLabel(file.name, file.mime_type)} · {t('viewer.noPreview')}
 			</p>
 		</div>
-		<Button href={url} download={file.name} size="lg" icon={icons.download}>Download</Button>
+		<Button href={url} download={file.name} size="lg" icon={icons.download}>{t('viewer.download')}</Button>
 	</div>
 {/if}

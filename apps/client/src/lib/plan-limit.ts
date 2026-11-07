@@ -56,6 +56,6 @@ export const planLimits = new EventTarget();
 /** Announces a 402 body on `planLimits` so the banner shows it. Any other status is ignored. */
 export function notePlanLimit(status: number, body: unknown): void {
 	if (status !== 402) return;
-	const detail = planLimitFrom(body) ?? { message: 'Your plan has no room for this.' };
+	const detail = planLimitFrom(body) ?? {};
 	planLimits.dispatchEvent(new CustomEvent<PlanLimit>('plan-limit', { detail }));
 }

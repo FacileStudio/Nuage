@@ -2,6 +2,7 @@
 	import { Button, Modal, Spinner, toast } from '@facile/muse';
 	import { backend, type Folder } from '$lib/backend';
 	import type { Entry } from '$lib/files/selection.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import { icons, nuage } from '$lib/icons';
 
 	let {
@@ -31,11 +32,15 @@
 	const movingFolders = $derived(
 		new Set(items.filter((i) => i.type === 'folder').map((i) => i.id))
 	);
-	const title = $derived(items.length === 1 ? `Move “${items[0].name}”` : `Move ${items.length} items`);
+	const title = $derived(
+		items.length === 1 ? t('move.single', { name: items[0].name }) : t('move.many', { count: items.length })
+	);
+	const nameOf = (crumb: { id: number | null; name: string }) =>
+		crumb.id === null ? t('nav.files') : crumb.name;
 	const unchanged = $derived(here?.id === originId);
 
 	$effect(() => {
-		path = trail.length > 0 ? [...trail] : [{ id: null, name: 'Files' }];
+		path = trail.length > 0 ? [...trail] : [{ id: null, name: '' }];
 	});
 
 	$effect(() => {
@@ -50,7 +55,7 @@
 			folders = res.folders ?? [];
 		} catch {
 			folders = [];
-			toast.danger('Could not load folders.');
+			toast.danger(t('move.loadFailed'));
 		}
 		loading = false;
 	}
@@ -61,13 +66,13 @@
 
 	function confirm() {
 		if (!here || unchanged) return;
-		onMove(here.id, here.name);
+		onMove(here.id, nameOf(here));
 		open = false;
 	}
 </script>
 
 <Modal bind:open {onClose} {title} showClose class="sm:max-w-lg">
-	<nav class="flex min-w-0 flex-wrap items-center gap-1 text-fc-sm" aria-label="Destination">
+	<nav class="flex min-w-0 flex-wrap items-center gap-1 text-fc-sm" aria-label={t('move.destination')}>
 		{#each path as crumb, i (crumb.id ?? 'root')}
 			{#if i > 0}
 				<iconify-icon icon={icons.arrow} width="14" height="14" class="block text-fc-fg-muted"
@@ -79,7 +84,7 @@
 				onclick={() => (path = path.slice(0, i + 1))}
 				class="truncate rounded-fc-sm px-1.5 py-0.5 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:px-2 text-fc-fg-muted transition-colors hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring disabled:font-medium disabled:text-fc-fg"
 			>
-				{crumb.name}
+				{nameOf(crumb)}
 			</button>
 		{/each}
 	</nav>
@@ -90,7 +95,7 @@
 		{:else if folders.length === 0}
 			<div class="flex h-full flex-col items-center justify-center gap-2 text-fc-fg-muted">
 				<iconify-icon icon={nuage.folderOpen} width="28" height="28" class="block"></iconify-icon>
-				<p class="text-fc-sm">No subfolders here</p>
+				<p class="text-fc-sm">{t('move.none')}</p>
 			</div>
 		{:else}
 			<ul class="flex flex-col py-1">
@@ -119,14 +124,14 @@
 
 	{#snippet footer()}
 		<div class="flex items-center justify-end gap-2">
-			<Button variant="ghost" class="[@media(pointer:coarse)]:h-11" onclick={() => (open = false)}>Cancel</Button>
+			<Button variant="ghost" class="[@media(pointer:coarse)]:h-11" onclick={() => (open = false)}>{t('common.cancel')}</Button>
 			<Button
 				icon={nuage.move}
 				class="[@media(pointer:coarse)]:h-11"
 				disabled={!here || unchanged}
 				onclick={confirm}
 			>
-				{unchanged ? 'Already here' : `Move to ${here?.name ?? ''}`}
+				{unchanged ? t('move.here') : t('move.to', { name: here ? nameOf(here) : '' })}
 			</Button>
 		</div>
 	{/snippet}

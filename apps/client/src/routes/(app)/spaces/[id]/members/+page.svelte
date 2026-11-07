@@ -19,6 +19,8 @@
 	import { icons, nuage } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
 	import { registreSpaceUrl } from '$lib/registre';
+	import { t } from '$lib/i18n/index.svelte';
+	import { displayName, roleLabel } from '$lib/people';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MemberAvatar from '$lib/components/MemberAvatar.svelte';
 
@@ -86,7 +88,7 @@
 			directory = res.users ?? [];
 			directoryLoaded = true;
 		} catch {
-			addError = 'Could not load the user directory.';
+			addError = t('members.directoryFailed');
 		}
 	}
 
@@ -94,7 +96,7 @@
 		if (!picked) return;
 		const uid = Number(picked.id);
 		if (!Number.isFinite(uid)) {
-			addError = 'That account has an id this API will not accept.';
+			addError = t('members.badId');
 			return;
 		}
 
@@ -104,9 +106,9 @@
 			await backend.addSpaceMember(app.token, spaceId, { user_id: uid, role: addRole });
 			await refreshMembers();
 			addOpen = false;
-			toast.success(`Added ${picked.name || picked.email}.`);
+			toast.success(t('members.added', { name: displayName(picked) }));
 		} catch (e) {
-			addError = e instanceof Error && e.message ? e.message : 'Could not add that member.';
+			addError = e instanceof Error && e.message ? e.message : t('members.addFailed');
 		}
 		adding = false;
 	}
@@ -125,11 +127,11 @@
 		try {
 			await backend.updateSpaceMember(app.token, spaceId, member.id, { role });
 			await refreshMembers();
-			toast.success(`${memberName(member)} is now ${role}.`);
+			toast.success(t('members.roleChanged', { name: memberName(member), role: roleLabel(role) }));
 		} catch {
 			/* Re-read rather than trust the select: the option the user picked did not stick. */
 			await refreshMembers();
-			toast.danger('Could not change that role.');
+			toast.danger(t('members.roleFailed'));
 		}
 	}
 
@@ -140,9 +142,9 @@
 			await backend.removeSpaceMember(app.token, spaceId, target.id);
 			members = members.filter((m) => m.id !== target.id);
 			removing = null;
-			toast.success(`Removed ${memberName(target)}.`);
+			toast.success(t('members.removed', { name: memberName(target) }));
 		} catch (e) {
-			toast.danger(e instanceof Error && e.message ? e.message : 'Could not remove that member.');
+			toast.danger(e instanceof Error && e.message ? e.message : t('members.removeFailed'));
 			throw e;
 		}
 	}
@@ -151,7 +153,7 @@
 	const isOwnerOrAdmin = $derived(!linked && (space?.role === 'owner' || space?.role === 'admin'));
 	const isOwner = $derived(space?.role === 'owner');
 	const ownerCount = $derived(members.filter((m) => m.role === 'owner').length);
-	const memberName = (member: SpaceMember) => member.user?.name || member.user?.email || 'Unknown';
+	const memberName = (member: SpaceMember) => displayName(member.user ?? {});
 
 	function canRemove(member: SpaceMember) {
 		if (!isOwnerOrAdmin) return false;
@@ -162,7 +164,7 @@
 </script>
 
 <svelte:head>
-	<title>Members — {space?.name ?? 'Space'} — Nuage</title>
+	<title>{t('members.title', { name: space?.name ?? t('space.fallbackName') })}</title>
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-8">
@@ -173,7 +175,7 @@
 		icon={icons.chevronLeft}
 		class="-ml-3 self-start"
 	>
-		{space?.name ?? 'Space'}
+		{space?.name ?? t('space.fallbackName')}
 	</Button>
 
 	{#if loading}
@@ -181,15 +183,15 @@
 	{:else if !space}
 		<EmptyState
 			icon={icons.space}
-			title="Space not found"
-			description="It may have been deleted, or you may no longer be a member."
+			title={t('space.notFound')}
+			description={t('space.notFoundText')}
 		>
-			<Button href="/spaces" icon={icons.chevronLeft}>Back to spaces</Button>
+			<Button href="/spaces" icon={icons.chevronLeft}>{t('space.backToSpaces')}</Button>
 		</EmptyState>
 	{:else}
 		<PageHeader
-			title="Members"
-			description="Everyone here can read and write every file in the space."
+			title={t('space.membersHeading')}
+			description={t('members.description')}
 		>
 			{#snippet actions()}
 				{#if linked}
@@ -200,10 +202,10 @@
 						rel="noopener noreferrer"
 						icon={icons.space}
 					>
-						Manage in Registre
+						{t('spaces.manageInRegistre')}
 					</Button>
 				{:else if isOwnerOrAdmin}
-					<Button icon={nuage.memberAdd} onclick={openAdd}>Add member</Button>
+					<Button icon={nuage.memberAdd} onclick={openAdd}>{t('members.add')}</Button>
 				{/if}
 			{/snippet}
 		</PageHeader>
@@ -231,17 +233,17 @@
 						     Removal is a separate question — `removeMember` allows it as long as
 						     another owner remains. -->
 						{#if member.role === 'owner' || !isOwnerOrAdmin}
-							<Badge tone={roleTone(member.role)}>{member.role}</Badge>
+							<Badge tone={roleTone(member.role)}>{roleLabel(member.role)}</Badge>
 						{:else}
 							<Select
 								value={member.role}
-								aria-label="Role for {memberName(member)}"
+								aria-label={t('members.roleFor', { name: memberName(member) })}
 								class="h-9 w-32 text-fc-sm"
 								onchange={(e) => updateRole(member, (e.currentTarget as HTMLSelectElement).value)}
 							>
-								<option value="member">Member</option>
-								<option value="admin">Admin</option>
-								{#if isOwner}<option value="owner">Owner</option>{/if}
+								<option value="member">{t('role.member')}</option>
+								<option value="admin">{t('role.admin')}</option>
+								{#if isOwner}<option value="owner">{t('role.owner')}</option>{/if}
 							</Select>
 						{/if}
 						{#if canRemove(member)}
@@ -249,10 +251,10 @@
 								variant="ghost-danger"
 								size="sm"
 								icon={icons.remove}
-								aria-label="Remove {memberName(member)}"
+								aria-label={t('members.removeLabel', { name: memberName(member) })}
 								onclick={() => (removing = member)}
 							>
-								Remove
+								{t('common.remove')}
 							</Button>
 						{/if}
 					</div>
@@ -262,21 +264,21 @@
 	{/if}
 </div>
 
-<Drawer bind:open={addOpen} title="Add a member" showClose>
+<Drawer bind:open={addOpen} title={t('members.drawerTitle')} showClose>
 	<div class="flex flex-col gap-4">
 		{#if addError}
 			<Alert tone="danger">{addError}</Alert>
 		{/if}
 
-		<Field label="Who" helper="Anyone with an account on this Nuage.">
-			<Input bind:value={pickQuery} placeholder="Search by name or email" autocomplete="off" />
+		<Field label={t('members.who')} helper={t('members.whoHelper')}>
+			<Input bind:value={pickQuery} placeholder={t('members.search')} autocomplete="off" />
 		</Field>
 
 		{#if !directoryLoaded}
 			<div class="flex h-24 items-center justify-center"><Spinner /></div>
 		{:else if candidates.length === 0}
 			<p class="py-6 text-center text-fc-sm text-fc-fg-muted">
-				{pickQuery.trim() ? 'Nobody matches that.' : 'Everyone with an account is already a member.'}
+				{pickQuery.trim() ? t('members.nobody') : t('members.everyone')}
 			</p>
 		{:else}
 			<!-- A radiogroup, not a list of independently tabbable buttons: picking one person
@@ -284,7 +286,7 @@
 			<div
 				class="flex max-h-64 flex-col overflow-y-auto rounded-fc-md bg-fc-surface"
 				role="radiogroup"
-				aria-label="Choose a person to add"
+				aria-label={t('members.choose')}
 			>
 				{#each candidates as candidate (candidate.id)}
 					{@const selected = picked?.id === candidate.id}
@@ -299,12 +301,12 @@
 							: 'hover:bg-fc-component'}"
 					>
 						<MemberAvatar
-							name={candidate.name || candidate.email}
+							name={displayName(candidate)}
 							src={candidate.avatar_url}
 							color={selected ? undefined : candidate.color}
 						/>
 						<span class="flex min-w-0 flex-1 flex-col">
-							<span class="truncate text-fc-sm font-medium">{candidate.name || candidate.email}</span>
+							<span class="truncate text-fc-sm font-medium">{displayName(candidate)}</span>
 							{#if candidate.name && candidate.email}
 								<span class="truncate text-fc-xs {selected ? 'opacity-70' : 'text-fc-fg-muted'}">
 									{candidate.email}
@@ -320,10 +322,10 @@
 			</div>
 		{/if}
 
-		<Field label="Role">
+		<Field label={t('members.role')}>
 			<Select bind:value={addRole}>
-				<option value="member">Member — read and write files</option>
-				<option value="admin">Admin — also manages members</option>
+				<option value="member">{t('members.role.member')}</option>
+				<option value="admin">{t('members.role.admin')}</option>
 			</Select>
 		</Field>
 	</div>
@@ -336,18 +338,20 @@
 			disabled={adding || !picked}
 			onclick={addMember}
 		>
-			{adding ? 'Adding…' : picked ? `Add ${picked.name || picked.email}` : 'Pick someone first'}
+			{adding
+				? t('members.adding')
+				: picked
+					? t('members.addPerson', { name: displayName(picked) })
+					: t('members.pickFirst')}
 		</Button>
 	{/snippet}
 </Drawer>
 
 <ConfirmModal
 	open={removing !== null}
-	title="Remove this member?"
-	description={removing
-		? `${memberName(removing)} loses access to every file in this space immediately. Files they uploaded stay in the space.`
-		: ''}
-	confirmLabel="Remove"
+	title={t('members.removeTitle')}
+	description={removing ? t('members.removeText', { name: memberName(removing) }) : ''}
+	confirmLabel={t('common.remove')}
 	tone="danger"
 	onConfirm={removeMember}
 	onCancel={() => (removing = null)}

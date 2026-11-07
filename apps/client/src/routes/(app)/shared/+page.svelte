@@ -5,6 +5,7 @@
 	import { getSpaceStore } from '$lib/space.svelte';
 	import { formatDate } from '$lib/format';
 	import { fileIcon, icons, nuage } from '$lib/icons';
+	import { t } from '$lib/i18n/index.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const app = getContext<{ token: string }>('app');
@@ -26,7 +27,7 @@
 			shares = res.shares ?? [];
 		} catch {
 			shares = [];
-			toast.danger('Could not load your share links.');
+			toast.danger(t('shared.loadFailed'));
 		}
 		loading = false;
 	}
@@ -38,22 +39,22 @@
 			await backend.deleteShare(app.token, target.id);
 			shares = shares.filter((s) => s.id !== target.id);
 			revoking = null;
-			toast.success('Link revoked.');
+			toast.success(t('shared.revoked'));
 		} catch {
-			toast.danger('Could not revoke that link.');
+			toast.danger(t('shared.revokeFailed'));
 		}
 	}
 
 	async function copyLink(share: Share) {
 		try {
 			await navigator.clipboard.writeText(`${window.location.origin}/s/${share.token}`);
-			toast.success('Link copied.');
+			toast.success(t('shared.copied'));
 		} catch {
-			toast.danger('Could not reach the clipboard.');
+			toast.danger(t('shared.clipboardFailed'));
 		}
 	}
 
-	const itemName = (share: Share) => share.file?.name ?? share.folder?.name ?? 'Untitled';
+	const itemName = (share: Share) => share.file?.name ?? share.folder?.name ?? t('shared.untitled');
 
 	const shareIcon = (share: Share) =>
 		share.file ? fileIcon(share.file.name, share.file.mime_type) : icons.folder;
@@ -62,13 +63,13 @@
 </script>
 
 <svelte:head>
-	<title>Shared links — Nuage</title>
+	<title>{t('shared.title')}</title>
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
 	<PageHeader
-		title="Shared links"
-		description="Every public link you have handed out. Anyone holding one can open it without an account."
+		title={t('shared.heading')}
+		description={t('shared.description')}
 	/>
 
 	{#if loading}
@@ -76,20 +77,20 @@
 	{:else if shares.length === 0}
 		<EmptyState
 			icon={nuage.share}
-			title="No shared links yet"
-			description="Open a file's menu in Files and choose Share to publish a link."
+			title={t('shared.emptyTitle')}
+			description={t('shared.emptyText')}
 		>
-			<Button href="/files" icon={icons.folder}>Go to Files</Button>
+			<Button href="/files" icon={icons.folder}>{t('shared.goToFiles')}</Button>
 		</EmptyState>
 	{:else}
 		<Table>
 			<thead>
 				<tr>
-					<th scope="col">Name</th>
-					<th scope="col" class="hidden md:table-cell">Link</th>
-					<th scope="col" class="hidden sm:table-cell">Expiry</th>
-					<th scope="col" class="hidden lg:table-cell">Created</th>
-					<th scope="col" class="text-right"><span class="sr-only">Actions</span></th>
+					<th scope="col">{t('common.name')}</th>
+					<th scope="col" class="hidden md:table-cell">{t('shared.link')}</th>
+					<th scope="col" class="hidden sm:table-cell">{t('shared.expiry')}</th>
+					<th scope="col" class="hidden lg:table-cell">{t('shared.created')}</th>
+					<th scope="col" class="text-right"><span class="sr-only">{t('settings.tokens.actions')}</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -114,18 +115,18 @@
 						</td>
 						<td class="hidden sm:table-cell">
 							{#if isExpired(share.expires_at)}
-								<Badge tone="danger">Expired</Badge>
+								<Badge tone="danger">{t('shared.expired')}</Badge>
 							{:else if share.expires_at}
 								<span class="text-fc-xs text-fc-fg-muted">{formatDate(share.expires_at)}</span>
 							{:else}
-								<span class="text-fc-xs text-fc-fg-muted">Never</span>
+								<span class="text-fc-xs text-fc-fg-muted">{t('shared.never')}</span>
 							{/if}
 						</td>
 						<td class="hidden text-fc-fg-muted lg:table-cell">{formatDate(share.created_at)}</td>
 						<td>
 							<div class="flex items-center justify-end gap-1">
 								<Button variant="ghost" size="sm" icon={icons.copy} onclick={() => copyLink(share)}>
-									Copy
+									{t('shared.copy')}
 								</Button>
 								<Button
 									variant="ghost-danger"
@@ -133,7 +134,7 @@
 									icon={nuage.shareOff}
 									onclick={() => (revoking = share)}
 								>
-									Revoke
+									{t('common.revoke')}
 								</Button>
 							</div>
 						</td>
@@ -148,11 +149,9 @@
      so it goes through a confirmation that says what actually breaks (CHARTE §14). -->
 <ConfirmModal
 	open={revoking !== null}
-	title="Revoke this link?"
-	description={revoking
-		? `Anyone who still has the link to “${itemName(revoking)}” gets a dead page from now on. The file itself is untouched, and revoking cannot be undone — you would have to share it again.`
-		: ''}
-	confirmLabel="Revoke"
+	title={t('shared.revokeTitle')}
+	description={revoking ? t('shared.revokeText', { name: itemName(revoking) }) : ''}
+	confirmLabel={t('common.revoke')}
 	tone="danger"
 	onConfirm={revokeShare}
 	onCancel={() => (revoking = null)}

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { Button } from '@facile/muse';
 	import { formatSize, relativeTime } from '$lib/format';
+	import { t } from '$lib/i18n/index.svelte';
 	import { fileIcon, fileTypeLabel, icons, nuage } from '$lib/icons';
 	import { previewKind, type ViewerFile } from '$lib/files/entries';
 	import { swipe } from '$lib/files/swipe';
@@ -54,7 +55,7 @@
 
 <dialog
 	bind:this={dialog}
-	aria-label={file?.name ?? 'File preview'}
+	aria-label={file?.name ?? t('viewer.preview')}
 	onclose={onClose}
 	onkeydown={onKeydown}
 	class="m-0 h-dvh max-h-none w-full max-w-none overflow-hidden overscroll-none bg-fc-page p-0 text-fc-fg backdrop:bg-fc-scrim"
@@ -64,7 +65,7 @@
 			class="flex h-full flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
 		>
 			<header class="flex items-center gap-3 bg-fc-component px-2 py-2 sm:px-4">
-				<button type="button" class="viewer-tool size-11" aria-label="Close preview" onclick={() => dialog?.close()}>
+				<button type="button" class="viewer-tool size-11" aria-label={t('viewer.close')} onclick={() => dialog?.close()}>
 					<iconify-icon icon={icons.close} width="20" height="20" class="block"></iconify-icon>
 				</button>
 				<span class="hidden size-9 shrink-0 items-center justify-center rounded-fc-sm bg-fc-surface text-fc-fg-muted sm:flex">
@@ -82,12 +83,12 @@
 					<span class="hidden text-fc-xs text-fc-fg-muted tabular-nums md:block">{index + 1} / {files.length}</span>
 				{/if}
 				{#if onShare}
-					<button type="button" class="viewer-tool size-11" aria-label="Share" onclick={() => onShare(file)}>
+					<button type="button" class="viewer-tool size-11" aria-label={t('viewer.share')} onclick={() => onShare(file)}>
 						<iconify-icon icon={nuage.share} width="20" height="20" class="block"></iconify-icon>
 					</button>
 				{/if}
-				<Button href={url} download={file.name} icon={icons.download} class="hidden sm:inline-flex">Download</Button>
-				<a href={url} download={file.name} class="viewer-tool size-11 sm:hidden" aria-label="Download">
+				<Button href={url} download={file.name} icon={icons.download} class="hidden sm:inline-flex">{t('viewer.download')}</Button>
+				<a href={url} download={file.name} class="viewer-tool size-11 sm:hidden" aria-label={t('viewer.download')}>
 					<iconify-icon icon={icons.download} width="20" height="20" class="block"></iconify-icon>
 				</a>
 			</header>
@@ -103,7 +104,7 @@
 				{#if files.length > 1}
 					<button
 						type="button"
-						aria-label="Previous file"
+						aria-label={t('viewer.previous')}
 						onclick={() => step(-1)}
 						class="absolute top-1/2 left-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
 					>
@@ -111,7 +112,7 @@
 					</button>
 					<button
 						type="button"
-						aria-label="Next file"
+						aria-label={t('viewer.next')}
 						onclick={() => step(1)}
 						class="absolute top-1/2 right-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
 					>
@@ -122,14 +123,14 @@
 
 			{#if files.length > 1}
 				<nav
-					aria-label="Files in this folder"
+					aria-label={t('viewer.siblings')}
 					class="flex items-center justify-between bg-fc-component px-2 sm:hidden"
 				>
-					<button type="button" class="viewer-tool" aria-label="Previous file" onclick={() => step(-1)}>
+					<button type="button" class="viewer-tool" aria-label={t('viewer.previous')} onclick={() => step(-1)}>
 						<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>
 					</button>
 					<span class="text-fc-xs text-fc-fg-muted tabular-nums">{index + 1} / {files.length}</span>
-					<button type="button" class="viewer-tool" aria-label="Next file" onclick={() => step(1)}>
+					<button type="button" class="viewer-tool" aria-label={t('viewer.next')} onclick={() => step(1)}>
 						<iconify-icon icon={nuage.next} width="22" height="22" class="block"></iconify-icon>
 					</button>
 				</nav>

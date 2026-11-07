@@ -41,6 +41,7 @@ func seedErasure(t *testing.T) erasureFixture {
 	gone, _ := strconv.ParseInt(goneID, 10, 64)
 	other, _ := strconv.ParseInt(otherID, 10, 64)
 
+	link(t, ts, gone, "sub-gone@example.com")
 	space := createSpace(t, ts, adminToken, "Studio")
 	addSpaceMember(t, ts, adminToken, space, goneID)
 	require.Equal(t, 201, uploadFileToSpace(ts, goneToken, "team.txt", "shared", space).StatusCode)
@@ -57,8 +58,11 @@ func seedErasure(t *testing.T) erasureFixture {
 	sqlDB, err := ts.db.DB()
 	require.NoError(t, err)
 	trashService := trash.NewService(ts.db, ts.store, nil, nil)
-	deletions := erasure.New(ts.db, directory.Client{Issuer: testIssuer}, portepg.New(sqlDB).EraseIdentity,
-		trashService, ts.appFolders, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	deletions := erasure.New(erasure.Config{
+		ORM: ts.db, Client: directory.Client{Issuer: testIssuer}, Erase: portepg.New(sqlDB).EraseIdentity,
+		Files: trashService, Apps: ts.appFolders, StorageDir: t.TempDir(),
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
 	return erasureFixture{ts: ts, gone: gone, other: other, space: space, deletions: deletions}
 }
 

@@ -9,6 +9,8 @@
 	import { icons, nuage } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
 	import { registreSpaceUrl } from '$lib/registre';
+	import { t } from '$lib/i18n/index.svelte';
+	import { displayName, roleLabel } from '$lib/people';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MemberAvatar from '$lib/components/MemberAvatar.svelte';
 
@@ -43,7 +45,7 @@
 	function switchToSpace() {
 		if (!space) return;
 		spaceStore.set(space);
-		toast.success(`Now working in “${space.name}”.`);
+		toast.success(t('space.switched', { name: space.name }));
 	}
 
 	/*
@@ -57,27 +59,27 @@
 		try {
 			await backend.leaveSpace(app.token, spaceId);
 		} catch (e) {
-			toast.danger(e instanceof Error && e.message ? e.message : 'Could not leave that space.');
+			toast.danger(e instanceof Error && e.message ? e.message : t('space.leaveFailed'));
 			throw e;
 		}
 		if (spaceStore.id === target.id) spaceStore.clear();
-		toast.success(`You left “${target.name}”.`);
+		toast.success(t('space.left', { name: target.name }));
 		goto('/spaces');
 	}
 
 	const isCurrent = $derived(space !== null && spaceStore.id === space.id);
 	const isOwnerOrAdmin = $derived(space?.role === 'owner' || space?.role === 'admin');
 	const linked = $derived(Boolean(space?.registre_space_id));
-	const memberName = (member: SpaceMember) => member.user?.name || member.user?.email || 'Unknown';
+	const memberName = (member: SpaceMember) => displayName(member.user ?? {});
 </script>
 
 <svelte:head>
-	<title>{space?.name ?? 'Space'} — Nuage</title>
+	<title>{t('space.pageTitle', { name: space?.name ?? t('space.fallbackName') })}</title>
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-8">
 	<Button variant="ghost" size="sm" href="/spaces" icon={icons.chevronLeft} class="-ml-3 self-start">
-		Spaces
+		{t('spaces.heading')}
 	</Button>
 
 	{#if loading}
@@ -85,20 +87,20 @@
 	{:else if !space}
 		<EmptyState
 			icon={icons.space}
-			title="Space not found"
-			description="It may have been deleted, or you may no longer be a member."
+			title={t('space.notFound')}
+			description={t('space.notFoundText')}
 		>
-			<Button href="/spaces" icon={icons.chevronLeft}>Back to spaces</Button>
+			<Button href="/spaces" icon={icons.chevronLeft}>{t('space.backToSpaces')}</Button>
 		</EmptyState>
 	{:else}
 		<PageHeader title={space.name} description={space.description || undefined}>
 			{#snippet actions()}
 				<Button icon={nuage.login} disabled={isCurrent} onclick={switchToSpace}>
-					{isCurrent ? 'Current space' : 'Switch to this space'}
+					{isCurrent ? t('space.current') : t('space.switch')}
 				</Button>
 				{#if isOwnerOrAdmin}
 					<Button variant="outline" href="/spaces/{spaceId}/settings" icon={icons.settings}>
-						Settings
+						{t('space.settings')}
 					</Button>
 				{/if}
 				{#if linked}
@@ -109,11 +111,11 @@
 						rel="noopener noreferrer"
 						icon={icons.space}
 					>
-						Manage in Registre
+						{t('spaces.manageInRegistre')}
 					</Button>
 				{:else}
 					<Button variant="ghost-danger" icon={icons.logout} onclick={() => (leaveOpen = true)}>
-						Leave space
+						{t('space.leave')}
 					</Button>
 				{/if}
 			{/snippet}
@@ -123,15 +125,12 @@
 			<section class="flex flex-col gap-4">
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div class="flex flex-col gap-1">
-						<h2 class="text-fc-lg font-semibold text-fc-fg">Members</h2>
-						<p class="text-fc-sm text-fc-fg-muted">
-							{members.length}
-							{members.length === 1 ? 'person has' : 'people have'} access to everything in this space.
-						</p>
+						<h2 class="text-fc-lg font-semibold text-fc-fg">{t('space.membersHeading')}</h2>
+						<p class="text-fc-sm text-fc-fg-muted">{t('space.membersCount', { count: members.length })}</p>
 					</div>
 					{#if isOwnerOrAdmin && !linked}
 						<Button variant="outline" href="/spaces/{spaceId}/members" icon={nuage.memberAdd}>
-							Manage
+							{t('space.manage')}
 						</Button>
 					{/if}
 				</div>
@@ -151,17 +150,17 @@
 									<p class="truncate text-fc-xs text-fc-fg-muted">{member.user.email}</p>
 								{/if}
 							</div>
-							<Badge tone={roleTone(member.role)}>{member.role}</Badge>
+							<Badge tone={roleTone(member.role)}>{roleLabel(member.role)}</Badge>
 						</div>
 					{/each}
 				</Card>
 			</section>
 
 			<section class="flex flex-col gap-4">
-				<h2 class="text-fc-lg font-semibold text-fc-fg">About</h2>
+				<h2 class="text-fc-lg font-semibold text-fc-fg">{t('space.about')}</h2>
 				<Card class="flex items-center gap-2 text-fc-sm text-fc-fg-muted">
 					<iconify-icon icon={icons.calendar} width="16" height="16" class="block shrink-0"></iconify-icon>
-					<span>Created {formatDate(space.created_at)}</span>
+					<span>{t('space.created', { date: formatDate(space.created_at) })}</span>
 				</Card>
 			</section>
 		</div>
@@ -170,9 +169,9 @@
 
 <ConfirmModal
 	bind:open={leaveOpen}
-	title="Leave “{space?.name ?? 'this space'}”?"
-	description="You lose access to every file in the space, including the ones you uploaded — they stay here. An owner or admin can add you back."
-	confirmLabel="Leave space"
+	title={t('space.leaveTitle', { name: space?.name ?? t('space.leaveFallback') })}
+	description={t('space.leaveText')}
+	confirmLabel={t('space.leave')}
 	tone="danger"
 	onConfirm={confirmLeave}
 />
