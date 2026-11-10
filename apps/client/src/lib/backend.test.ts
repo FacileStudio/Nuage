@@ -17,12 +17,22 @@ afterEach(() => {
 });
 
 describe('apiFetch', () => {
-	test('sends the CSRF header and the cookie, which is all an SSO session has', async () => {
+	test('sends the cookie, which is all an SSO session has, and no bearer token', async () => {
 		const seen = respondWith(200);
 		await backend.me();
-		expect(seen[0].headers.get('X-Facile-CSRF')).toBe('1');
 		expect(seen[0].credentials).toBe('same-origin');
 		expect(seen[0].headers.has('Authorization')).toBe(false);
+	});
+
+	test('sends the CSRF header on a mutation, which porte requires with a cookie', async () => {
+		const seen = respondWith(200);
+		await backend.logout();
+		expect(seen[0].headers.get('X-Facile-CSRF')).toBe('1');
+	});
+
+	test('reads an empty body as an empty object, as every caller expects', async () => {
+		respondWith(204);
+		expect(await backend.logout()).toEqual({});
 	});
 
 	test('still sends the bearer token a local login stored', async () => {

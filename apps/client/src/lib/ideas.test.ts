@@ -80,8 +80,8 @@ describe('toIdea', () => {
 
 describe('errorKey and toolLabel', () => {
 	test('maps statuses to messages', () => {
-		expect(errorKey(new ApiError('x', 429))).toBe('ideas.error.capped');
-		expect(errorKey(new ApiError('x', 412))).toBe('ideas.error.notLinked');
+		expect(errorKey(new ApiError(429, '', 'x'))).toBe('ideas.error.capped');
+		expect(errorKey(new ApiError(412, '', 'x'))).toBe('ideas.error.notLinked');
 		expect(errorKey(new Error('x'))).toBe('ideas.error.unreachable');
 	});
 

@@ -218,7 +218,7 @@
 		subscription: { plan: planName(quota), href: REGISTRE_SPACES_URL },
 		helpHref: `${page.url.origin}/docs`,
 		onSignOut: signOut,
-		theme: theme.preference,
+		theme: theme.mode,
 		onThemeChange: (next: ThemePreference) => theme.set(next),
 		onLocaleChange: rememberLocale,
 		invitations

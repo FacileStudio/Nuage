@@ -59,7 +59,7 @@
 		{#if id === 'profile'}
 			<ProfileSection name={app.user?.name?.trim() || app.user?.email || ''} email={app.user?.email} avatar={app.user?.avatar_url || undefined} />
 		{:else if id === 'preferences'}
-			<PreferencesSection theme={theme.preference} onThemeChange={(next) => theme.set(next)} onLocaleChange={rememberLocale} />
+			<PreferencesSection theme={theme.mode} onThemeChange={(next) => theme.set(next)} onLocaleChange={rememberLocale} />
 		{:else if id === 'apps'}
 			<AppDataSection token={app.token} />
 		{:else if id === 'nook'}

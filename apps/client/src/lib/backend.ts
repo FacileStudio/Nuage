@@ -1,15 +1,19 @@
-import { notePlanLimit, planLimitFrom } from '$lib/plan-limit';
+import { ApiError, CSRF_HEADER, createApi, redirectToLogin } from '@facile/client';
+import { isSafeUpgradeUrl, notePlanLimit } from '$lib/plan-limit';
+
+export { ApiError };
 
 const backendBaseUrl = '/api';
 
 /*
  * porte carries a session on two transports: an Authorization header, which API tokens
- * use, and an HttpOnly cookie, which is all an SSO login leaves behind. The cookie is ambient, so porte refuses a mutating request
- * that carries one without this header — a browser will not attach a custom header
- * cross-site without a preflight the API never answers. Only its presence is
- * checked, so the value is a constant.
+ * use, and an HttpOnly cookie, which is all an SSO login leaves behind. The cookie is ambient,
+ * so porte refuses a mutating request that carries one without the X-Facile-CSRF header, which
+ * @facile/client's kernel adds to every method but GET, HEAD and OPTIONS.
  */
-const csrfHeader = 'X-Facile-CSRF';
+const csrfHeader = CSRF_HEADER;
+
+const api = createApi({ base: backendBaseUrl, onUnauthorized: redirectToLogin });
 
 
 export type UserProfile = {
@@ -259,22 +263,6 @@ type ApiErrorPayload = {
 };
 
 /**
- * ApiError is a failed response that still remembers its status, which is what
- * separates "you are not signed in" from "the server fell over".
- */
-export class ApiError extends Error {
-	readonly status: number;
-	readonly upgradeUrl?: string;
-
-	constructor(message: string, status: number, upgradeUrl?: string) {
-		super(message);
-		this.name = 'ApiError';
-		this.status = status;
-		this.upgradeUrl = upgradeUrl;
-	}
-}
-
-/**
  * isAuthError reports whether the API refused the credential, as opposed to
  * failing for any other reason.
  *
@@ -295,42 +283,27 @@ function uploadFailure(xhr: XMLHttpRequest, fallback: string): Error {
 	try {
 		const payload = JSON.parse(xhr.responseText);
 		notePlanLimit(xhr.status, payload);
-		if (payload?.error?.message) return new ApiError(payload.error.message, xhr.status);
+		if (payload?.error?.message) return new ApiError(xhr.status, '', payload.error.message);
 	} catch {}
 	return new Error(`${fallback} with status ${xhr.status}`);
 }
 
+/**
+ * One API call through @facile/client's kernel. A 401 sends the browser to the login page unless
+ * the call is quiet; a 402 raises the plan-limit banner unless the call is quiet. An upgrade link
+ * survives only when it is safe to put in an href, and an empty body reads as an empty object.
+ */
 async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string, quiet = false): Promise<T> {
 	const headers = new Headers(options.headers);
-	if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
-		headers.set('Content-Type', 'application/json');
+	if (token) headers.set('Authorization', `Bearer ${token}`);
+	try {
+		return ((await api<T>(path, { ...options, headers }, { quiet })) ?? {}) as T;
+	} catch (error) {
+		if (!(error instanceof ApiError)) throw error;
+		const upgradeUrl = error.status === 402 && isSafeUpgradeUrl(error.upgradeUrl) ? error.upgradeUrl : undefined;
+		if (!quiet) notePlanLimit(error.status, { message: error.message, upgrade_url: upgradeUrl });
+		throw new ApiError(error.status, error.code, error.message, upgradeUrl);
 	}
-	headers.set(csrfHeader, '1');
-	if (token) {
-		headers.set('Authorization', `Bearer ${token}`);
-	}
-	const response = await fetch(`${backendBaseUrl}${path}`, {
-		credentials: 'same-origin',
-		...options,
-		headers
-	});
-	if (!response.ok) {
-		let payload: ApiErrorPayload | undefined;
-		try {
-			payload = (await response.json()) as ApiErrorPayload;
-		} catch {
-			payload = undefined;
-		}
-		if (!quiet) notePlanLimit(response.status, payload);
-		throw new ApiError(
-			payload?.error?.message || `Request failed with status ${response.status}`,
-			response.status,
-			response.status === 402 ? planLimitFrom(payload)?.upgrade_url : undefined
-		);
-	}
-	const text = await response.text();
-	if (!text) return {} as T;
-	return JSON.parse(text) as T;
 }
 
 const spaceQuery = (spaceId: number | null): string => (spaceId === null ? '' : `?space_id=${spaceId}`);
@@ -381,7 +354,7 @@ export const backend = {
 	 * only the server can see it.
 	 */
 	me(token?: string) {
-		return apiFetch<MeResponse>('/users/me', {}, token);
+		return apiFetch<MeResponse>('/users/me', {}, token, true);
 	},
 
 	/**
@@ -431,7 +404,7 @@ export const backend = {
 				}
 				notePlanLimit(r.status, payload);
 				throw payload?.error?.message
-					? new ApiError(payload.error.message, r.status)
+					? new ApiError(r.status, '', payload.error.message)
 					: new Error(`Upload failed with status ${r.status}`);
 			}
 			return (await r.json()) as NuageFile;
@@ -690,14 +663,14 @@ export const backend = {
 	},
 
 	getPublicShare(shareToken: string) {
-		return apiFetch<PublicShareResponse>(`/shared/${shareToken}`);
+		return apiFetch<PublicShareResponse>(`/shared/${shareToken}`, {}, undefined, true);
 	},
 
 	getPublicShareFiles(shareToken: string, folderId?: number) {
 		const qs = new URLSearchParams();
 		if (folderId != null) qs.set('folder_id', String(folderId));
 		const query = qs.size ? `?${qs}` : '';
-		return apiFetch<PublicShareFilesResponse>(`/shared/${shareToken}/files${query}`);
+		return apiFetch<PublicShareFilesResponse>(`/shared/${shareToken}/files${query}`, {}, undefined, true);
 	},
 
 	/** Downscaled preview of a shared image; an SVG is already small and is served as it is. */
