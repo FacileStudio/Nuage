@@ -10,8 +10,21 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-10
+
+### Added
+
+- The user menu shows the person's pending Registre space invitations, with a count and a link to accept them (`GET /api/me/invitations`, porte/kit, muse v0.18.0). It is mounted with `OIDC_ISSUER` and never fails a page: an unreachable Registre answers `{"count":0}`.
+
 ### Changed
 
+- Sign-in goes through porte/kit's user store. The stored address is now rewritten at a sign-in only when Registre marks it verified, the rule every suite app follows. New accounts are filled exactly as before: colour, empty profile fields, `created_at`.
+- GDPR erasure runs in one transaction through porte/kit: personal files and folders, app folders, memberships, shares, quota, billing offers, Nook deliveries naming the address, pending MCP actions, then the account. A failure rolls everything back, and stored bytes are removed only after the commit. A Registre notice matches the identity with or without the issuer's trailing slash. A space whose only owner is erased gets its longest-standing member as owner (spaces Registre does not manage); a space the person was alone in is kept with its files.
+- The `/api` rate limit is tronc's token bucket: a burst of 600, refilled at 10 per second, keyed by the visitor's address as the trusted proxy reported it (IPv6 by /64) and bounded at 50,000 visitors. A refusal carries `Retry-After` in seconds; the `X-RateLimit-*` headers, which no client read, are gone.
+- Client: the fetch kernel and the theme store come from `@facile/client` v0.1.0. The CSRF header is sent on mutations only, and a 401 outside the session probe returns to the sign-in page. The stored theme choice is kept.
+- tronc v0.21.0, porte v0.18.2 (`directory` v0.4.0), muse v0.18.0. Go 1.26.10 with the matching builder image, `golang.org/x/net` v0.62.0 and `golang.org/x/image` v0.45.0, which clear the critical advisories douane reported.
+- A test pins the upload, download, share, trash and quota answers byte for byte (`tests/contract_test.go`), so the web client, nuage-cli and the suite apps keep the same contract.
+- Quality gate: filet `preset: facile` at v0.19.1 in CI and as the lefthook pre-push step (`filet gate .`), douane 0.7.1 in CI with `-fail critical -scope prod`. `.githooks/` is replaced by `lefthook.yml`.
 - Licensed under the GNU Affero General Public License v3.0 only (`AGPL-3.0-only`). See `LICENSE`.
 
 ## [0.16.0] - 2026-11-10
