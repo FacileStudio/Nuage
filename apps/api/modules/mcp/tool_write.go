@@ -18,7 +18,7 @@ const maxSaveBytes = 5 << 20
 
 // Refusals of the write tools, each saying what to change.
 var (
-	errName        = stderrors.New("name must be 1 to 255 characters, with no slash, backslash or control character, and not . or ..")
+	errName        = stderrors.New("name must be 1 to 255 characters, with no slash, backslash or control character, and be neither . nor .. alone")
 	errEncoding    = stderrors.New(`encoding must be "text" or "base64"`)
 	errBase64      = stderrors.New("content is not valid base64. Send standard base64, or set encoding to text")
 	errTooLarge    = fmt.Errorf("content is over %d MB. Split it into several files", maxSaveBytes>>20)

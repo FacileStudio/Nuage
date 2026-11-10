@@ -80,15 +80,6 @@ func (s *Service) createSpace(ctx context.Context, userID int64, req CreateSpace
 	return space, nil
 }
 
-func (s *Service) memberView(ctx context.Context, userID int64, space schemas.Space) (*SpaceResponse, error) {
-	role, err := s.getMemberRole(ctx, space.ID, userID)
-	if err != nil {
-		return nil, err
-	}
-	resp := mapSpaceWithRole(space, role)
-	return &resp, nil
-}
-
 func (s *Service) listSpaces(ctx context.Context, userID int64) ([]SpaceResponse, error) {
 	var members []schemas.SpaceMember
 	if err := s.orm.WithContext(ctx).

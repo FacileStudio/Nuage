@@ -39,6 +39,3 @@ func (s scope) ownsFolder(f *schemas.Folder) bool {
 func (s scope) ownsFile(f *schemas.File) bool {
 	return s.spaceID != nil || f.UploadedBy == s.userID
 }
-
-// isSpace reports whether the scope is a space mount rather than personal.
-func (s scope) isSpace() bool { return s.spaceID != nil }
