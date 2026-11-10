@@ -13,8 +13,8 @@ Local setup, the integration test suite and what it needs, and the checks to run
 The gate lives in `scripts/check.sh`: gofmt, `go vet` and `go test` over the Go module,
 then the client type-check. `mise run check` is the same run (`mise.toml` also pins the
 Go toolchain); `--go-only` skips the client and `--format` rewrites the Go sources in
-place. `mise run hooks` points `core.hooksPath` at `.githooks`, so that same gate runs
-before every push.
+place. `mise run hooks` installs the tracked `lefthook.yml`, whose pre-push job is
+`filet gate .`: format, the filet rules, the analyzers, the tests and douane over both apps.
 
 ## Setup
 
