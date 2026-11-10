@@ -2,24 +2,31 @@ package erasure
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/porte/directory"
+	"github.com/FacileStudio/porte/kit"
 
 	"gorm.io/gorm"
 )
 
-// PersonalFiles removes the files and folders a person keeps outside any space.
+// PersonalFiles removes, inside the erasure's transaction, the files and
+// folders a person keeps outside any space, and returns the removal of their
+// stored bytes for after the commit.
 type PersonalFiles interface {
-	ErasePersonal(ctx context.Context, userID int64) error
+	ErasePersonal(ctx context.Context, tx *gorm.DB, userID int64) (func(context.Context), error)
 }
 
-// AppData removes every app folder a person holds.
+// AppData removes, inside the erasure's transaction, every app folder a
+// person holds, and returns the removal of their stored bytes for after the
+// commit.
 type AppData interface {
-	DeleteAll(ctx context.Context, userID int64) error
+	EraseAll(ctx context.Context, tx *gorm.DB, userID int64) (func(context.Context), error)
 }
 
 // Deletions erases the people Registre erased. It polls Registre's deletion
@@ -30,6 +37,7 @@ type Deletions struct {
 	files      PersonalFiles
 	apps       AppData
 	storageDir string
+	accounts   *kit.Store
 	receiver   *directory.Deletions
 }
 
@@ -47,9 +55,20 @@ type Config struct {
 	Logger     *slog.Logger
 }
 
-// New builds the receiver over Nuage's tables.
-func New(cfg Config) *Deletions {
+// New builds the receiver over Nuage's tables. The account itself is erased
+// through porte/kit, which resolves the identity with or without the issuer's
+// trailing slash and runs eraseData and the users delete in one transaction
+// under the lock every sign-in takes.
+func New(ctx context.Context, cfg Config) (*Deletions, error) {
+	sqlDB, err := cfg.ORM.DB()
+	if err != nil {
+		return nil, err
+	}
 	d := &Deletions{orm: cfg.ORM, files: cfg.Files, apps: cfg.Apps, storageDir: cfg.StorageDir}
+	d.accounts, err = kit.NewStore(ctx, kit.Store{DB: sqlDB, Columns: auth.StoreColumns(), EraseData: d.eraseData, Logger: cfg.Logger})
+	if err != nil {
+		return nil, err
+	}
 	d.receiver = &directory.Deletions{
 		Client:          cfg.Client,
 		OnPersonDeleted: d.ErasePerson,
@@ -57,7 +76,7 @@ func New(cfg Config) *Deletions {
 		State:           NewState(cfg.ORM),
 		Logger:          cfg.Logger,
 	}
-	return d
+	return d, nil
 }
 
 type account struct {
@@ -66,37 +85,49 @@ type account struct {
 	UploadPath string
 }
 
-// ErasePerson deletes the account behind a Registre identity and what it owns:
-// personal files and folders, app folders, tokens and quota. Space content it
-// authored stays, reassigned to the Deleted user placeholder. A subject that is
-// already gone is a no-op, so a replayed notice changes nothing.
+type cleanupKey struct{}
+
+// ErasePerson deletes the account behind a Registre identity and what it owns,
+// in one transaction: personal files and folders, app folders, shares, tokens,
+// quota, then the account. Space content it authored stays, reassigned to the
+// Deleted user placeholder, and a space it owned alone among its members gets
+// its longest-standing member as owner. Stored bytes and the uploaded avatar
+// are removed after the commit. A subject that is already gone is a no-op, so
+// a replayed notice changes nothing.
 func (d *Deletions) ErasePerson(ctx context.Context, provider, subject string) error {
-	found, err := d.find(ctx, provider, subject)
-	if err != nil || found.ID == 0 {
+	var cleanups []func(context.Context)
+	if err := d.accounts.EraseAccount(context.WithValue(ctx, cleanupKey{}, &cleanups), provider, subject); err != nil {
 		return err
 	}
-	if err := d.files.ErasePersonal(ctx, found.ID); err != nil {
-		return err
+	for _, cleanup := range cleanups {
+		cleanup(ctx)
 	}
-	if err := d.apps.DeleteAll(ctx, found.ID); err != nil {
-		return err
-	}
-	if err := d.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return deleteAccount(tx, found)
-	}); err != nil {
-		return err
-	}
-	removeUpload(d.storageDir, found.UploadPath)
 	return nil
 }
 
-func (d *Deletions) find(ctx context.Context, provider, subject string) (account, error) {
+func (d *Deletions) eraseData(ctx context.Context, sqlTx *sql.Tx, userID int64) error {
+	tx := d.orm.WithContext(ctx)
+	tx.Statement.ConnPool = sqlTx
 	var found account
-	err := d.orm.WithContext(ctx).Raw(
-		`SELECT u.id, u.email, coalesce(u.avatar_upload_path, '') AS upload_path FROM users u
-		 JOIN porte_identities i ON i.user_id = u.id WHERE i.provider = ? AND i.subject = ?`,
-		provider, subject).Scan(&found).Error
-	return found, err
+	if err := tx.Raw(`SELECT id, email, coalesce(avatar_upload_path, '') AS upload_path FROM users WHERE id = ?`,
+		userID).Scan(&found).Error; err != nil {
+		return err
+	}
+	removeFiles, err := d.files.ErasePersonal(ctx, tx, userID)
+	if err != nil {
+		return err
+	}
+	removeApps, err := d.apps.EraseAll(ctx, tx, userID)
+	if err != nil {
+		return err
+	}
+	if err := deleteAccount(tx, found); err != nil {
+		return err
+	}
+	if cleanups, ok := ctx.Value(cleanupKey{}).(*[]func(context.Context)); ok {
+		*cleanups = append(*cleanups, removeFiles, removeApps, func(context.Context) { removeUpload(d.storageDir, found.UploadPath) })
+	}
+	return nil
 }
 
 func removeUpload(storageDir, relative string) {

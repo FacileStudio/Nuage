@@ -145,9 +145,9 @@ func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, quo
 // newDeletions builds the GDPR deletion receiver when OIDC is configured, with
 // the same client credentials as the snapshot sync, and returns nil otherwise.
 // Nuage runs as one replica, so the one Run it starts is the only one.
-func newDeletions(cfg erasure.Config, appEnv env.Config) *erasure.Deletions {
+func newDeletions(cfg erasure.Config, appEnv env.Config) (*erasure.Deletions, error) {
 	if appEnv.OIDC == nil {
-		return nil
+		return nil, nil
 	}
 	cfg.Client = directory.Client{
 		Issuer:       appEnv.OIDC.Issuer,
@@ -155,7 +155,7 @@ func newDeletions(cfg erasure.Config, appEnv env.Config) *erasure.Deletions {
 		ClientSecret: appEnv.OIDC.ClientSecret,
 	}
 	cfg.StorageDir = appEnv.StorageDir
-	return erasure.New(cfg)
+	return erasure.New(context.Background(), cfg)
 }
 
 // bulleOptions wires the Ideas routes to Bulle: the app acts as the signed-in
@@ -381,9 +381,13 @@ func run() int {
 	spacesService := spaces.NewService(db, storageClient, registreSpacesURL(appEnv))
 	registre, syncer := newDirectory(db, appEnv, plans, quotaService, appLogger)
 	appFolderService := appfolders.NewService(db, storageClient, quotaService, appLogger)
-	deletions := newDeletions(erasure.Config{
+	deletions, err := newDeletions(erasure.Config{
 		ORM: db, Erase: porteStore.EraseIdentity, Files: trashService, Apps: appFolderService, Logger: appLogger,
 	}, appEnv)
+	if err != nil {
+		appLogger.Error("failed to build the erasure receiver", slog.Any("error", err))
+		return 1
+	}
 	if err := spacesService.MigrateBuckets(context.Background()); err != nil {
 		appLogger.Error("failed to move space files to their own buckets; serving with the files still in the shared bucket", slog.Any("error", err))
 	}

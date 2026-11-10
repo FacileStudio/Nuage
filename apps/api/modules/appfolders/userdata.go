@@ -2,7 +2,6 @@ package appfolders
 
 import (
 	"context"
-	stderrors "errors"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
@@ -82,25 +81,28 @@ func lockFolderForDelete(tx *gorm.DB, userID int64, appKey string) (int64, error
 	return folders[0].ID, nil
 }
 
-// DeleteAll deletes every app folder userID holds, active apps or not, with
-// the objects in them. It is the erasure path: a person with no folder is not
-// an error.
-func (s *Service) DeleteAll(ctx context.Context, userID int64) error {
-	var keys []string
-	err := s.orm.WithContext(ctx).Raw(`SELECT a.key FROM app_folders af
-		JOIN registered_apps a ON a.id = af.app_id WHERE af.user_id = ?`, userID).Scan(&keys).Error
-	if err != nil {
-		return errors.Internal("failed to list the app folders", err)
+// EraseAll deletes, inside tx, every app folder userID holds, active apps or
+// not, with the objects in them. It is the erasure path: a person with no
+// folder is not an error. The folders are locked first, which waits for
+// uploads already recording into them. It returns the removal of the stored
+// bytes, which the caller runs once tx has committed.
+func (s *Service) EraseAll(ctx context.Context, tx *gorm.DB, userID int64) (func(context.Context), error) {
+	var folders []int64
+	if err := tx.WithContext(ctx).Model(&schemas.AppFolder{}).Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("user_id = ?", userID).Pluck("id", &folders).Error; err != nil {
+		return nil, errors.Internal("failed to lock the app folders", err)
 	}
-	for _, key := range keys {
-		if err := s.DeleteAppData(ctx, userID, key); err != nil && !isNotFound(err) {
-			return err
+	var keys []string
+	if len(folders) > 0 {
+		if err := tx.Model(&schemas.AppObject{}).Where("folder_id IN ?", folders).Pluck("bucket_key", &keys).Error; err != nil {
+			return nil, errors.Internal("failed to read the app objects", err)
+		}
+		if err := tx.Where("folder_id IN ?", folders).Delete(&schemas.AppObject{}).Error; err != nil {
+			return nil, errors.Internal("failed to delete the app objects", err)
+		}
+		if err := tx.Delete(&schemas.AppFolder{}, folders).Error; err != nil {
+			return nil, errors.Internal("failed to delete the app folders", err)
 		}
 	}
-	return nil
-}
-
-func isNotFound(err error) bool {
-	var failure *errors.Error
-	return stderrors.As(err, &failure) && failure.Code == "not_found"
+	return func(ctx context.Context) { s.removeObjects(ctx, keys) }, nil
 }

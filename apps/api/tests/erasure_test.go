@@ -62,11 +62,12 @@ func seedErasure(t *testing.T) erasureFixture {
 	sqlDB, err := ts.db.DB()
 	require.NoError(t, err)
 	trashService := trash.NewService(ts.db, ts.store, nil, nil)
-	deletions := erasure.New(erasure.Config{
+	deletions, err := erasure.New(context.Background(), erasure.Config{
 		ORM: ts.db, Client: directory.Client{Issuer: testIssuer}, Erase: portepg.New(sqlDB).EraseIdentity,
 		Files: trashService, Apps: ts.appFolders, StorageDir: t.TempDir(),
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
+	require.NoError(t, err)
 	return erasureFixture{ts: ts, gone: gone, other: other, space: space, deletions: deletions}
 }
 

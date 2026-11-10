@@ -1,6 +1,8 @@
 package erasure
 
 import (
+	"strconv"
+
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"gorm.io/gorm"
@@ -10,7 +12,15 @@ const (
 	reassignActivity = `UPDATE activity_logs SET user_id = @ghost WHERE user_id = @id AND (
 		(resource_type = 'file' AND resource_id IN (SELECT id FROM files WHERE space_id IS NOT NULL))
 		OR (resource_type = 'folder' AND resource_id IN (SELECT id FROM folders WHERE space_id IS NOT NULL)))`
-	deleteActivity    = `DELETE FROM activity_logs WHERE user_id = @id`
+	deleteActivity   = `DELETE FROM activity_logs WHERE user_id = @id`
+	promoteSuccessor = `UPDATE space_members SET role = 'owner' WHERE id IN (
+		SELECT DISTINCT ON (m.space_id) m.id FROM space_members m JOIN spaces s ON s.id = m.space_id
+		WHERE m.user_id <> @id AND s.registre_space_id IS NULL
+		  AND m.space_id IN (SELECT space_id FROM space_members WHERE user_id = @id AND role = 'owner')
+		  AND NOT EXISTS (SELECT 1 FROM space_members o
+		                  WHERE o.space_id = m.space_id AND o.user_id <> @id AND o.role = 'owner')
+		ORDER BY m.space_id, m.joined_at, m.id)`
+	deleteMemberships = `DELETE FROM space_members WHERE user_id = @id`
 	deleteShares      = `DELETE FROM shares WHERE shared_by = @id`
 	reassignFiles     = `UPDATE files SET uploaded_by = @ghost WHERE uploaded_by = @id`
 	reassignVersions  = `UPDATE file_versions SET created_by = @ghost WHERE created_by = @id`
@@ -22,13 +32,13 @@ const (
 	releaseCharges    = `UPDATE spaces SET charged_to = NULL WHERE charged_to = @id`
 	releaseOffers     = `UPDATE spaces SET billing_offer_to = NULL WHERE billing_offer_to = @id`
 	deleteWebhooks    = `DELETE FROM nook_deliveries WHERE position(@email in payload) > 0`
-	deleteUser        = `DELETE FROM users WHERE id = @id`
+	deleteMCPActions  = `DELETE FROM mcp_actions WHERE user_id = @text_id`
 )
 
 var accountSteps = []string{
-	reassignActivity, deleteActivity, deleteShares, reassignFiles, reassignVersions, reassignFolders,
-	reassignUploads, reassignTombstone, deleteTombstones, deleteQuota, releaseCharges, releaseOffers,
-	deleteWebhooks, deleteUser,
+	reassignActivity, deleteActivity, promoteSuccessor, deleteMemberships, deleteShares,
+	reassignFiles, reassignVersions, reassignFolders, reassignUploads, reassignTombstone,
+	deleteTombstones, deleteQuota, releaseCharges, releaseOffers, deleteWebhooks, deleteMCPActions,
 }
 
 func deleteAccount(tx *gorm.DB, found account) error {
@@ -36,7 +46,7 @@ func deleteAccount(tx *gorm.DB, found account) error {
 	if err != nil {
 		return err
 	}
-	args := map[string]any{"id": found.ID, "ghost": ghost, "email": found.Email}
+	args := map[string]any{"id": found.ID, "text_id": strconv.FormatInt(found.ID, 10), "ghost": ghost, "email": found.Email}
 	for _, statement := range accountSteps {
 		if err := tx.Exec(statement, args).Error; err != nil {
 			return err
