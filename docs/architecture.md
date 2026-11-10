@@ -49,13 +49,14 @@ shared plumbing lives in `internal/`.
 The middleware stack, in the order `main.go` installs it:
 
 1. `chimiddleware.RequestID`
-2. `middleware.RealIP` — reads the **rightmost** `X-Forwarded-For` entry, since the leftmost
-   is caller-controlled and would let anyone forge an IP
+2. tronc's `RealIP` — rewrites `RemoteAddr` from `TRUSTED_PROXIES` and the CDN header only,
+   so a caller cannot forge its address
 3. `middleware.CORS(AllowedOrigins)`
 4. tronc's `SecurityHeaders`: HSTS, an enforced anti-framing policy and a report-only CSP, with the client's inline script hashes and the plan catalogue origin added
 5. `middleware.RequestLogger`
 6. `chimiddleware.Recoverer`
-7. `middleware.RateLimitExcept(100, time.Minute, "/files/upload", "/webdav")`
+7. `middleware.RateLimitAPI(600, time.Minute, "/api/", middleware.IsTransferPath)`, tronc's
+   token bucket keyed by `RemoteAddr` (IPv6 by /64)
 
 Upload and WebDAV paths are exempt from the general limit because one large transfer issues
 hundreds of sequential chunk requests and would otherwise rate-limit itself.

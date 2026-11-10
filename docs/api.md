@@ -154,7 +154,7 @@ next version instead of a new file, so the file keeps its id, name, folder, shar
 history — the only way to replace content past the 100 MiB single-request limit without
 creating a duplicate. `DELETE` aborts and discards them.
 
-All `/files/upload` paths are exempt from the general 100/minute rate limit, since one large
+All `/files/upload` paths are exempt from the general 600/minute rate limit, since one large
 transfer issues hundreds of sequential requests. A background sweeper expires abandoned
 sessions.
 
@@ -362,5 +362,7 @@ with the status the error type maps to: `400` invalid, `401` unauthorized, `403`
 |---|---|
 | `/api/*` except transfer paths and `/webdav` | 600/min per IP |
 
-The client IP comes from the **rightmost** `X-Forwarded-For` entry, because the leftmost is
-caller-controlled and would otherwise let anyone spoof their way past a limit.
+The limit is tronc's token bucket: a burst of 600, refilled at 10 requests per second. The
+key is `RemoteAddr` as tronc's real-IP middleware rewrote it from a trusted proxy (an IPv6
+caller by its /64), never a forwarded header read by hand. A refusal is `429` with
+`Retry-After` in seconds and the body `rate limit exceeded`. No `X-RateLimit-*` header is sent.
