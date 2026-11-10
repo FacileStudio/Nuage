@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/FacileStudio/porte/session"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
+	"github.com/FacileStudio/Nuage/apps/api/internal/ideas"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
 	"github.com/FacileStudio/Nuage/apps/api/modules/appfolders"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
@@ -25,6 +27,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
 	nuagewebdav "github.com/FacileStudio/Nuage/apps/api/modules/webdav"
 	"github.com/FacileStudio/tronc/apiref"
+	"github.com/FacileStudio/tronc/bulle"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -50,6 +53,9 @@ func buildTestRouter() chi.Router {
 		spaces.RegisterRoutes(r, nil, authService)
 		activitymod.RegisterRoutes(r, nil, authService)
 		appfolders.RegisterRoutes(r, nil, authService)
+		r.Group(func(r chi.Router) {
+			_ = ideas.New(nil, nil, nil).Mount(r, bulle.Options{URL: "http://bulle.invalid", TokenSource: func(context.Context) (string, error) { return "", nil }})
+		})
 	})
 
 	nuagewebdav.RegisterRoutes(router, nil, nil, nil, nil, nil)

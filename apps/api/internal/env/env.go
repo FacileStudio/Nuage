@@ -62,6 +62,10 @@ type Config struct {
 	// with the user's full access, from NUAGE_FULL_ACCESS_ACTORS (Bulle in
 	// production). Any other actor that is not a registered app is refused.
 	FullAccessActors []string
+
+	// BulleURL is where the Ideas routes reach Bulle, from BULLE_URL. Empty
+	// leaves them unmounted, as does a Nuage without OIDC.
+	BulleURL string
 }
 
 // Load reads the configuration from the environment, failing when a required
@@ -79,6 +83,7 @@ func Load() (Config, error) {
 		Core:          core,
 		StorageDir:    troncenv.String("STORAGE_DIR", "./data"),
 		PresignSecret: troncenv.String("PRESIGN_SECRET", ""),
+		BulleURL:      troncenv.String("BULLE_URL", ""),
 	}
 
 	if cfg.MinIO, err = loadMinIO(); err != nil {

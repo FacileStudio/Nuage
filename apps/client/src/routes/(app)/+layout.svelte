@@ -2,7 +2,7 @@
 	import { onMount, setContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Button, MobileNav, SideBar } from '@facile/muse';
+	import { Button, MobileNav, SideBar, getI18n, ideasNavItem } from '@facile/muse';
 	import { backend, isAuthError, type QuotaResponse, type Space, type UserProfile } from '$lib/backend';
 	import { rememberLocale, setSessionLocale, t } from '$lib/i18n/index.svelte';
 	import { theme, type ThemePreference } from '$lib/theme.svelte';
@@ -10,6 +10,7 @@
 	import { REGISTRE_SPACES_URL } from '$lib/registre';
 	import { hasPending, undoLast } from '$lib/undo.svelte';
 	import { getSpaceStore } from '$lib/space.svelte';
+	import { ideasStore } from '$lib/ideas.svelte';
 	import { icons, nuage } from '$lib/icons';
 	import QuotaMeter from '$lib/components/QuotaMeter.svelte';
 	import PlanLimitBanner from '$lib/components/PlanLimitBanner.svelte';
@@ -25,6 +26,12 @@
 	let quota = $state<QuotaResponse | null>(null);
 	let spaces = $state<Space[]>([]);
 	let collapsed = $state(false);
+	let ideasReady = $state(false);
+
+	$effect(() => {
+		const id = spaceStore.id;
+		if (ideasReady) void ideasStore.load(id);
+	});
 
 	function setUser(nextUser: UserProfile) {
 		user = nextUser;
@@ -109,6 +116,7 @@
 				loaded = true;
 				refreshQuota();
 				loadSpaces();
+				ideasReady = true;
 			} catch (error) {
 				if (isAuthError(error)) { goto('/login'); return; }
 				failure = error instanceof Error && error.message ? error.message : t('common.unreachable');
@@ -127,13 +135,31 @@
 	 * permanent nav row that spends prime vertical space on the page people open least
 	 * (CHARTE §14).
 	 */
+	const i18n = getI18n();
+
+	/* Ideas leads the list in every suite app. A Nuage without Bulle answers 404 and drops it. */
+	const ideasPages = $derived.by(() => {
+		if (!ideasStore.available) return [];
+		const item = ideasNavItem({
+			href: '/ideas',
+			active: isActive('/ideas'),
+			count: ideasStore.count,
+			running: ideasStore.running,
+			i18n
+		});
+		return [{ ...item, short: item.label }];
+	});
+
 	const navPages = $derived([
-		{ href: '/files', label: t('nav.files'), short: t('nav.files'), icon: icons.folder },
-		{ href: '/shared', label: t('nav.shared'), short: t('nav.sharedShort'), icon: nuage.share },
-		{ href: '/trash', label: t('nav.trash'), short: t('nav.trash'), icon: icons.remove },
-		{ href: '/activity', label: t('nav.activity'), short: t('nav.activity'), icon: icons.history },
-		{ href: '/spaces', label: t('nav.spaces'), short: t('nav.spaces'), icon: icons.space }
-	].map((item) => ({ ...item, active: isActive(item.href) })));
+		...ideasPages,
+		...[
+			{ href: '/files', label: t('nav.files'), short: t('nav.files'), icon: icons.folder },
+			{ href: '/shared', label: t('nav.shared'), short: t('nav.sharedShort'), icon: nuage.share },
+			{ href: '/trash', label: t('nav.trash'), short: t('nav.trash'), icon: icons.remove },
+			{ href: '/activity', label: t('nav.activity'), short: t('nav.activity'), icon: icons.history },
+			{ href: '/spaces', label: t('nav.spaces'), short: t('nav.spaces'), icon: icons.space }
+		].map((item) => ({ ...item, active: isActive(item.href) }))
+	]);
 
 	/* MobileNav's ceiling is six targets plus the avatar and its labels are tooltips, so the
 	   bar takes the short spelling of the same destinations. */

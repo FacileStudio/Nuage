@@ -1,6 +1,9 @@
 package quota
 
 import (
+	"context"
+
+	"github.com/FacileStudio/porte/forfait"
 	"github.com/FacileStudio/tronc/errors"
 
 	"gorm.io/gorm"
@@ -32,4 +35,11 @@ func (s *Service) pickSubject(subjects []string) string {
 		return ""
 	}
 	return subjects[0]
+}
+
+// PersonScope is the scope a person's plan is read under: their Registre
+// subject, or the free plan for an account with no identity under the issuer.
+func (s *Service) PersonScope(ctx context.Context, userID int64) (forfait.Scope, error) {
+	person, err := s.personTarget(s.orm.WithContext(ctx), userID)
+	return person.scope, err
 }

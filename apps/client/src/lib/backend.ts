@@ -1,4 +1,4 @@
-import { notePlanLimit } from '$lib/plan-limit';
+import { notePlanLimit, planLimitFrom } from '$lib/plan-limit';
 
 const backendBaseUrl = '/api';
 
@@ -202,6 +202,38 @@ export type SpaceMember = {
 	};
 };
 
+export type IdeaSource = { label: string; ref: string };
+
+export type BulleIdea = {
+	id: string;
+	kind: string;
+	title: string;
+	why: string;
+	draft: string;
+	sources: IdeaSource[] | null;
+	status: string;
+	expires_at: string;
+};
+
+export type IdeasResponse = {
+	ai_access: boolean;
+	upgrade_url?: string;
+	ideas: BulleIdea[];
+	generating: boolean;
+	last_batch_at: string | null;
+};
+
+export type RunState = 'running' | 'needs_approval' | 'done' | 'failed';
+
+export type IdeaRunResponse = {
+	id: string;
+	state: RunState;
+	summary: string;
+	outputs: { call_id: string; tool: string; url: string; preview: string }[] | null;
+	pending_approvals: { call_id: string; tool: string; args: unknown }[] | null;
+	continue_url: string;
+};
+
 export type UploadProgressCallback = (loaded: number, total: number) => void;
 
 type ApiErrorPayload = {
@@ -214,11 +246,13 @@ type ApiErrorPayload = {
  */
 export class ApiError extends Error {
 	readonly status: number;
+	readonly upgradeUrl?: string;
 
-	constructor(message: string, status: number) {
+	constructor(message: string, status: number, upgradeUrl?: string) {
 		super(message);
 		this.name = 'ApiError';
 		this.status = status;
+		this.upgradeUrl = upgradeUrl;
 	}
 }
 
@@ -248,7 +282,7 @@ function uploadFailure(xhr: XMLHttpRequest, fallback: string): Error {
 	return new Error(`${fallback} with status ${xhr.status}`);
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
+async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string, quiet = false): Promise<T> {
 	const headers = new Headers(options.headers);
 	if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
 		headers.set('Content-Type', 'application/json');
@@ -269,10 +303,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, token?: stri
 		} catch {
 			payload = undefined;
 		}
-		notePlanLimit(response.status, payload);
+		if (!quiet) notePlanLimit(response.status, payload);
 		throw new ApiError(
 			payload?.error?.message || `Request failed with status ${response.status}`,
-			response.status
+			response.status,
+			response.status === 402 ? planLimitFrom(payload)?.upgrade_url : undefined
 		);
 	}
 	const text = await response.text();
@@ -280,11 +315,47 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, token?: stri
 	return JSON.parse(text) as T;
 }
 
+const spaceQuery = (spaceId: number | null): string => (spaceId === null ? '' : `?space_id=${spaceId}`);
+
 const isSvg = (file: { name: string; mime_type: string }): boolean =>
 	file.mime_type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
 
 export const backend = {
 	baseUrl: backendBaseUrl,
+
+	listIdeas(spaceId: number | null) {
+		return apiFetch<IdeasResponse>(`/ideas${spaceQuery(spaceId)}`, {}, undefined, true);
+	},
+
+	generateIdeas(spaceId: number | null) {
+		return apiFetch<{ batch_id: string }>(`/ideas/generate${spaceQuery(spaceId)}`, { method: 'POST' }, undefined, true);
+	},
+
+	runIdea(id: string, spaceId: number | null) {
+		return apiFetch<{ run_id: string }>(
+			`/ideas/${encodeURIComponent(id)}/run${spaceQuery(spaceId)}`,
+			{ method: 'POST' },
+			undefined,
+			true
+		);
+	},
+
+	dismissIdea(id: string) {
+		return apiFetch<object>(`/ideas/${encodeURIComponent(id)}/dismiss`, { method: 'POST' }, undefined, true);
+	},
+
+	ideaRun(runId: string) {
+		return apiFetch<IdeaRunResponse>(`/ideas/runs/${encodeURIComponent(runId)}`, {}, undefined, true);
+	},
+
+	decideIdea(runId: string, callId: string, approve: boolean) {
+		return apiFetch<object>(
+			`/ideas/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(callId)}`,
+			{ method: 'POST', body: JSON.stringify({ approve }) },
+			undefined,
+			true
+		);
+	},
 
 	/**
 	 * The authenticated profile, and the only honest answer to "is this browser
