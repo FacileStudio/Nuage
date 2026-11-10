@@ -1,0 +1,82 @@
+POST /files/upload/init -> 201
+  Content-Type: application/json
+  {"session_id":"fac_<id>","expires_at":"<time>"}
+PUT /files/upload/fac_<id>/part/1 -> 201
+  Content-Type: application/json
+  {"part_number":1,"size":11,"hash":"<sha256>"}
+GET /files/upload/fac_<id>/status -> 200
+  Content-Type: application/json
+  {"session_id":"fac_<id>","file_name":"notes.txt","total_size":11,"status":"pending","uploaded_chunks":[{"part_number":1,"size":11,"hash":"<sha256>"}],"expires_at":"<time>"}
+POST /files/upload/fac_<id>/complete -> 201
+  Content-Type: application/json
+  {"file":{"id":1,"facile_id":"fac_<id>","name":"notes.txt","mime_type":"application/octet-stream","size":11,"hash":"<sha256>","folder_id":null,"origin_app":"","linked_to":"","uploaded_by":1,"created_at":"<time>","updated_at":"<time>"}}
+GET /files/1 -> 200
+  Content-Type: application/json
+  {"id":1,"facile_id":"fac_<id>","name":"notes.txt","mime_type":"application/octet-stream","size":11,"hash":"<sha256>","folder_id":null,"origin_app":"","linked_to":"","uploaded_by":1,"created_at":"<time>","updated_at":"<time>"}
+GET /files/1/download -> 200
+  Content-Type: application/octet-stream
+  Content-Length: 11
+  Content-Disposition: attachment; filename*=UTF-8''notes.txt
+  Cache-Control: private, no-cache
+  ETag: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  Accept-Ranges: bytes
+  hello world
+GET /files/1/download -> 404
+  Content-Type: application/json
+  {"error":{"code":"not_found","message":"file not found"}}
+GET /files -> 200
+  Content-Type: application/json
+  {"files":[{"id":1,"facile_id":"fac_<id>","name":"notes.txt","mime_type":"application/octet-stream","size":11,"hash":"<sha256>","folder_id":null,"origin_app":"","linked_to":"","uploaded_by":1,"created_at":"<time>","updated_at":"<time>"}]}
+POST /shares -> 201
+  Content-Type: application/json
+  {"id":1,"token":"<token>","file_id":1,"folder_id":null,"shared_by":1,"permission":"view","expires_at":null,"created_at":"<time>"}
+GET /shared/fac_<id> -> 200
+  Content-Type: application/json
+  {"token":"<token>","permission":"view","file":{"id":1,"facile_id":"fac_<id>","name":"notes.txt","mime_type":"application/octet-stream","size":11,"updated_at":"<time>"}}
+GET /shared/fac_<id>/download/1 -> 200
+  Content-Type: application/octet-stream
+  Content-Length: 11
+  Content-Disposition: attachment; filename*=UTF-8''notes.txt
+  Cache-Control: private, no-cache
+  ETag: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  Accept-Ranges: bytes
+  hello world
+GET /shares/by-me -> 200
+  Content-Type: application/json
+  {"shares":[{"id":1,"token":"<token>","file_id":1,"folder_id":null,"shared_by":1,"permission":"view","expires_at":null,"created_at":"<time>","file":{"id":1,"facile_id":"fac_<id>","name":"notes.txt","mime_type":"application/octet-stream","size":11,"updated_at":"<time>"}}]}
+GET /quota/me -> 200
+  Content-Type: application/json
+  {"user_id":1,"storage_used":11,"storage_limit":53687091200,"percentage":2.0489096641540527e-8,"source":"instance"}
+DELETE /files/1 -> 200
+  Content-Type: application/json
+  {"deleted":true}
+GET /trash -> 200
+  Content-Type: application/json
+  {"items":[{"type":"file","id":1,"facile_id":"fac_<id>","name":"notes.txt","mime_type":"application/octet-stream","size":11,"deleted_at":"<time>","expires_at":"<time>"}],"retention_days":30}
+POST /trash/file/1/restore -> 200
+  Content-Type: application/json
+  {"restored":true}
+GET /sync/state -> 200
+  Content-Type: application/json
+  {"files":[{"id":1,"facile_id":"fac_<id>","name":"notes.txt","mime_type":"application/octet-stream","size":11,"hash":"<sha256>","folder_id":null,"space_id":null,"created_at":"<time>","updated_at":"<time>"}],"folders":[],"server_time":"<time>"}
+DELETE /files/1 -> 200
+  Content-Type: application/json
+  {"deleted":true}
+DELETE /trash/file/1 -> 200
+  Content-Type: application/json
+  {"deleted":true}
+GET /quota/me -> 200
+  Content-Type: application/json
+  {"user_id":1,"storage_used":0,"storage_limit":53687091200,"percentage":0,"source":"instance"}
+GET /users/me -> 200
+  Content-Type: application/json
+  {"user":{"id":"1","email":"owner@example.com","name":"","avatar_url":"","avatar_source":"","color":"<color>","locale":"en","created_at":"<time>"}}
+GET /files -> 401
+  Content-Type: application/json
+  {"error":{"code":"unauthenticated","message":"missing auth"}}
+GET /trash -> 401
+  Content-Type: application/json
+  {"error":{"code":"unauthenticated","message":"missing auth"}}
+GET /quota/me -> 401
+  Content-Type: application/json
+  {"error":{"code":"unauthenticated","message":"missing auth"}}
