@@ -3,6 +3,7 @@ package docs
 import (
 	"net/http"
 
+	"github.com/FacileStudio/Nuage/apps/api/modules/mcp"
 	"github.com/FacileStudio/tronc/apiref"
 	"github.com/FacileStudio/tronc/bulle"
 	"github.com/go-chi/chi/v5"
@@ -1110,6 +1111,7 @@ func Reference() apiref.Config {
 						},
 					},
 				},
+				mcp.Documentation,
 			},
 		},
 	}

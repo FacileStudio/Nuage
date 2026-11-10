@@ -7,6 +7,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
+	"github.com/FacileStudio/tronc/mcp"
 
 	"gorm.io/gorm"
 )
@@ -67,6 +68,9 @@ func migrateSchema(db *gorm.DB) error {
 		&AppFolder{},
 		&AppObject{},
 	); err != nil {
+		return err
+	}
+	if err := db.Exec(mcp.PendingSchema).Error; err != nil {
 		return err
 	}
 	if err := backfill(db); err != nil {

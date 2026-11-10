@@ -47,6 +47,7 @@ up on `minioadmin` — that is local-dev behavior, not a supported deployment.
 | `OIDC_SUCCESS_URL` | with issuer | — | Where to send the browser after a successful login |
 | `OIDC_MACHINE_AUDIENCE` | no | — | Nuage's own client id. Arms the bearer path for delegated JWTs Registre mints for another suite service, such as Bulle acting for a signed-in user |
 | `OIDC_SCOPE_PREFIX` | no | — | Set to `nuage` to gate those JWTs: GET, HEAD and OPTIONS need `nuage.read` or `nuage.write`, every other method needs `nuage.write`. Requires `OIDC_MACHINE_AUDIENCE` |
+| `MCP_RESOURCE` | no | compose: `https://nuage.facile.studio/mcp` | Turns on the MCP server at `/mcp`. It is the URL people paste into an MCP client and must equal the resource declared in Registre's `seed.yaml` byte for byte. Needs `OIDC_ISSUER`; the confirmation key is derived from `PRESIGN_SECRET` |
 
 Setting `OIDC_ISSUER` while leaving any of the four companions empty exits 1 with an
 explicit message. The suite's provider is Authentik at `porte.facile.studio`, with a

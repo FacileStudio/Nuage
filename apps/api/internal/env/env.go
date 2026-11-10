@@ -4,6 +4,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/porte"
 
+	"crypto/sha256"
 	"fmt"
 
 	troncenv "github.com/FacileStudio/tronc/env"
@@ -66,6 +67,19 @@ type Config struct {
 	// BulleURL is where the Ideas routes reach Bulle, from BULLE_URL. Empty
 	// leaves them unmounted, as does a Nuage without OIDC.
 	BulleURL string
+
+	// MCP turns on the remote MCP server.
+	MCP MCP
+}
+
+// MCP configures the remote MCP server. Resource is the canonical URI
+// clients connect to, https://nuage.facile.studio/mcp in production, and the
+// RFC 8707 resource Registre binds its tokens to, from MCP_RESOURCE. It needs
+// OIDC. StateKey signs the confirmation state handed to clients; it is
+// derived from PRESIGN_SECRET, so no new secret is needed.
+type MCP struct {
+	Resource string
+	StateKey []byte
 }
 
 // Load reads the configuration from the environment, failing when a required
@@ -84,6 +98,9 @@ func Load() (Config, error) {
 		StorageDir:    troncenv.String("STORAGE_DIR", "./data"),
 		PresignSecret: troncenv.String("PRESIGN_SECRET", ""),
 		BulleURL:      troncenv.String("BULLE_URL", ""),
+	}
+	if cfg.PresignSecret != "" {
+		cfg.MCP = MCP{Resource: troncenv.String("MCP_RESOURCE", ""), StateKey: deriveStateKey(cfg.PresignSecret)}
 	}
 
 	if cfg.MinIO, err = loadMinIO(); err != nil {
@@ -198,4 +215,11 @@ func (c Config) IssuerForMigration() string {
 		return ""
 	}
 	return c.OIDC.Issuer
+}
+
+// deriveStateKey derives the MCP confirmation key from the presign secret,
+// namespaced so it collides with no other use of that secret.
+func deriveStateKey(secret string) []byte {
+	sum := sha256.Sum256([]byte("nuage-mcp-state:" + secret))
+	return sum[:]
 }

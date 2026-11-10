@@ -279,6 +279,44 @@ that actually exist, which is the repair path when accounting drifts.
 `POST /settings/test-nook` sends a probe event through the Nook notifier, and
 `GET /settings/nook/deliveries` shows the queue with per-attempt status and response codes.
 
+## MCP
+
+`POST /mcp` is a remote MCP server (spec 2026-07-28, stateless Streamable HTTP) for any MCP
+client: Claude, ChatGPT, Cursor, VS Code, MCP Inspector, Bulle. It is on when `MCP_RESOURCE`
+and `OIDC_ISSUER` are set. Tokens come from Registre, bound to `https://nuage.facile.studio/mcp`,
+with `nuage.read` (read tools) and `nuage.write` (every other tool). A call without a token gets
+401 with `resource_metadata`; the RFC 9728 document is at
+`/.well-known/oauth-protected-resource/mcp`. GET is 405, a foreign `Origin` is 403.
+
+| Tool | What it does |
+|---|---|
+| `nuage_list_folder` | A folder, a space root or the personal root (which also lists the spaces), paged |
+| `nuage_search` | Files and folders by name, across the drive and every space, or one space |
+| `nuage_read_file` | Text of a file as UTF-8, 60,000 bytes per call with `next_offset`; binary files return details only |
+| `nuage_save_file` | A new file from text or base64 (5 MB), or a new version of a file the caller uploaded |
+| `nuage_create_folder` | A folder; an existing folder of that name is returned instead |
+| `nuage_move` | Rename and/or move a file or folder within its drive or space |
+| `nuage_delete` | Move to the trash, **confirmed by the person** |
+| `nuage_create_share` | A public link, **confirmed by the person** |
+| `nuage_revoke_share`, `nuage_list_shares` | Manage the person's links |
+
+Every tool calls the same service method as the REST route it mirrors, so space membership and
+ownership rules are the API's. Delegated tokens follow `RequireAuth`'s actor rule: a registered
+app is refused, an actor outside `NUAGE_FULL_ACCESS_ACTORS` is refused.
+
+Confirmations: a client that declares form elicitation gets an MRTR `input_required` question.
+Any other client gets `status: pending_confirmation` and a `confirm_url` to `/pending?action=<id>`,
+where the person confirms in Nuage through these routes (session only; a delegated or restricted
+token gets 403):
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/mcp/pending` | Open actions with their item and `state` (`ready`, `changed`, `missing`) |
+| POST | `/api/mcp/pending/{id}/confirm` | Runs it once; a share answers its `url` |
+| POST | `/api/mcp/pending/{id}/dismiss` | Closes it without running |
+
+Actions live in `mcp_actions` for 7 days. An item edited after the question is refused (412).
+
 ## WebDAV
 
 | Method | Path | Auth |

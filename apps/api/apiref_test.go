@@ -17,6 +17,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/docs"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
+	"github.com/FacileStudio/Nuage/apps/api/modules/mcp"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/modules/search"
 	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
@@ -53,6 +54,7 @@ func buildTestRouter() chi.Router {
 		spaces.RegisterRoutes(r, nil, authService)
 		activitymod.RegisterRoutes(r, nil, authService)
 		appfolders.RegisterRoutes(r, nil, authService)
+		mcp.RegisterPendingRoutes(r, nil, authService)
 		r.Group(func(r chi.Router) {
 			_ = ideas.New(nil, nil, nil).Mount(r, bulle.Options{URL: "http://bulle.invalid", TokenSource: func(context.Context) (string, error) { return "", nil }})
 		})

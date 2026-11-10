@@ -8,6 +8,18 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While on
 Releases are tagged `v*` on `main`. The API deploys from `main` on push, so a
 tag records what shipped rather than triggering the deploy.
 
+## [Unreleased]
+
+### Added
+
+- MCP server at `POST /mcp` (MCP 2026-07-28, stateless) on tronc/mcp v0.19.0, for any MCP client holding a Registre token bound to `https://nuage.facile.studio/mcp`. Ten tools: `nuage_list_folder`, `nuage_search`, `nuage_read_file` (UTF-8 text, 60,000 bytes per call with `next_offset`), `nuage_save_file` (text or base64, 5 MB, new file or new version), `nuage_create_folder`, `nuage_move`, `nuage_delete`, `nuage_create_share`, `nuage_revoke_share` and `nuage_list_shares`. They call the REST routes' own service methods, so spaces and ownership hold exactly as in the API, and delegated tokens follow the same actor rule.
+- Moving to the trash and creating a public link are confirmed by the person: through the client (MRTR elicitation) when it can ask, otherwise on the new `/pending` page, which `GET /api/mcp/pending`, `POST /api/mcp/pending/{id}/confirm` and `POST /api/mcp/pending/{id}/dismiss` serve. A `/pending` link survives sign-in.
+- `MCP_RESOURCE` (compose default `https://nuage.facile.studio/mcp`) turns the server on; the confirmation key derives from `PRESIGN_SECRET`.
+
+### Changed
+
+- tronc v0.19.0, porte v0.16.0 and porte/mcpauth v0.2.0. A Registre user's first MCP call creates their Nuage account through the OIDC kit, as a first web login would, so nobody has to open Nuage on the web first. Boot creates the `mcp_actions` table (additive).
+
 ## [0.15.0] - 2026-11-10
 
 ### Added
