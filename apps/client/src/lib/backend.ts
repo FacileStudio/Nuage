@@ -236,6 +236,19 @@ export type IdeaRunResponse = {
 
 export type UploadProgressCallback = (loaded: number, total: number) => void;
 
+/** An action an MCP client asked for, waiting for the person to confirm it. */
+export type PendingAction = {
+	id: string;
+	kind: 'trash' | 'share';
+	client_id: string;
+	summary: string;
+	created_at: string;
+	expires_at: string;
+	state: 'ready' | 'changed' | 'missing';
+	expires_in_days?: number;
+	item?: { type: 'file' | 'folder'; id: number; name: string; mime_type?: string; size?: number };
+};
+
 type ApiErrorPayload = {
 	error?: { message?: string };
 };
@@ -537,6 +550,21 @@ export const backend = {
 
 	deleteShare(token: string, id: number) {
 		return apiFetch<{}>(`/shares/${id}`, { method: 'DELETE' }, token);
+	},
+
+	/** Lists the actions MCP clients asked for that wait for the person. */
+	listPending() {
+		return apiFetch<{ actions: PendingAction[] }>('/mcp/pending');
+	},
+
+	/** Runs one waiting action once; a confirmed share answers its link. */
+	confirmPending(id: string) {
+		return apiFetch<{ status: string; url?: string }>(`/mcp/pending/${encodeURIComponent(id)}/confirm`, { method: 'POST' });
+	},
+
+	/** Closes one waiting action without running it. */
+	dismissPending(id: string) {
+		return apiFetch<{ status: string }>(`/mcp/pending/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 	},
 
 	async getSettings(token: string): Promise<Record<string, string>> {

@@ -4,6 +4,7 @@ import { files } from './files';
 import { ideas } from './ideas';
 import { members } from './members';
 import { pages } from './pages';
+import { pending } from './pending';
 import { settings } from './settings';
 import { share } from './share';
 import { shell } from './shell';
@@ -25,7 +26,8 @@ const rows = {
 	...members,
 	...settings,
 	...tokens,
-	...ideas
+	...ideas,
+	...pending
 };
 
 export type AppKey = keyof typeof rows;

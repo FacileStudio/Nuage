@@ -20,6 +20,7 @@ and MinIO are internal Docker services.
 - Shares files or folders through public tokenized links with an optional expiry
 - Signs time-limited presigned download URLs for unauthenticated clients
 - Mounts the whole tree over WebDAV using an API token as the Basic auth password
+- Serves an MCP server at `/mcp` for AI clients (Claude, ChatGPT, Cursor), authorised by Registre, with trashing and public links confirmed by the person
 - Enforces per-user storage quotas, with an admin view and recalculation
 - Exposes an incremental sync feed with tombstones so offline clients converge
 - Records an activity log, emits events to Nook, and tees its logs to Journal

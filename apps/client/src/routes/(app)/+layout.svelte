@@ -114,17 +114,42 @@
 				const result = await backend.me();
 				setUser(result.user);
 				loaded = true;
+				resumeReturn();
 				refreshQuota();
 				loadSpaces();
 				ideasReady = true;
 			} catch (error) {
-				if (isAuthError(error)) { goto('/login'); return; }
+				if (isAuthError(error)) { keepReturn(); goto('/login'); return; }
 				failure = error instanceof Error && error.message ? error.message : t('common.unreachable');
 			}
 		})();
 
 		return () => document.removeEventListener('keydown', handleUndoKeydown);
 	});
+
+	/*
+	 * An MCP client hands the person a /pending?action=… link. Signing in lands on OIDC's success
+	 * page, so the link is kept for this tab and reopened once the session is back. Only /pending
+	 * is kept: the value is read back into goto, and no other path needs it.
+	 */
+	const RETURN_KEY = 'nuage.return';
+
+	function keepReturn() {
+		if (page.url.pathname !== '/pending') return;
+		try {
+			sessionStorage.setItem(RETURN_KEY, page.url.pathname + page.url.search);
+		} catch {}
+	}
+
+	function resumeReturn() {
+		let back: string | null = null;
+		try {
+			back = sessionStorage.getItem(RETURN_KEY);
+			sessionStorage.removeItem(RETURN_KEY);
+		} catch {}
+		const safe = back === '/pending' || back?.startsWith('/pending?');
+		if (back && safe && back !== page.url.pathname + page.url.search) void goto(back);
+	}
 
 	function isActive(href: string) {
 		return page.url.pathname === href || page.url.pathname.startsWith(href + '/');

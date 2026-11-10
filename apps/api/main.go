@@ -30,6 +30,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
 	"github.com/FacileStudio/Nuage/apps/api/modules/docs"
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
+	"github.com/FacileStudio/Nuage/apps/api/modules/mcp"
 	"github.com/FacileStudio/Nuage/apps/api/modules/quota"
 	"github.com/FacileStudio/Nuage/apps/api/modules/search"
 	"github.com/FacileStudio/Nuage/apps/api/modules/settings"
@@ -394,6 +395,13 @@ func run() int {
 		}
 	}
 	ideasGate := ideas.New(db, plans, quotaService)
+	mcpService, err := newMCP(context.Background(), sqlDB, appEnv, mcp.Deps{
+		Files: fileService, Sharing: sharingService, Spaces: spacesService, Actors: authService,
+	}, porteStore.Identities(), kit, appLogger)
+	if err != nil {
+		appLogger.Error("failed to build the MCP server", slog.Any("error", err))
+		return 1
+	}
 
 	clientDir := spa.DirFromEnv()
 	router := httpx.NewRouter(httpx.Config{
@@ -419,6 +427,10 @@ func run() int {
 		router.Method(http.MethodPost, directory.DeletionsPath, deletions.Handler())
 	}
 
+	if mcpService != nil {
+		mcp.RegisterRoutes(router, mcpService)
+	}
+
 	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 
 	var ideasErr error
@@ -440,6 +452,9 @@ func run() int {
 		spaces.RegisterRoutes(r, spacesService, authService)
 		activitymod.RegisterRoutes(r, activityService, authService)
 		appfolders.RegisterRoutes(r, appFolderService, authService)
+		if mcpService != nil {
+			mcp.RegisterPendingRoutes(r, mcpService, authService)
+		}
 		if ideasOptions != nil {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAuth(authService))
