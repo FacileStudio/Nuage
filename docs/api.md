@@ -81,6 +81,12 @@ Both credential endpoints are rate limited to 10 requests per minute per IP.
 | POST | `/users/me/api-token` | session |
 | DELETE | `/users/me/api-token/{id}` | session |
 | GET | `/users/{id}` | session |
+| GET | `/me/invitations` | session, mounted with `OIDC_ISSUER` |
+
+`GET /me/invitations` is porte/kit's count of the person's pending Registre space invitations,
+`{"count": n, "href": url}`, for the user menu. It never fails for Registre's sake: an
+unreachable or slow Registre answers `{"count":0}` without `href`. Answers are cached per user
+for 60 seconds.
 
 A user is `{"id","email","name","avatar_url","avatar_source","color","created_at"}`.
 `avatar_source` distinguishes an uploaded avatar from one imported from OIDC, which is what

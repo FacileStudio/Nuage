@@ -22,6 +22,11 @@ export type UserProfile = {
 	created_at: string;
 };
 
+export type InvitationsResponse = {
+	count: number;
+	href?: string;
+};
+
 export type MeResponse = {
 	user: UserProfile;
 };
@@ -377,6 +382,14 @@ export const backend = {
 	 */
 	me(token?: string) {
 		return apiFetch<MeResponse>('/users/me', {}, token);
+	},
+
+	/**
+	 * The signed-in person's pending Registre space invitations for the user menu. The API never
+	 * fails this call for Registre's sake; without Registre the route is not mounted.
+	 */
+	invitations() {
+		return apiFetch<InvitationsResponse>('/me/invitations', {}, undefined, true);
 	},
 
 	/**

@@ -27,6 +27,17 @@
 	let spaces = $state<Space[]>([]);
 	let collapsed = $state(false);
 	let ideasReady = $state(false);
+	let invitations = $state<{ count: number; href: string } | null>(null);
+
+	/* muse draws no Invitations row without an href, so an answer without one is no row at all. */
+	async function loadInvitations() {
+		try {
+			const answer = await backend.invitations();
+			invitations = answer.href ? { count: answer.count, href: answer.href } : null;
+		} catch {
+			invitations = null;
+		}
+	}
 
 	$effect(() => {
 		const id = spaceStore.id;
@@ -117,6 +128,7 @@
 				resumeReturn();
 				refreshQuota();
 				loadSpaces();
+				loadInvitations();
 				ideasReady = true;
 			} catch (error) {
 				if (isAuthError(error)) { keepReturn(); goto('/login'); return; }
@@ -208,7 +220,8 @@
 		onSignOut: signOut,
 		theme: theme.preference,
 		onThemeChange: (next: ThemePreference) => theme.set(next),
-		onLocaleChange: rememberLocale
+		onLocaleChange: rememberLocale,
+		invitations
 	});
 
 	const onSettings = $derived(isActive('/settings'));

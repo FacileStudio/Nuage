@@ -124,11 +124,7 @@ func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, quo
 	}
 	registre := spaces.NewRegistre(db, appEnv.OIDC.Issuer, appLogger)
 	syncer := &directory.Syncer{
-		Client: directory.Client{
-			Issuer:       appEnv.OIDC.Issuer,
-			ClientID:     appEnv.OIDC.ClientID,
-			ClientSecret: appEnv.OIDC.ClientSecret,
-		},
+		Client: registreClient(appEnv),
 		Apply: func(ctx context.Context, snapshot directory.Snapshot) error {
 			was := plans.Enforcing()
 			err := errors.Join(registre.Apply(ctx, snapshot), plans.Apply(ctx, snapshot))
@@ -142,6 +138,19 @@ func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, quo
 	return registre, syncer
 }
 
+// registreClient is Registre's directory client under the app's own OIDC
+// credentials, and the zero client when OIDC is not configured.
+func registreClient(appEnv env.Config) directory.Client {
+	if appEnv.OIDC == nil {
+		return directory.Client{}
+	}
+	return directory.Client{
+		Issuer:       appEnv.OIDC.Issuer,
+		ClientID:     appEnv.OIDC.ClientID,
+		ClientSecret: appEnv.OIDC.ClientSecret,
+	}
+}
+
 // newDeletions builds the GDPR deletion receiver when OIDC is configured, with
 // the same client credentials as the snapshot sync, and returns nil otherwise.
 // Nuage runs as one replica, so the one Run it starts is the only one.
@@ -149,11 +158,7 @@ func newDeletions(cfg erasure.Config, appEnv env.Config) (*erasure.Deletions, er
 	if appEnv.OIDC == nil {
 		return nil, nil
 	}
-	cfg.Client = directory.Client{
-		Issuer:       appEnv.OIDC.Issuer,
-		ClientID:     appEnv.OIDC.ClientID,
-		ClientSecret: appEnv.OIDC.ClientSecret,
-	}
+	cfg.Client = registreClient(appEnv)
 	cfg.StorageDir = appEnv.StorageDir
 	return erasure.New(context.Background(), cfg)
 }
@@ -447,7 +452,8 @@ func run() int {
 			avatarFS.ServeHTTP(w, request)
 		})
 
-		mountErr = auth.RegisterRoutes(r, sessions, kit)
+		mountErr = errors.Join(auth.RegisterRoutes(r, sessions, kit), auth.RegisterInvitations(
+			r, middleware.RequireAuth(authService), registreClient(appEnv), porteStore.Identities(), appLogger))
 		users.RegisterRoutes(r, userService, authService)
 		files.RegisterRoutes(r, fileService, authService)
 		trash.RegisterRoutes(r, trashService, authService)

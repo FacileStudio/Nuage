@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/FacileStudio/Nuage/apps/api/modules/mcp"
+	"github.com/FacileStudio/porte/kit"
 	"github.com/FacileStudio/tronc/apiref"
 	"github.com/FacileStudio/tronc/bulle"
 	"github.com/go-chi/chi/v5"
@@ -332,6 +333,14 @@ type NookDeliveryResponse struct {
 }
 
 // Mount mounts the reference page and the OpenAPI document on router.
+// invitationsRoute documents porte/kit's GET /me/invitations with its real
+// response schema.
+func invitationsRoute() Route {
+	route := kit.InvitationsRoute()
+	route.ResponseBody = kit.InvitationsResponse{}
+	return route
+}
+
 func Mount(router chi.Router) {
 	apiref.Mount(router, Reference())
 }
@@ -448,6 +457,7 @@ func Reference() apiref.Config {
 							PathParams:   []Field{{Name: "id", Type: "string", Description: "User ID"}},
 							ResponseBody: UserResponse{},
 						},
+						invitationsRoute(),
 					},
 				},
 				{

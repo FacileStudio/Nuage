@@ -8,10 +8,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/FacileStudio/porte/directory"
+	portepg "github.com/FacileStudio/porte/pg"
 	"github.com/FacileStudio/porte/session"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/ideas"
+	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	activitymod "github.com/FacileStudio/Nuage/apps/api/modules/activity"
 	"github.com/FacileStudio/Nuage/apps/api/modules/appfolders"
 	"github.com/FacileStudio/Nuage/apps/api/modules/auth"
@@ -42,6 +45,9 @@ func buildTestRouter() chi.Router {
 
 	router.Route(apiPrefix, func(r chi.Router) {
 		r.Get(avatarRoutePrefix+"*", func(w http.ResponseWriter, request *http.Request) {})
+		_ = auth.RegisterInvitations(r, middleware.RequireAuth(authService),
+			directory.Client{Issuer: "https://sso.test", ClientID: "nuage", ClientSecret: "secret"},
+			portepg.New(nil).Identities(), slog.Default())
 
 		users.RegisterRoutes(r, nil, authService)
 		files.RegisterRoutes(r, nil, authService)

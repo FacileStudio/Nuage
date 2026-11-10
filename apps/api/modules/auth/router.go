@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"log/slog"
+	"net/http"
+
+	"github.com/FacileStudio/porte/directory"
 	"github.com/FacileStudio/porte/kit"
 	"github.com/FacileStudio/porte/oidc"
 	"github.com/FacileStudio/porte/session"
@@ -14,4 +18,19 @@ import (
 // unmounted.
 func RegisterRoutes(router chi.Router, sessions *session.Manager, oidcKit *oidc.Kit) error {
 	return kit.Mount(router, kit.Config{Sessions: sessions, OIDC: oidcKit})
+}
+
+// RegisterInvitations mounts GET /me/invitations behind requireAuth: the
+// signed-in person's pending Registre space invitations for the user menu.
+// Without a Registre client (no OIDC issuer) it mounts nothing.
+func RegisterInvitations(
+	router chi.Router, requireAuth func(http.Handler) http.Handler, client directory.Client,
+	identities kit.IdentityLister, logger *slog.Logger,
+) error {
+	if client.Issuer == "" {
+		return nil
+	}
+	return kit.MountInvitations(router.With(requireAuth), kit.InvitationsConfig{
+		Directory: client, Identities: identities, Logger: logger,
+	})
 }
