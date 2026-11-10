@@ -90,7 +90,10 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 		return nil, nil, nil, err
 	}
 	resealInBackground(ctx, store, appLogger)
-	users := auth.NewUserStore(db, notifier)
+	users, err := auth.NewUserStore(ctx, db, notifier)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	cfg := appEnv.Porte()
 
 	sessions, err := session.New(cfg, session.Deps{Sessions: store.Sessions(), Logger: appLogger})
@@ -433,14 +436,14 @@ func run() int {
 
 	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 
-	var ideasErr error
+	var mountErr error
 	router.Route(apiPrefix, func(r chi.Router) {
 		r.Get(avatarRoutePrefix+"*", func(w http.ResponseWriter, request *http.Request) {
 			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
 			avatarFS.ServeHTTP(w, request)
 		})
 
-		auth.RegisterRoutes(r, sessions, kit)
+		mountErr = auth.RegisterRoutes(r, sessions, kit)
 		users.RegisterRoutes(r, userService, authService)
 		files.RegisterRoutes(r, fileService, authService)
 		trash.RegisterRoutes(r, trashService, authService)
@@ -459,13 +462,13 @@ func run() int {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAuth(authService))
 				if err := ideasGate.Mount(r, *ideasOptions); err != nil {
-					ideasErr = err
+					mountErr = errors.Join(mountErr, err)
 				}
 			})
 		}
 	})
-	if ideasErr != nil {
-		appLogger.Error("failed to mount ideas", slog.Any("error", ideasErr))
+	if mountErr != nil {
+		appLogger.Error("failed to mount the API routes", slog.Any("error", mountErr))
 		return 1
 	}
 

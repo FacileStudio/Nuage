@@ -43,7 +43,7 @@ func AdoptPorte(db *gorm.DB, issuer string) error {
 // showed initials until their next login. The URL is derived from the
 // (provider, subject) row porte already keeps, so the update is idempotent and
 // a row already on the right URL is left alone. A non-https issuer is skipped,
-// matching oidcavatar.PhotoURL.
+// matching kit.PictureURL.
 func backfillPictureURLs(db *gorm.DB, issuer string) error {
 	base := strings.TrimRight(issuer, "/")
 	if !strings.HasPrefix(strings.ToLower(base), "https://") {

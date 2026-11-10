@@ -163,7 +163,9 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	router := chi.NewRouter()
 	router.Use(troncmiddleware.CORS(troncmiddleware.CORSConfig{AllowedOrigins: []string{"*"}}))
 
-	auth.RegisterRoutes(router, sessions, kit)
+	if err := auth.RegisterRoutes(router, sessions, kit); err != nil {
+		t.Fatalf("mount auth: %v", err)
+	}
 	users.RegisterRoutes(router, userService, authService)
 	files.RegisterRoutes(router, fileService, authService)
 	trash.RegisterRoutes(router, trashService, authService)
@@ -203,6 +205,15 @@ func cleanDB(db *gorm.DB) {
 	db.Exec("CREATE SCHEMA public")
 }
 
+// userStore is the app's UserStore over db, as buildAuth makes it.
+func userStore(db *gorm.DB) *auth.UserStore {
+	store, err := auth.NewUserStore(context.Background(), db, nil)
+	if err != nil {
+		panic(err)
+	}
+	return store
+}
+
 // registerUser creates an account through the app's UserStore, as a Registre
 // sign-in does, gives it the local identity the retired password sign-up wrote,
 // and issues a session. The password is ignored: no password sign-in exists
@@ -210,7 +221,7 @@ func cleanDB(db *gorm.DB) {
 func registerUser(ts *testServer, email, _ string) (string, string) {
 	ctx := context.Background()
 	claims := porte.Claims{Provider: testIssuer, Subject: "sub-" + email, Email: email, EmailVerified: true}
-	id, err := auth.NewUserStore(ts.db, nil).UpsertFromOIDC(ctx, claims)
+	id, err := userStore(ts.db).UpsertFromOIDC(ctx, claims)
 	if err != nil {
 		panic(err)
 	}
@@ -312,7 +323,10 @@ func buildTestAuth(
 		return nil, nil, err
 	}
 	store := portepg.New(sqlDB)
-	users := auth.NewUserStore(db, notifier)
+	users, err := auth.NewUserStore(context.Background(), db, notifier)
+	if err != nil {
+		return nil, nil, err
+	}
 	cfg := appEnv.Porte()
 
 	sessions, err := session.New(cfg, session.Deps{Sessions: store.Sessions(), Logger: slog.Default()})

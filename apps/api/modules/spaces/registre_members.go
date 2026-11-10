@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/FacileStudio/Nuage/apps/api/internal/oidcavatar"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	"github.com/FacileStudio/porte/directory"
+	"github.com/FacileStudio/porte/kit"
 
 	"gorm.io/gorm"
 )
@@ -96,7 +96,7 @@ func provisionUser(ctx context.Context, tx *gorm.DB, email string, member direct
 		Email:          email,
 		Name:           strings.TrimSpace(member.Name),
 		Color:          color,
-		OIDCPictureURL: oidcavatar.PhotoURL(member.Picture),
+		OIDCPictureURL: kit.PictureURL(member.Picture),
 	}
 	if err := tx.Create(&user).Error; err != nil {
 		return 0, err
