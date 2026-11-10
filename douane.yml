@@ -1,0 +1,5 @@
+permits:
+  - id: GO-2026-5932
+    package: golang.org/x/crypto
+    reason: "x/crypto/openpgp is unmaintained, no tagged x/crypto release removes it yet, and Nuage never imports it. The advisory has no severity, so it leaves the scan incomplete."
+    expires: 2027-02-08
