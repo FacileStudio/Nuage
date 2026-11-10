@@ -27,6 +27,9 @@ import (
 // StorageKey is the suite-wide name of Nuage's storage ceiling, in GB.
 const StorageKey = "nuage.storage_gb"
 
+// AIAccessKey is the suite-wide name of the flag that unlocks AI features.
+const AIAccessKey = "ai.access"
+
 // storageDefault is the free plan's ceiling: 5 GB.
 const storageDefault = "5"
 
@@ -59,6 +62,10 @@ func New(orm *gorm.DB, issuer string, logger *slog.Logger) *Plans {
 		Key:     StorageKey,
 		Kind:    forfait.Limit,
 		Default: json.RawMessage(storageDefault),
+	}, forfait.Feature{
+		Key:     AIAccessKey,
+		Kind:    forfait.Bool,
+		Default: json.RawMessage("false"),
 	})
 	store.Issuer = issuer
 	store.Logger = logger

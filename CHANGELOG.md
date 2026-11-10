@@ -8,6 +8,17 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While on
 Releases are tagged `v*` on `main`. The API deploys from `main` on push, so a
 tag records what shipped rather than triggering the deploy.
 
+## [Unreleased]
+
+### Added
+
+- Ideas: a lightbulb entry at the top of the sidebar and phone bar, with a badge for new ideas, and an `/ideas` page where Bulle suggests what to tidy, find or share in the active space. An idea runs in place: Nuage polls the run, shows an approval card for each held call, then the result with its links and a link to continue in Bulle. Ideas are paid (`ai.access`): a free plan sees the upsell and Registre's plans link.
+- API: `GET /api/ideas`, `POST /api/ideas/generate`, `POST /api/ideas/{id}/run`, `POST /api/ideas/{id}/dismiss`, `GET /api/ideas/runs/{run}` and `POST /api/ideas/runs/{run}/approvals/{call}`, mounted when `OIDC_ISSUER` and the new `BULLE_URL` are set. They call Bulle as the signed-in user through a Registre token exchange (audience `bulle`, scopes `bulle.read` and `bulle.write`). `space_id` must be a space the caller belongs to and that Registre knows. Nuage declares `ai.access` as a plan feature and answers 402 with the upgrade link, or `ai_access: false` on the list, without calling Bulle when the plan lacks it.
+
+### Changed
+
+- porte to v0.15.1 (`porte/exchange`) and tronc to v0.18.0 (`tronc/bulle`). Client: `@facile/muse` v0.16.1 to v0.17.1.
+
 ## [0.14.3] - 2026-11-07
 
 ### Changed

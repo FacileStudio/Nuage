@@ -19,6 +19,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
 	"github.com/FacileStudio/Nuage/apps/api/internal/erasure"
+	"github.com/FacileStudio/Nuage/apps/api/internal/ideas"
 	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
@@ -42,9 +43,11 @@ import (
 
 	"github.com/FacileStudio/Journal/sdk/journal"
 	"github.com/FacileStudio/porte/directory"
+	"github.com/FacileStudio/porte/exchange"
 	"github.com/FacileStudio/porte/oidc"
 	portepg "github.com/FacileStudio/porte/pg"
 	"github.com/FacileStudio/porte/session"
+	"github.com/FacileStudio/tronc/bulle"
 	"github.com/FacileStudio/tronc/health"
 	"github.com/FacileStudio/tronc/healthcheck"
 	"github.com/FacileStudio/tronc/httpjson"
@@ -149,6 +152,29 @@ func newDeletions(cfg erasure.Config, appEnv env.Config) *erasure.Deletions {
 	}
 	cfg.StorageDir = appEnv.StorageDir
 	return erasure.New(cfg)
+}
+
+// bulleOptions wires the Ideas routes to Bulle: the app acts as the signed-in
+// user through a Registre token exchange for audience bulle, over the same
+// identity store that seals the Registre tokens.
+func bulleOptions(appEnv env.Config, identities exchange.Identities, appLogger *slog.Logger) (*bulle.Options, error) {
+	exchanger, err := exchange.New(exchange.Config{
+		Issuer:       appEnv.OIDC.Issuer,
+		ClientID:     appEnv.OIDC.ClientID,
+		ClientSecret: appEnv.OIDC.ClientSecret,
+		Identities:   identities,
+		Logger:       appLogger,
+	})
+	if err != nil {
+		return nil, err
+	}
+	source := exchanger.Source(exchange.Target{Audience: "bulle", Scopes: []string{"bulle.read", "bulle.write"}})
+	return &bulle.Options{
+		URL:         appEnv.BulleURL,
+		TokenSource: source.Token,
+		Forget:      source.Forget,
+		UpgradeURL:  registreSpacesURL(appEnv),
+	}, nil
 }
 
 // registreSpacesURL is Registre's spaces page, where shared spaces are managed once OIDC is
@@ -359,6 +385,16 @@ func run() int {
 	}
 	activityService := activitymod.NewService(db)
 
+	var ideasOptions *bulle.Options
+	if appEnv.OIDC != nil && appEnv.BulleURL != "" {
+		ideasOptions, err = bulleOptions(appEnv, porteStore.Identities(), appLogger)
+		if err != nil {
+			appLogger.Error("failed to set up ideas", slog.Any("error", err))
+			return 1
+		}
+	}
+	ideasGate := ideas.New(db, plans, quotaService)
+
 	clientDir := spa.DirFromEnv()
 	router := httpx.NewRouter(httpx.Config{
 		TrustedProxies: appEnv.TrustedProxies,
@@ -385,6 +421,7 @@ func run() int {
 
 	avatarFS := http.StripPrefix(apiPrefix+avatarRoutePrefix, http.FileServer(http.Dir(filepath.Join(appEnv.StorageDir, "avatars"))))
 
+	var ideasErr error
 	router.Route(apiPrefix, func(r chi.Router) {
 		r.Get(avatarRoutePrefix+"*", func(w http.ResponseWriter, request *http.Request) {
 			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
@@ -403,7 +440,19 @@ func run() int {
 		spaces.RegisterRoutes(r, spacesService, authService)
 		activitymod.RegisterRoutes(r, activityService, authService)
 		appfolders.RegisterRoutes(r, appFolderService, authService)
+		if ideasOptions != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireAuth(authService))
+				if err := ideasGate.Mount(r, *ideasOptions); err != nil {
+					ideasErr = err
+				}
+			})
+		}
 	})
+	if ideasErr != nil {
+		appLogger.Error("failed to mount ideas", slog.Any("error", ideasErr))
+		return 1
+	}
 
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, appLogger)
 	docs.Mount(router)

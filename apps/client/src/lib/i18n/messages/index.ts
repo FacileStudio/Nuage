@@ -1,6 +1,7 @@
 import type { Catalogs, Message } from '@facile/muse';
 import { activity } from './activity';
 import { files } from './files';
+import { ideas } from './ideas';
 import { members } from './members';
 import { pages } from './pages';
 import { settings } from './settings';
@@ -23,7 +24,8 @@ const rows = {
 	...spaces,
 	...members,
 	...settings,
-	...tokens
+	...tokens,
+	...ideas
 };
 
 export type AppKey = keyof typeof rows;

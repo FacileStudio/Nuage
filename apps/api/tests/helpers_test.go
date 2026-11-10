@@ -18,6 +18,8 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/Nuage/apps/api/internal/entitlements"
 	"github.com/FacileStudio/Nuage/apps/api/internal/env"
+	"github.com/FacileStudio/Nuage/apps/api/internal/ideas"
+	"github.com/FacileStudio/Nuage/apps/api/internal/middleware"
 	"github.com/FacileStudio/Nuage/apps/api/internal/nook"
 	"github.com/FacileStudio/Nuage/apps/api/internal/presign"
 	"github.com/FacileStudio/Nuage/apps/api/internal/storage"
@@ -39,6 +41,7 @@ import (
 	"github.com/FacileStudio/porte/oidc"
 	portepg "github.com/FacileStudio/porte/pg"
 	"github.com/FacileStudio/porte/session"
+	troncbulle "github.com/FacileStudio/tronc/bulle"
 	troncmiddleware "github.com/FacileStudio/tronc/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -54,6 +57,7 @@ type testServer struct {
 	plans      *entitlements.Plans
 	store      *storage.Client
 	appFolders *appfolders.Service
+	bulle      *fakeBulle
 }
 
 // testIssuer is the OIDC issuer the plan entitlements are built for in tests.
@@ -171,6 +175,18 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 	spaces.RegisterRoutes(router, spacesService, authService)
 	activitymod.RegisterRoutes(router, activityService, authService)
 	appfolders.RegisterRoutes(router, appFolderService, authService)
+	bulle := newFakeBulle(t)
+	router.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAuth(authService))
+		err := ideas.New(db, plans, quotaService).Mount(r, troncbulle.Options{
+			URL:         bulle.server.URL,
+			TokenSource: func(context.Context) (string, error) { return "tok", nil },
+			UpgradeURL:  testIssuer + "/spaces",
+		})
+		if err != nil {
+			t.Fatalf("mount ideas: %v", err)
+		}
+	})
 	nuagewebdav.RegisterRoutes(router, db, storageClient, authService, quotaService, slog.Default())
 
 	t.Cleanup(func() {
@@ -179,7 +195,7 @@ func setupTestServerWith(t *testing.T, appEnv env.Config, verifier session.JWTVe
 		sqlDB.Close()
 	})
 
-	return &testServer{router: router, db: db, sessions: sessions, plans: plans, store: storageClient, appFolders: appFolderService}
+	return &testServer{router: router, db: db, sessions: sessions, plans: plans, store: storageClient, appFolders: appFolderService, bulle: bulle}
 }
 
 func cleanDB(db *gorm.DB) {

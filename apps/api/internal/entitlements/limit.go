@@ -62,3 +62,8 @@ func (p *Plans) Limit(sc forfait.Scope) int64 {
 func (p *Plans) Issuer() string {
 	return p.store.Issuer
 }
+
+// AIAccess reports whether the scope's plan includes ai.access.
+func (p *Plans) AIAccess(sc forfait.Scope) bool {
+	return p.store.Enabled(sc, AIAccessKey)
+}
