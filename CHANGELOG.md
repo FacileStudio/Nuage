@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-10
+
 ### Added
 
 - MCP server at `POST /mcp` (MCP 2026-07-28, stateless) on tronc/mcp v0.19.0, for any MCP client holding a Registre token bound to `https://nuage.facile.studio/mcp`. Ten tools: `nuage_list_folder`, `nuage_search`, `nuage_read_file` (UTF-8 text, 60,000 bytes per call with `next_offset`), `nuage_save_file` (text or base64, 5 MB, new file or new version), `nuage_create_folder`, `nuage_move`, `nuage_delete`, `nuage_create_share`, `nuage_revoke_share` and `nuage_list_shares`. They call the REST routes' own service methods, so spaces and ownership hold exactly as in the API, and delegated tokens follow the same actor rule.
