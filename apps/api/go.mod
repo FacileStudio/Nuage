@@ -4,11 +4,11 @@ go 1.26
 
 require (
 	github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba
-	github.com/FacileStudio/porte v0.16.0
-	github.com/FacileStudio/porte/directory v0.3.0
+	github.com/FacileStudio/porte v0.18.2
+	github.com/FacileStudio/porte/directory v0.4.0
 	github.com/FacileStudio/porte/forfait v0.1.1
 	github.com/FacileStudio/porte/mcpauth v0.2.0
-	github.com/FacileStudio/tronc v0.19.0
+	github.com/FacileStudio/tronc v0.21.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/httprate v0.15.0
 	github.com/minio/minio-go/v7 v7.0.82
