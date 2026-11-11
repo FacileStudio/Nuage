@@ -8,7 +8,7 @@ require (
 	github.com/FacileStudio/porte/directory v0.4.0
 	github.com/FacileStudio/porte/forfait v0.1.1
 	github.com/FacileStudio/porte/mcpauth v0.2.0
-	github.com/FacileStudio/tronc v0.21.0
+	github.com/FacileStudio/tronc v0.22.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/minio/minio-go/v7 v7.0.82
 	github.com/modelcontextprotocol/go-sdk v1.8.0

@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Changed
+
+- The MCP server and its confirm page run on tronc v0.22.0's shared app kit (`mcp.NewApp`, `mcp.PendingPage`, `mcp.PendingRoutes`, `mcp.Digest`): the local list, confirm and dismiss handlers and their types are gone. Tool names, tool schemas and the `/api/mcp/pending` bodies are unchanged, and actions opened before the upgrade still confirm. The OpenAPI list schema is now named `PendingList_PendingItem`, and `PendingResult` documents its optional `url`.
+- Account erasure deletes pending MCP actions through `mcp.ErasePending`, in the same transaction.
+- tronc v0.22.0.
+
 ## [0.17.0] - 2026-11-10
 
 ### Added

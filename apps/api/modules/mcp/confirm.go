@@ -2,8 +2,6 @@ package mcp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"strconv"
 	"strings"
 	"time"
@@ -92,8 +90,7 @@ func digest(file *schemas.File, folder *schemas.Folder) string {
 	} else {
 		fields = []string{"folder", strconv.FormatInt(folder.ID, 10), folder.Name, ptr(folder.ParentID), ptr(folder.SpaceID), folder.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 	}
-	sum := sha256.Sum256([]byte(strings.Join(fields, "\x00")))
-	return hex.EncodeToString(sum[:16])
+	return mcpkit.Digest(fields...)
 }
 
 // ptr renders an optional id.

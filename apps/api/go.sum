@@ -8,8 +8,8 @@ github.com/FacileStudio/porte/forfait v0.1.1 h1:eZFT3VIcOmHxbFQsUpQumBeqeBHsM29E
 github.com/FacileStudio/porte/forfait v0.1.1/go.mod h1:B+ki+HU6zT19PAC85ugVzpiJ0nzwolKtvQTtbjxRKD4=
 github.com/FacileStudio/porte/mcpauth v0.2.0 h1:MrXEWCmgknDiNYWbRWPceUAGlBPSXfBjvhmMA9rKwA8=
 github.com/FacileStudio/porte/mcpauth v0.2.0/go.mod h1:OAwHhZW3zOQPtMWNIZZlG73/lP6BnVg9i5dUbsz7IM4=
-github.com/FacileStudio/tronc v0.21.0 h1:lXm4Y69Y0irciHxJ5FcDuyAhkgzWx+GWaIl/2/oCDFM=
-github.com/FacileStudio/tronc v0.21.0/go.mod h1:QugDOuUrqoQw6JEi1jcPqY19lgmL+lhHDxtJcIkDk3g=
+github.com/FacileStudio/tronc v0.22.0 h1:aUgJ/MJYKxOZnSoHrSHt7yMTuYME/Qv9G8M5MV+ytcQ=
+github.com/FacileStudio/tronc v0.22.0/go.mod h1:QugDOuUrqoQw6JEi1jcPqY19lgmL+lhHDxtJcIkDk3g=
 github.com/coreos/go-oidc/v3 v3.20.0 h1:EtE0WIBHk03N+DqGkY4+UONzzZHk7amKt6IyNd7OsZE=
 github.com/coreos/go-oidc/v3 v3.20.0/go.mod h1:DYCf24+ncYi+XkIH97GY1+dqoRlbaSI26KVTCI9SrY4=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
