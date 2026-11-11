@@ -10,6 +10,11 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Security
+
+- Go modules past their advisories: `github.com/go-jose/go-jose/v4` 4.1.9 and `github.com/klauspost/compress` 1.20.4.
+- Client dependencies past their high advisories: `pdfjs-dist` 6.5.438, `@sveltejs/kit` 2.70.4 and `vite` 7.3.8, with overrides pinning `devalue` 5.9.4, `nanoid` 3.3.20, `postcss` 8.5.32 and `source-map-js` 1.2.2. The PDF viewer renders, selects text and finds matches on pdf.js 6 unchanged.
+
 ### Changed
 
 - `scripts/check.sh` runs the Go tests the way CI does: one package at a time (`-p 1`, `-count=1`), with a 40-minute timeout for `./tests`. Before, `schemas` and `tests` ran in parallel against the one test database and failed locally, and `./tests` (about 12 minutes) hit the 10-minute default timeout.
