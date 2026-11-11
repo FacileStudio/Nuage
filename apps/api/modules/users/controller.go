@@ -24,11 +24,16 @@ func newController(service *Service) *Controller {
 }
 
 func (controller *Controller) list(context context.Context) (*ListResponse, error) {
-	if _, ok := authcontext.IdentityFromContext(context); !ok {
+	identity, ok := authcontext.IdentityFromContext(context)
+	if !ok {
 		return nil, errors.Unauthorized("missing auth")
 	}
+	callerID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		return nil, errors.Internal("failed to parse user id", err)
+	}
 
-	users, err := controller.service.listUsers(context)
+	users, err := controller.service.listUsers(context, callerID, identity.IsAdmin)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +42,16 @@ func (controller *Controller) list(context context.Context) (*ListResponse, erro
 }
 
 func (controller *Controller) get(context context.Context, userID string) (*MeResponse, error) {
-	user, err := controller.service.getUser(context, userID)
+	identity, ok := authcontext.IdentityFromContext(context)
+	if !ok {
+		return nil, errors.Unauthorized("missing auth")
+	}
+	callerID, err := strconv.ParseInt(identity.UserID, 10, 64)
+	if err != nil {
+		return nil, errors.Internal("failed to parse user id", err)
+	}
+
+	user, err := controller.service.getVisibleUser(context, callerID, identity.IsAdmin, userID)
 	if err != nil {
 		return nil, err
 	}

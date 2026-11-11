@@ -20,10 +20,10 @@ export const members = {
 	'members.drawerTitle': ['Add a member', 'Ajouter un membre', 'Añadir un miembro', 'Mitglied hinzufügen'],
 	'members.who': ['Who', 'Qui', 'Quién', 'Wer'],
 	'members.whoHelper': [
-		'Anyone with an account on this Nuage.',
-		'Toute personne ayant un compte sur ce Nuage.',
-		'Cualquier persona con una cuenta en este Nuage.',
-		'Alle mit einem Konto auf diesem Nuage.'
+		'People you share a space with. For anyone else, type their full email address.',
+		'Les personnes de vos espaces. Pour quelqu’un d’autre, saisissez son adresse email complète.',
+		'Las personas con las que compartes un espacio. Para otra persona, escribe su correo completo.',
+		'Personen aus deinen Bereichen. Für alle anderen gib die vollständige E-Mail-Adresse ein.'
 	],
 	'members.search': [
 		'Search by name or email',
@@ -33,10 +33,16 @@ export const members = {
 	],
 	'members.nobody': ['Nobody matches that.', 'Personne ne correspond.', 'Nadie coincide.', 'Niemand passt dazu.'],
 	'members.everyone': [
-		'Everyone with an account is already a member.',
-		'Toutes les personnes ayant un compte sont déjà membres.',
-		'Todas las personas con cuenta ya son miembros.',
-		'Alle mit einem Konto sind bereits Mitglied.'
+		'Everyone you share a space with is already a member. Type an email address to add someone else.',
+		'Toutes les personnes de vos espaces sont déjà membres. Saisissez une adresse email pour ajouter quelqu’un d’autre.',
+		'Todas las personas de tus espacios ya son miembros. Escribe un correo para añadir a otra persona.',
+		'Alle aus deinen Bereichen sind bereits Mitglied. Gib eine E-Mail-Adresse ein, um jemand anderen hinzuzufügen.'
+	],
+	'members.byEmail': [
+		'{email} will be added if they have an account on this Nuage.',
+		'{email} sera ajouté si cette personne a un compte sur ce Nuage.',
+		'Se añadirá a {email} si tiene una cuenta en este Nuage.',
+		'{email} wird hinzugefügt, wenn die Person ein Konto auf diesem Nuage hat.'
 	],
 	'members.choose': [
 		'Choose a person to add',
@@ -71,6 +77,12 @@ export const members = {
 		'Ce compte a un identifiant que l’API n’accepte pas.',
 		'Esa cuenta tiene un id que esta API no acepta.',
 		'Dieses Konto hat eine ID, die diese API nicht akzeptiert.'
+	],
+	'members.noAccount': [
+		'No account uses that email address yet.',
+		'Aucun compte n’utilise encore cette adresse email.',
+		'Ninguna cuenta usa todavía esa dirección de correo.',
+		'Noch kein Konto nutzt diese E-Mail-Adresse.'
 	],
 	'members.added': ['Added {name}.', '{name} ajouté.', 'Se añadió a {name}.', '{name} hinzugefügt.'],
 	'members.addFailed': [

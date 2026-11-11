@@ -10,7 +10,7 @@ var Documentation = documentation.Module{
 			Method:       "GET",
 			Path:         "/users",
 			Summary:      "List users",
-			Description:  "Returns all authenticated users with profile metadata.",
+			Description:  "Returns the accounts the caller may see: itself and everyone who shares a space with it. An administrator's own session sees every account.",
 			Auth:         "bearer token required",
 			ResponseBody: "ListResponse",
 			Errors: []documentation.Error{

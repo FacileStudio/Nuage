@@ -12,9 +12,11 @@ type UpdateSpaceRequest struct {
 	Description *string `json:"description"`
 }
 
-// AddMemberRequest is the body used to add a member to a space.
+// AddMemberRequest is the body used to add a member to a space: a user_id
+// for someone the caller already shares a space with, or an exact email.
 type AddMemberRequest struct {
-	UserID int64  `json:"user_id"`
+	UserID int64  `json:"user_id,omitempty"`
+	Email  string `json:"email,omitempty"`
 	Role   string `json:"role"`
 }
 

@@ -725,7 +725,7 @@ export const backend = {
 		return apiFetch<{ members: SpaceMember[] }>(`/spaces/${spaceId}/members`, {}, token);
 	},
 
-	addSpaceMember(token: string, spaceId: number, data: { user_id: number; role?: string }) {
+	addSpaceMember(token: string, spaceId: number, data: { user_id?: number; email?: string; role?: string }) {
 		return apiFetch<SpaceMember>(`/spaces/${spaceId}/members`, {
 			method: 'POST',
 			body: JSON.stringify(data)

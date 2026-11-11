@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
@@ -215,6 +216,30 @@ func (s *Service) listMembers(ctx context.Context, userID int64, spaceID int64) 
 	return result, nil
 }
 
+// resolveTargetUser finds the account to add. A user_id must belong to someone
+// actorID already shares a space with: ids are guessable, and the member list
+// would then show the address of whoever an id named. Anyone else is added by
+// exact email.
+func (s *Service) resolveTargetUser(ctx context.Context, actorID int64, req AddMemberRequest) (schemas.User, error) {
+	query := s.orm.WithContext(ctx).Where("email <> ?", schemas.DeletedUserEmail)
+	if req.UserID != 0 {
+		query = query.Where("id = ? AND id IN (?)", req.UserID, schemas.SpacePeers(s.orm, actorID))
+	} else if email := strings.ToLower(strings.TrimSpace(req.Email)); email != "" {
+		query = query.Where("LOWER(email) = ?", email)
+	} else {
+		return schemas.User{}, errors.NotFound("user not found")
+	}
+
+	var user schemas.User
+	if err := query.First(&user).Error; err != nil {
+		if stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return schemas.User{}, errors.NotFound("user not found")
+		}
+		return schemas.User{}, errors.Internal("failed to find user", err)
+	}
+	return user, nil
+}
+
 func (s *Service) addMember(ctx context.Context, userID int64, spaceID int64, req AddMemberRequest) (*MemberResponse, error) {
 	actor, err := s.scope(ctx, spaceID, userID, portespaces.RoleAdmin)
 	if err != nil {
@@ -236,22 +261,19 @@ func (s *Service) addMember(ctx context.Context, userID int64, spaceID int64, re
 		return nil, errors.Forbidden("cannot grant a role above your own")
 	}
 
-	var existing schemas.SpaceMember
-	if err := s.orm.WithContext(ctx).Where("space_id = ? AND user_id = ?", spaceID, req.UserID).First(&existing).Error; err == nil {
-		return nil, errors.Conflict("user is already a member of this space")
+	targetUser, err := s.resolveTargetUser(ctx, userID, req)
+	if err != nil {
+		return nil, err
 	}
 
-	var targetUser schemas.User
-	if err := s.orm.WithContext(ctx).Where("id = ?", req.UserID).First(&targetUser).Error; err != nil {
-		if stderrors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.NotFound("user not found")
-		}
-		return nil, errors.Internal("failed to find user", err)
+	var existing schemas.SpaceMember
+	if err := s.orm.WithContext(ctx).Where("space_id = ? AND user_id = ?", spaceID, targetUser.ID).First(&existing).Error; err == nil {
+		return nil, errors.Conflict("user is already a member of this space")
 	}
 
 	member := &schemas.SpaceMember{
 		SpaceID: spaceID,
-		UserID:  req.UserID,
+		UserID:  targetUser.ID,
 		Role:    role,
 	}
 

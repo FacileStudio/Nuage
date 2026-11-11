@@ -15,7 +15,7 @@
 		Spinner,
 		toast
 	} from '@facile/muse';
-	import { backend, type Space, type SpaceMember, type UserProfile } from '$lib/backend';
+	import { ApiError, backend, type Space, type SpaceMember, type UserProfile } from '$lib/backend';
 	import { icons, nuage } from '$lib/icons';
 	import { roleTone } from '$lib/roles';
 	import { registreSpaceUrl } from '$lib/registre';
@@ -76,10 +76,8 @@
 	}
 
 	/*
-	 * The instance directory, fetched once per visit. This replaces a text field that asked a
-	 * human to type a numeric user id — the API only accepts `user_id`, but `GET /users` has
-	 * always been there to turn one into the other, so the id never needed to be the user's
-	 * problem. No new exposure either: that endpoint is readable by any authenticated caller.
+	 * The people the caller already shares a space with: GET /users shows nobody else. Anyone
+	 * outside that circle is added by typing their exact email address.
 	 */
 	async function loadDirectory() {
 		if (directoryLoaded) return;
@@ -93,22 +91,32 @@
 	}
 
 	async function addMember() {
-		if (!picked) return;
-		const uid = Number(picked.id);
-		if (!Number.isFinite(uid)) {
+		if (!picked && !byEmail) return;
+		const uid = picked ? Number(picked.id) : NaN;
+		if (picked && !Number.isFinite(uid)) {
 			addError = t('members.badId');
 			return;
 		}
+		const name = picked ? displayName(picked) : typedEmail;
 
 		adding = true;
 		addError = '';
 		try {
-			await backend.addSpaceMember(app.token, spaceId, { user_id: uid, role: addRole });
+			await backend.addSpaceMember(
+				app.token,
+				spaceId,
+				picked ? { user_id: uid, role: addRole } : { email: typedEmail, role: addRole }
+			);
 			await refreshMembers();
 			addOpen = false;
-			toast.success(t('members.added', { name: displayName(picked) }));
+			toast.success(t('members.added', { name }));
 		} catch (e) {
-			addError = e instanceof Error && e.message ? e.message : t('members.addFailed');
+			addError =
+				e instanceof ApiError && e.status === 404
+					? t('members.noAccount')
+					: e instanceof Error && e.message
+						? e.message
+						: t('members.addFailed');
 		}
 		adding = false;
 	}
@@ -122,6 +130,13 @@
 			.filter((u) => !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
 			.slice(0, 50);
 	});
+
+	const typedEmail = $derived(pickQuery.trim().toLowerCase());
+	const byEmail = $derived(
+		!picked &&
+			/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typedEmail) &&
+			!directory.some((u) => u.email?.toLowerCase() === typedEmail)
+	);
 
 	async function updateRole(member: SpaceMember, role: string) {
 		try {
@@ -278,7 +293,11 @@
 			<div class="flex h-24 items-center justify-center"><Spinner /></div>
 		{:else if candidates.length === 0}
 			<p class="py-6 text-center text-fc-sm text-fc-fg-muted">
-				{pickQuery.trim() ? t('members.nobody') : t('members.everyone')}
+				{byEmail
+					? t('members.byEmail', { email: typedEmail })
+					: pickQuery.trim()
+						? t('members.nobody')
+						: t('members.everyone')}
 			</p>
 		{:else}
 			<!-- A radiogroup, not a list of independently tabbable buttons: picking one person
@@ -335,14 +354,16 @@
 			size="lg"
 			class="w-full"
 			icon={nuage.memberAdd}
-			disabled={adding || !picked}
+			disabled={adding || (!picked && !byEmail)}
 			onclick={addMember}
 		>
 			{adding
 				? t('members.adding')
 				: picked
 					? t('members.addPerson', { name: displayName(picked) })
-					: t('members.pickFirst')}
+					: byEmail
+						? t('members.addPerson', { name: typedEmail })
+						: t('members.pickFirst')}
 		</Button>
 	{/snippet}
 </Drawer>

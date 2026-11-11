@@ -1,6 +1,10 @@
 package schemas
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // Space is a shared team workspace.
 //
@@ -43,3 +47,11 @@ type SpaceMember struct {
 }
 
 func (SpaceMember) TableName() string { return "space_members" }
+
+// SpacePeers selects the id of every user who shares a space with userID, as a
+// subquery for an IN clause.
+func SpacePeers(db *gorm.DB, userID int64) *gorm.DB {
+	fresh := db.Session(&gorm.Session{NewDB: true})
+	return fresh.Model(&SpaceMember{}).Select("user_id").
+		Where("space_id IN (?)", fresh.Model(&SpaceMember{}).Select("space_id").Where("user_id = ?", userID))
+}
