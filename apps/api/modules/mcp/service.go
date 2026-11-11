@@ -9,17 +9,12 @@ package mcp
 
 import (
 	"context"
-	"errors"
-	"log/slog"
-	"net/url"
 
 	"github.com/FacileStudio/Nuage/apps/api/modules/files"
 	"github.com/FacileStudio/Nuage/apps/api/modules/sharing"
 	"github.com/FacileStudio/Nuage/apps/api/modules/spaces"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	mcpkit "github.com/FacileStudio/tronc/mcp"
-	"github.com/FacileStudio/tronc/middleware"
-	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
 // instructions is what a client shows its model about this server.
@@ -46,72 +41,24 @@ type Deps struct {
 	Actors  Actors
 }
 
-// Config describes the endpoint.
-type Config struct {
-	// Resource is the canonical URI people paste into their MCP client,
-	// https://nuage.facile.studio/mcp in production. Registre binds tokens
-	// to it.
-	Resource string
+// Config describes the endpoint: the deployment side main hands over.
+type Config = mcpkit.AppConfig
 
-	// Issuer is Registre, the only authorization server.
-	Issuer string
-
-	// Version is the server version reported to clients.
-	Version string
-
-	// Origins are the browser origins allowed besides the resource's own.
-	Origins []string
-
-	// StateKey signs the confirmation state handed to clients.
-	StateKey []byte
-
-	// Verifier checks access tokens, normally mcpauth.Verifier.
-	Verifier auth.TokenVerifier
-
-	// Pending stores the actions waiting for a person, normally
-	// mcpkit.PostgresPending.
-	Pending mcpkit.Pending
-
-	// PerMinute caps tool calls per person. Zero means 120.
-	PerMinute int
-
-	// Logger receives the write audit, which Journal collects.
-	Logger *slog.Logger
-}
-
-// Service is the MCP server and the confirmations behind its confirm page.
+// Service is the MCP server and the confirm page behind it.
 type Service struct {
 	tools  *toolset
 	server *mcpkit.Server
+	page   *mcpkit.PendingPage[PendingItem]
 }
 
 // NewService builds the MCP server over Nuage's services.
 func NewService(deps Deps, cfg Config) (*Service, error) {
-	resource, err := url.Parse(cfg.Resource)
-	if err != nil || resource.Host == "" {
-		return nil, errors.New("mcp: the resource must be an absolute URI")
-	}
-	if cfg.Logger == nil {
-		cfg.Logger = slog.Default()
-	}
-	if cfg.PerMinute == 0 {
-		cfg.PerMinute = 120
-	}
-	tools := &toolset{Deps: deps, appURL: resource.Scheme + "://" + resource.Host}
-	tools.confirm, err = mcpkit.NewConfirmations(mcpkit.ConfirmConfig{
-		Store: cfg.Pending, Key: cfg.StateKey, ConfirmURL: tools.appURL + "/pending", Kinds: tools.kinds(), Audit: cfg.Logger,
-	})
+	tools := &toolset{Deps: deps}
+	app, err := mcpkit.NewApp(cfg, mcpkit.AppSpec{Name: "nuage", Title: "Nuage", Instructions: instructions, Kinds: tools.kinds(), Tools: tools.list()})
 	if err != nil {
 		return nil, err
 	}
-	server, err := mcpkit.New(mcpkit.Options{
-		Name: "nuage", Title: "Nuage", Version: cfg.Version, Instructions: instructions,
-		Resource: cfg.Resource, Issuer: cfg.Issuer, Verifier: cfg.Verifier, Origins: cfg.Origins, Audit: cfg.Logger,
-		RateLimit: middleware.RatelimitConfig{Limit: float64(cfg.PerMinute) / 60, Burst: cfg.PerMinute},
-		Tools:     tools.list(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &Service{tools: tools, server: server}, nil
+	tools.confirm, tools.appURL = app.Confirmations, app.URL
+	page := &mcpkit.PendingPage[PendingItem]{Confirmations: app.Confirmations, Actor: webActor, User: pendingUser, Describe: tools.describe, Done: tools.done}
+	return &Service{tools: tools, server: app.Server, page: page}, nil
 }

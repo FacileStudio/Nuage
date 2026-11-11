@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FacileStudio/Nuage/apps/api/modules/mcp"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 	mcpkit "github.com/FacileStudio/tronc/mcp"
 	"github.com/FacileStudio/tronc/mcp/mcptest"
@@ -222,13 +221,36 @@ func TestMCPConfirmPageMakesTheLink(t *testing.T) {
 	}
 	id := pending.ConfirmURL[strings.LastIndex(pending.ConfirmURL, "=")+1:]
 	base := strings.TrimSuffix(f.resource, "/mcp")
+	listReq, _ := http.NewRequest(http.MethodGet, base+"/api/mcp/pending", nil)
+	listReq.Header.Set("Authorization", "Bearer "+f.session)
+	listResp, err := http.DefaultClient.Do(listReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list struct {
+		Actions []struct {
+			ID    string `json:"id"`
+			Kind  string `json:"kind"`
+			State string `json:"state"`
+			Days  int    `json:"expires_in_days"`
+			Item  *struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+			} `json:"item"`
+		} `json:"actions"`
+	}
+	parseJSON(listResp, &list)
+	if len(list.Actions) != 1 || list.Actions[0].ID != id || list.Actions[0].Kind != "share" || list.Actions[0].State != "ready" ||
+		list.Actions[0].Days != 7 || list.Actions[0].Item == nil || list.Actions[0].Item.Name != "deck.txt" {
+		t.Fatalf("the confirm page must list the share with its file, got %d %+v", listResp.StatusCode, list)
+	}
 	req, _ := http.NewRequest(http.MethodPost, base+"/api/mcp/pending/"+id+"/confirm", bytes.NewReader(nil))
 	req.Header.Set("Authorization", "Bearer "+f.session)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result mcp.PendingResult
+	var result mcpkit.PendingResult
 	parseJSON(resp, &result)
 	if resp.StatusCode != http.StatusOK || result.Status != "shared" || !strings.Contains(result.URL, "/s/") || f.shares(file.ID) != 1 {
 		t.Fatalf("confirming must make one link, got %d %+v and %d links", resp.StatusCode, result, f.shares(file.ID))

@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	mcpkit "github.com/FacileStudio/tronc/mcp"
 
 	"gorm.io/gorm"
 )
@@ -32,13 +33,12 @@ const (
 	releaseCharges    = `UPDATE spaces SET charged_to = NULL WHERE charged_to = @id`
 	releaseOffers     = `UPDATE spaces SET billing_offer_to = NULL WHERE billing_offer_to = @id`
 	deleteWebhooks    = `DELETE FROM nook_deliveries WHERE position(@email in payload) > 0`
-	deleteMCPActions  = `DELETE FROM mcp_actions WHERE user_id = @text_id`
 )
 
 var accountSteps = []string{
 	reassignActivity, deleteActivity, promoteSuccessor, deleteMemberships, deleteShares,
 	reassignFiles, reassignVersions, reassignFolders, reassignUploads, reassignTombstone,
-	deleteTombstones, deleteQuota, releaseCharges, releaseOffers, deleteWebhooks, deleteMCPActions,
+	deleteTombstones, deleteQuota, releaseCharges, releaseOffers, deleteWebhooks,
 }
 
 func deleteAccount(tx *gorm.DB, found account) error {
@@ -46,13 +46,13 @@ func deleteAccount(tx *gorm.DB, found account) error {
 	if err != nil {
 		return err
 	}
-	args := map[string]any{"id": found.ID, "text_id": strconv.FormatInt(found.ID, 10), "ghost": ghost, "email": found.Email}
+	args := map[string]any{"id": found.ID, "ghost": ghost, "email": found.Email}
 	for _, statement := range accountSteps {
 		if err := tx.Exec(statement, args).Error; err != nil {
 			return err
 		}
 	}
-	return nil
+	return mcpkit.ErasePending(tx.Statement.Context, tx.Statement.ConnPool, strconv.FormatInt(found.ID, 10))
 }
 
 func deletedUser(tx *gorm.DB) (int64, error) {
