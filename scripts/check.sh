@@ -6,6 +6,10 @@
 #   sh scripts/check.sh --go-only   Go modules only
 #   sh scripts/check.sh --format    rewrite Go sources in place
 #
+# Go tests run one package at a time (-p 1), as CI does: every package shares one
+# test database, and in parallel `schemas` and `tests` drop each other's tables.
+# ./tests alone takes about 12 minutes (up to 20 under load), so it gets 40m.
+#
 # Deliberately depends on nothing but a `go` on PATH and `bun` for the client.
 # It is NOT invoked through mise: `mise run` resolves every tool in the merged
 # config before running any task body, so an unrelated broken tool in the
@@ -68,7 +72,8 @@ for dir in $GO_MODULES; do
     fi
 
     "$GO" vet ./... || s=1
-    "$GO" test ./... || s=1
+    "$GO" test -p 1 -count=1 -timeout 10m $("$GO" list ./... | grep -v '/tests$') || s=1
+    "$GO" test -p 1 -count=1 -timeout 40m ./tests || s=1
     "$GO" test -count=1 -run TestTheLinkedStampMatchesTheVersionFile -ldflags "-X github.com/FacileStudio/Nuage/apps/api/internal/version.stamp=v$(tr -d '[:space:]' < ../../VERSION)" ./internal/version || s=1
     exit "$s"
   ) || status=1

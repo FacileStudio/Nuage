@@ -10,6 +10,10 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Changed
+
+- `scripts/check.sh` runs the Go tests the way CI does: one package at a time (`-p 1`, `-count=1`), with a 40-minute timeout for `./tests`. Before, `schemas` and `tests` ran in parallel against the one test database and failed locally, and `./tests` (about 12 minutes) hit the 10-minute default timeout.
+
 ## [0.17.2] - 2026-11-11
 
 ### Security
