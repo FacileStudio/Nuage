@@ -230,7 +230,8 @@ type SpaceMemberResponse struct {
 }
 
 type AddSpaceMemberRequest struct {
-	UserID string `json:"user_id" validate:"required"`
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
 	Role   string `json:"role" validate:"required"`
 }
 
@@ -392,7 +393,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "GET",
 							Path:         "/users",
-							Summary:      "List users in instance",
+							Summary:      "List the caller and the people it shares a space with (every account for an administrator)",
 							Auth:         "bearer",
 							ResponseBody: UserListResponse{},
 						},
@@ -452,7 +453,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "GET",
 							Path:         "/users/{id}",
-							Summary:      "Get user profile by ID",
+							Summary:      "Get the profile of the caller or a space peer by ID; anyone else answers 404",
 							Auth:         "bearer",
 							PathParams:   []Field{{Name: "id", Type: "string", Description: "User ID"}},
 							ResponseBody: UserResponse{},
@@ -774,7 +775,7 @@ func Reference() apiref.Config {
 						{
 							Method:       "POST",
 							Path:         "/spaces/{id}/members",
-							Summary:      "Add a member to space. Answers 409 for a space linked to Registre, which alone manages its members.",
+							Summary:      "Add a member to space by exact email, or by user_id for someone the caller already shares a space with (anyone else answers 404). Answers 409 for a space linked to Registre, which alone manages its members.",
 							Auth:         "bearer",
 							PathParams:   []Field{{Name: "id", Type: "string", Description: "Space ID"}},
 							RequestBody:  AddSpaceMemberRequest{},

@@ -64,14 +64,24 @@ func (service *Service) getUser(context context.Context, userID string) (*User, 
 	return mapUser(record), nil
 }
 
-func (service *Service) listUsers(context context.Context) ([]User, error) {
+// visibleUsers narrows the users table to the accounts callerID may see:
+// itself and everyone who shares a space with it, or every account when all
+// is set for an admin. Nobody else's address is any of the caller's business.
+func (service *Service) visibleUsers(context context.Context, callerID int64, all bool) *gorm.DB {
+	query := service.orm.WithContext(context).Model(&schemas.User{}).Where("users.email <> ?", schemas.DeletedUserEmail)
+	if all {
+		return query
+	}
+	return query.Where("users.id = ? OR users.id IN (?)", callerID, schemas.SpacePeers(service.orm, callerID))
+}
+
+func (service *Service) listUsers(context context.Context, callerID int64, all bool) ([]User, error) {
 	if err := usercolor.BackfillMissing(context, service.orm); err != nil {
 		return nil, errors.Internal("failed to backfill user colors", err)
 	}
 
 	var records []schemas.User
-	if err := service.orm.WithContext(context).Where("email <> ?", schemas.DeletedUserEmail).
-		Order("name asc, email asc, id asc").Find(&records).Error; err != nil {
+	if err := service.visibleUsers(context, callerID, all).Order("name asc, email asc, id asc").Find(&records).Error; err != nil {
 		return nil, errors.Internal("failed to list users", err)
 	}
 
@@ -81,6 +91,24 @@ func (service *Service) listUsers(context context.Context) ([]User, error) {
 	}
 
 	return users, nil
+}
+
+// getVisibleUser returns userID when callerID may see it, and not_found
+// otherwise, so the answer does not reveal whether an invisible account exists.
+func (service *Service) getVisibleUser(context context.Context, callerID int64, all bool, userID string) (*User, error) {
+	id, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return nil, errors.NotFound("user not found")
+	}
+
+	var count int64
+	if err := service.visibleUsers(context, callerID, all).Where("users.id = ?", id).Count(&count).Error; err != nil {
+		return nil, errors.Internal("failed to read user", err)
+	}
+	if count == 0 {
+		return nil, errors.NotFound("user not found")
+	}
+	return service.getUser(context, userID)
 }
 
 // updateUser applies a partial profile update for a user: name and colour.

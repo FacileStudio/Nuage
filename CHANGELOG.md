@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+### Security
+
+- `GET /api/users` and `GET /api/users/{id}` show only the caller and the people it shares a space with. Any other id answers 404. Before, every signed-in account read every account's name and email. An administrator's own session (`is_admin`, no token scope, not delegated) still sees every account.
+- `POST /api/spaces/{id}/members` takes a `user_id` only for someone the caller already shares a space with, and now also takes an exact `email` for anyone else. Before, an owner could add guessed ids to its own space and read their addresses in the member list.
+- The member picker lists the people you already share a space with and adds anyone else by their full email address.
+
 ## [0.17.1] - 2026-11-11
 
 ### Changed

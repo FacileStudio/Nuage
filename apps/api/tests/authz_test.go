@@ -29,13 +29,15 @@ func uploadFileToSpace(ts *testServer, token, filename, content string, spaceID 
 	})
 }
 
+// addSpaceMember adds userID by its exact email, the way the member picker adds
+// someone the owner shares no space with yet.
 func addSpaceMember(t *testing.T, ts *testServer, token string, spaceID int64, userID string) {
 	t.Helper()
-	numericID, err := strconv.ParseInt(userID, 10, 64)
-	require.NoError(t, err)
+	var email string
+	require.NoError(t, ts.db.Raw(`SELECT email FROM users WHERE id = ?`, userID).Scan(&email).Error)
 	resp := doJSON(ts, "POST", fmt.Sprintf("/spaces/%d/members", spaceID), map[string]any{
-		"user_id": numericID,
-		"role":    "member",
+		"email": email,
+		"role":  "member",
 	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 }
