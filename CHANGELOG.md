@@ -14,7 +14,7 @@ tag records what shipped rather than triggering the deploy.
 
 - The MCP server and its confirm page run on tronc v0.22.0's shared app kit (`mcp.NewApp`, `mcp.PendingPage`, `mcp.PendingRoutes`, `mcp.Digest`): the local list, confirm and dismiss handlers and their types are gone. Tool names, tool schemas and the `/api/mcp/pending` bodies are unchanged, and actions opened before the upgrade still confirm. The OpenAPI list schema is now named `PendingList_PendingItem`, and `PendingResult` documents its optional `url`.
 - Account erasure deletes pending MCP actions through `mcp.ErasePending`, in the same transaction.
-- tronc v0.22.0.
+- tronc v0.22.0. Go 1.26.11 with the matching builder image, which clears the Go advisories GO-2026-6848 to GO-2026-6859 that douane could not score.
 
 ## [0.17.0] - 2026-11-10
 
