@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.17.3] - 2026-11-11
+
 ### Security
 
 - Go modules past their advisories: `github.com/go-jose/go-jose/v4` 4.1.9 and `github.com/klauspost/compress` 1.20.4.
