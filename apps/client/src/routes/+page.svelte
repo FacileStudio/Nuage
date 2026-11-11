@@ -32,11 +32,6 @@
 	});
 </script>
 
-<svelte:head>
-	<title>{t('landing.title')}</title>
-	<meta name="description" content={t('landing.description')} />
-</svelte:head>
-
 {#if !redirecting}
 	<div class="min-h-screen bg-fc-page text-fc-fg">
 		<LandingHeader appName="Nuage" icon={nuage.brand} skipHref="#main">

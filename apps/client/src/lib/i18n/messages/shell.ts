@@ -57,18 +57,6 @@ export const shell = {
 		'No se pudo iniciar sesión. Inténtalo de nuevo.',
 		'Die Anmeldung ist fehlgeschlagen. Versuche es erneut.'
 	],
-	'landing.title': [
-		'Nuage — Cloud storage',
-		'Nuage — Stockage cloud',
-		'Nuage — Almacenamiento en la nube',
-		'Nuage — Cloud-Speicher'
-	],
-	'landing.description': [
-		'Self-hosted file storage. Upload, organize, and share — your cloud, your rules.',
-		'Stockage de fichiers auto-hébergé. Déposez, organisez et partagez : votre cloud, vos règles.',
-		'Almacenamiento de archivos autoalojado. Sube, organiza y comparte: tu nube, tus reglas.',
-		'Selbst gehosteter Dateispeicher. Hochladen, ordnen und teilen: deine Cloud, deine Regeln.'
-	],
 	'landing.heroTitle': [
 		'Your files.|Your cloud.',
 		'Vos fichiers.|Votre cloud.',

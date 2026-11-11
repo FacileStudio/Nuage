@@ -1,7 +1,7 @@
 {
   "name": "Nuage",
   "short_name": "Nuage",
-  "description": "Self-hosted cloud file storage for the Facile Suite.",
+  "description": "The studio drive, connected to every tool through an S3-compatible API. Share files with no middleman.",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -12,15 +12,10 @@
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
-    },
-    {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
     }
   ],
-  "theme_color": "#0a0a0a",
-  "background_color": "#0a0a0a",
+  "theme_color": "#fafafa",
+  "background_color": "#fafafa",
   "display": "standalone",
   "start_url": "/"
 }
