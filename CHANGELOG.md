@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.17.5] - 2026-11-12
+
 ### Security
 
 - fix(auth): an account re-created for a person Registre erased is erased again on the next deletion push or poll, without a restart (porte v0.19.0, `directory.Deletions.Holds`). Before, a bearer token minted before the erasure, or an MCP first call, could bring the account back and it stayed until the next restart.
