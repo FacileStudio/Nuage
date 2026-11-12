@@ -43,12 +43,14 @@ type Deletions struct {
 
 // Config wires the receiver to Nuage: the database, Registre's directory client
 // (the same credentials as the snapshot sync), porte's own rows eraser
-// (pg.Store.EraseIdentity), the two stores that hold a person's files, and the
-// directory the avatars live in.
+// (pg.Store.EraseIdentity) and holder check (pg.Store.HoldsIdentity, which lets
+// a re-pushed or re-polled notice erase an account that came back), the two
+// stores that hold a person's files, and the directory the avatars live in.
 type Config struct {
 	ORM        *gorm.DB
 	Client     directory.Client
 	Erase      func(ctx context.Context, provider, subject string) error
+	Holds      func(ctx context.Context, provider, subject string) (bool, error)
 	Files      PersonalFiles
 	Apps       AppData
 	StorageDir string
@@ -73,10 +75,19 @@ func New(ctx context.Context, cfg Config) (*Deletions, error) {
 		Client:          cfg.Client,
 		OnPersonDeleted: d.ErasePerson,
 		Erase:           cfg.Erase,
+		Holds:           cfg.Holds,
 		State:           NewState(cfg.ORM),
 		Logger:          cfg.Logger,
 	}
 	return d, nil
+}
+
+// Ledger answers porte.ErasedSubjects from the receiver's saved state: whether
+// Nuage already erased the person behind an identity. It reads the state on
+// every call, so the sign-in path and the space sync, built before the
+// receiver, see what the receiver recorded without sharing it.
+func Ledger(orm *gorm.DB, client directory.Client) *directory.Deletions {
+	return &directory.Deletions{Client: client, State: NewState(orm)}
 }
 
 type account struct {

@@ -29,6 +29,9 @@ func (r *Registre) resolveMember(ctx context.Context, tx *gorm.DB, member direct
 	if err != nil || userID != 0 {
 		return userID, err
 	}
+	if erased, err := r.isErased(ctx, member.Subject); err != nil || erased {
+		return 0, err
+	}
 	email := strings.ToLower(strings.TrimSpace(member.Email))
 	if email == "" {
 		return 0, nil
@@ -41,6 +44,19 @@ func (r *Registre) resolveMember(ctx context.Context, tx *gorm.DB, member direct
 		return 0, err
 	}
 	return userID, r.attachIdentity(tx, userID, member.Subject)
+}
+
+// isErased reports whether Nuage already erased the member's identity, and
+// logs the skip. Without WithErased nothing is erased.
+func (r *Registre) isErased(ctx context.Context, subject string) (bool, error) {
+	if r.erased == nil {
+		return false, nil
+	}
+	erased, err := r.erased.Erased(ctx, r.issuer, subject)
+	if erased {
+		r.logger.Warn("directory: member was erased here, skipped", slog.String("subject", subject))
+	}
+	return erased, err
 }
 
 // userBySubject finds the user holding the identity (issuer, subject), or 0.

@@ -43,6 +43,7 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/FacileStudio/Journal/sdk/journal"
+	"github.com/FacileStudio/porte"
 	"github.com/FacileStudio/porte/directory"
 	"github.com/FacileStudio/porte/exchange"
 	"github.com/FacileStudio/porte/oidc"
@@ -80,7 +81,7 @@ const (
 // The notifier rides into the UserStore rather than the auth service, because
 // creating an account is the thing that emits user.created and the UserStore
 // is the only place an account is created.
-func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *oidc.Kit, *portepg.Store, error) {
+func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, erased porte.ErasedSubjects, appEnv env.Config, appLogger *slog.Logger) (*session.Manager, *oidc.Kit, *portepg.Store, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, nil, nil, err
@@ -106,6 +107,7 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 		Sessions:   sessions,
 		Codes:      store.LoginCodes(),
 		Logger:     appLogger,
+		Erased:     erased,
 	})
 	if err != nil {
 		return nil, nil, nil, err
@@ -118,11 +120,11 @@ func buildAuth(ctx context.Context, db *gorm.DB, notifier *nook.Notifier, appEnv
 // and no nudge route to mount. Every snapshot updates the spaces first, then the plan
 // entitlements; both run even when the other fails, and either failure retries the snapshot.
 // The snapshot that first makes plans apply also logs who is now over their ceiling.
-func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, quotaService *quota.Service, appLogger *slog.Logger) (*spaces.Registre, *directory.Syncer) {
+func newDirectory(db *gorm.DB, appEnv env.Config, plans *entitlements.Plans, quotaService *quota.Service, erased porte.ErasedSubjects, appLogger *slog.Logger) (*spaces.Registre, *directory.Syncer) {
 	if appEnv.OIDC == nil {
 		return nil, nil
 	}
-	registre := spaces.NewRegistre(db, appEnv.OIDC.Issuer, appLogger)
+	registre := spaces.NewRegistre(db, appEnv.OIDC.Issuer, appLogger).WithErased(erased)
 	syncer := &directory.Syncer{
 		Client: registreClient(appEnv),
 		Apply: func(ctx context.Context, snapshot directory.Snapshot) error {
@@ -149,6 +151,16 @@ func registreClient(appEnv env.Config) directory.Client {
 		ClientID:     appEnv.OIDC.ClientID,
 		ClientSecret: appEnv.OIDC.ClientSecret,
 	}
+}
+
+// erasedLedger is what sign-in, bearer provisioning and the space sync ask
+// before giving an identity an account: the deletion receiver's saved state.
+// Without OIDC there is no receiver and no ledger.
+func erasedLedger(db *gorm.DB, appEnv env.Config) porte.ErasedSubjects {
+	if appEnv.OIDC == nil {
+		return nil
+	}
+	return erasure.Ledger(db, registreClient(appEnv))
 }
 
 // newDeletions builds the GDPR deletion receiver when OIDC is configured, with
@@ -362,7 +374,8 @@ func run() int {
 	defer notifier.Stop()
 	actLogger := activity.NewLogger(db)
 
-	sessions, kit, porteStore, err := buildAuth(context.Background(), db, notifier, appEnv, appLogger)
+	erased := erasedLedger(db, appEnv)
+	sessions, kit, porteStore, err := buildAuth(context.Background(), db, notifier, erased, appEnv, appLogger)
 	if err != nil {
 		appLogger.Error("failed to build authentication", slog.Any("error", err))
 		return 1
@@ -384,10 +397,10 @@ func run() int {
 	settingsService := settings.NewService(db, notifier)
 	searchService := search.NewService(db)
 	spacesService := spaces.NewService(db, storageClient, registreSpacesURL(appEnv))
-	registre, syncer := newDirectory(db, appEnv, plans, quotaService, appLogger)
+	registre, syncer := newDirectory(db, appEnv, plans, quotaService, erased, appLogger)
 	appFolderService := appfolders.NewService(db, storageClient, quotaService, appLogger)
 	deletions, err := newDeletions(erasure.Config{
-		ORM: db, Erase: porteStore.EraseIdentity, Files: trashService, Apps: appFolderService, Logger: appLogger,
+		ORM: db, Erase: porteStore.EraseIdentity, Holds: porteStore.HoldsIdentity, Files: trashService, Apps: appFolderService, Logger: appLogger,
 	}, appEnv)
 	if err != nil {
 		appLogger.Error("failed to build the erasure receiver", slog.Any("error", err))

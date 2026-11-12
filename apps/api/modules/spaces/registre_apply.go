@@ -7,6 +7,7 @@ import (
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/facile"
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/porte"
 	"github.com/FacileStudio/porte/directory"
 	portespaces "github.com/FacileStudio/porte/spaces"
 
@@ -25,11 +26,20 @@ type Registre struct {
 	issuer string
 	logger *slog.Logger
 	retry  retryPolicy
+	erased porte.ErasedSubjects
 }
 
 // NewRegistre wires the directory sync over the database, for the given issuer.
 func NewRegistre(orm *gorm.DB, issuer string, logger *slog.Logger) *Registre {
 	return &Registre{orm: orm, issuer: issuer, logger: logger, retry: retryPolicy{first: retryFirst, max: retryMax}}
+}
+
+// WithErased makes the sync skip, rather than provision, a member whose
+// Registre identity Nuage already erased, so a snapshot pulled before the
+// erasure cannot give that person an account again.
+func (r *Registre) WithErased(erased porte.ErasedSubjects) *Registre {
+	r.erased = erased
+	return r
 }
 
 // Apply makes Nuage's linked spaces match the snapshot, in one transaction. It is

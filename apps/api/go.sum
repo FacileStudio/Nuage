@@ -1,9 +1,9 @@
 github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba h1:/DSby1r2Ix9vsPKfDky0rRY/skp8p2Nq+I/B3cc9M9g=
 github.com/FacileStudio/Journal/sdk/journal v0.0.0-20260708221941-db985ad2b1ba/go.mod h1:mb3rZqpSwA4CMrP9LQe2eWdM/4np3xzkRy6l/WWSaUg=
-github.com/FacileStudio/porte v0.18.2 h1:JB7Zs+Kwi0m9Rq28ddhPaQgrtgh4btmnWkSbJd8lqkM=
-github.com/FacileStudio/porte v0.18.2/go.mod h1:V7gSnyj+w9itRiG9yesKXc0Vc+OYL+IJojWa1LOmkow=
-github.com/FacileStudio/porte/directory v0.4.0 h1:U+86bDXChiMUBUQnN5VwEyiBoCiLwduwo5IYqRBkC60=
-github.com/FacileStudio/porte/directory v0.4.0/go.mod h1:i7UxoAqCgqAq4ny9/bbuqT/Z69xD7GYG1w3fpH6EhTw=
+github.com/FacileStudio/porte v0.19.0 h1:HP8NL+OYIREDvYstpTKboRo6D/CcSk0xfZgBmmFnn/c=
+github.com/FacileStudio/porte v0.19.0/go.mod h1:CaIkb31GGNpTuhgOrFg2/BsX7eErBlS7WSXKIa4YkcA=
+github.com/FacileStudio/porte/directory v0.5.0 h1:XdnYlML8tuTmRyETr4C0ZjnjNOZV/MQC6Ooh5pcCC38=
+github.com/FacileStudio/porte/directory v0.5.0/go.mod h1:bqyATzP2U6+3XbNrPJ0ddIuX4+Pev2dNid0QNpTpsow=
 github.com/FacileStudio/porte/forfait v0.1.1 h1:eZFT3VIcOmHxbFQsUpQumBeqeBHsM29EYsAIswQo+Jk=
 github.com/FacileStudio/porte/forfait v0.1.1/go.mod h1:B+ki+HU6zT19PAC85ugVzpiJ0nzwolKtvQTtbjxRKD4=
 github.com/FacileStudio/porte/mcpauth v0.2.0 h1:MrXEWCmgknDiNYWbRWPceUAGlBPSXfBjvhmMA9rKwA8=
@@ -18,8 +18,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
-github.com/go-chi/chi/v5 v5.3.1 h1:3j4HZLGZQ3JpMCrPJF/Jl3mYJfWLKBfNJ6quurUGCf8=
-github.com/go-chi/chi/v5 v5.3.1/go.mod h1:R+tYY2hNuVUUjxoPtqUdgBqevM9s9njzkTLutVsOCto=
+github.com/go-chi/chi/v5 v5.5.0 h1:xdKQ1dJmVJsmgahrXSKhUx8NyVPzpwdlyrrQFpMPJgg=
+github.com/go-chi/chi/v5 v5.5.0/go.mod h1:d1IG7GtKPSjPyBP365PH8sAGVHk3qfB/IhjFNRH1wWM=
 github.com/go-ini/ini v1.67.0 h1:z6ZrTEZqSWOTyH2FlglNbNgARyHG8oLW9gMELqKr06A=
 github.com/go-ini/ini v1.67.0/go.mod h1:ByCAeIL28uOIIG0E3PJtZPDL8WnHpFKFOtgjp+3Ies8=
 github.com/go-jose/go-jose/v4 v4.1.9 h1:pKfeQkig1NmgK4hJrZYXLEYURXfoJB61Larw0uIW4gY=
