@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.18.5] - 2026-11-14
+
+### Fixed
+
+- Containers now honour `restart: unless-stopped` instead of the swarm-only `restart_policy: any`.
+
 ## [0.18.4] - 2026-11-14
 
 ### Added
