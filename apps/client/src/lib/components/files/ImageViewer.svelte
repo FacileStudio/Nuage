@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Spinner } from '@facile/muse';
+	import { Spinner, Tooltip } from '@facile/muse';
 	import { nuage } from '$lib/icons';
 	import { t } from '$lib/i18n/index.svelte';
 
@@ -139,21 +139,29 @@
 	<div
 		class="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-fc-pill bg-fc-component/90 p-1 text-fc-fg shadow-lg backdrop-blur"
 	>
-		<button type="button" class="viewer-tool" aria-label={t('viewer.zoomOut')} disabled={scale <= MIN} onclick={() => zoomTo(scale / 1.5)}>
-			<iconify-icon icon={nuage.zoomOut} width="18" height="18" class="block"></iconify-icon>
-		</button>
-		<button type="button" class="viewer-tool w-14 text-fc-xs font-medium tabular-nums" aria-label={t('viewer.resetZoom')} onclick={() => {
-			zoomTo(1);
-			rotation = 0;
-		}}>
-			{Math.round(scale * 100)}%
-		</button>
-		<button type="button" class="viewer-tool" aria-label={t('viewer.zoomIn')} disabled={scale >= MAX} onclick={() => zoomTo(scale * 1.5)}>
-			<iconify-icon icon={nuage.zoomIn} width="18" height="18" class="block"></iconify-icon>
-		</button>
+		<Tooltip text={t('viewer.zoomOut')} describe={false} class="contents">
+			<button type="button" class="viewer-tool" aria-label={t('viewer.zoomOut')} disabled={scale <= MIN} onclick={() => zoomTo(scale / 1.5)}>
+				<iconify-icon icon={nuage.zoomOut} width="18" height="18" class="block"></iconify-icon>
+			</button>
+		</Tooltip>
+		<Tooltip text={t('viewer.resetZoom')} describe={false} class="contents">
+			<button type="button" class="viewer-tool w-14 text-fc-xs font-medium tabular-nums" aria-label={t('viewer.resetZoom')} onclick={() => {
+				zoomTo(1);
+				rotation = 0;
+			}}>
+				{Math.round(scale * 100)}%
+			</button>
+		</Tooltip>
+		<Tooltip text={t('viewer.zoomIn')} describe={false} class="contents">
+			<button type="button" class="viewer-tool" aria-label={t('viewer.zoomIn')} disabled={scale >= MAX} onclick={() => zoomTo(scale * 1.5)}>
+				<iconify-icon icon={nuage.zoomIn} width="18" height="18" class="block"></iconify-icon>
+			</button>
+		</Tooltip>
 		<span class="mx-1 h-5 w-px bg-fc-surface"></span>
-		<button type="button" class="viewer-tool" aria-label={t('viewer.rotate')} onclick={() => (rotation = (rotation + 90) % 360)}>
-			<iconify-icon icon={nuage.rotate} width="18" height="18" class="block"></iconify-icon>
-		</button>
+		<Tooltip text={t('viewer.rotate')} describe={false} class="contents">
+			<button type="button" class="viewer-tool" aria-label={t('viewer.rotate')} onclick={() => (rotation = (rotation + 90) % 360)}>
+				<iconify-icon icon={nuage.rotate} width="18" height="18" class="block"></iconify-icon>
+			</button>
+		</Tooltip>
 	</div>
 </div>

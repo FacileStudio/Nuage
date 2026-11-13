@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { Spinner } from '@facile/muse';
+	import { Spinner, Tooltip } from '@facile/muse';
 	import { icons, nuage } from '$lib/icons';
 	import { t } from '$lib/i18n/index.svelte';
 	import { openPdf, type PdfSession } from '$lib/files/pdf';
@@ -106,9 +106,11 @@
 <div class="flex h-full w-full flex-col overflow-hidden rounded-fc-lg bg-fc-surface" onkeydown={onKeydown}>
 	<div class="flex flex-wrap items-center gap-1 bg-fc-component px-2 py-1.5 text-fc-fg">
 		<div class="flex items-center gap-1 text-fc-sm">
-			<button type="button" class="viewer-tool" aria-label={t('viewer.prevPage')} disabled={pageNum <= 1} onclick={() => goTo(pageNum - 1)}>
-				<iconify-icon icon={nuage.previous} width="18" height="18" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.prevPage')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.prevPage')} disabled={pageNum <= 1} onclick={() => goTo(pageNum - 1)}>
+					<iconify-icon icon={nuage.previous} width="18" height="18" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 			<input
 				bind:value={pageInput}
 				onchange={() => goTo(Number(pageInput))}
@@ -117,9 +119,11 @@
 				class="h-8 w-12 rounded-fc-sm [@media(pointer:coarse)]:h-11 bg-fc-field text-center text-fc-sm tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
 			/>
 			<span class="text-fc-fg-muted tabular-nums">/ {totalPages || '–'}</span>
-			<button type="button" class="viewer-tool" aria-label={t('viewer.nextPage')} disabled={pageNum >= totalPages} onclick={() => goTo(pageNum + 1)}>
-				<iconify-icon icon={nuage.next} width="18" height="18" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.nextPage')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.nextPage')} disabled={pageNum >= totalPages} onclick={() => goTo(pageNum + 1)}>
+					<iconify-icon icon={nuage.next} width="18" height="18" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 		</div>
 
 		<div class="flex-1"></div>
@@ -139,32 +143,44 @@
 				{#if query}
 					<span class="text-fc-xs text-fc-fg-muted tabular-nums">{matches.current}/{matches.total}</span>
 				{/if}
-				<button type="button" class="viewer-tool" aria-label={t('viewer.prevMatch')} onclick={() => session?.find(query, true, true)}>
-					<iconify-icon icon={icons.chevronUp} width="18" height="18" class="block"></iconify-icon>
-				</button>
-				<button type="button" class="viewer-tool" aria-label={t('viewer.nextMatch')} onclick={() => session?.find(query, true)}>
-					<iconify-icon icon={icons.chevronDown} width="18" height="18" class="block"></iconify-icon>
-				</button>
+				<Tooltip text={t('viewer.prevMatch')} describe={false} class="contents">
+					<button type="button" class="viewer-tool" aria-label={t('viewer.prevMatch')} onclick={() => session?.find(query, true, true)}>
+						<iconify-icon icon={icons.chevronUp} width="18" height="18" class="block"></iconify-icon>
+					</button>
+				</Tooltip>
+				<Tooltip text={t('viewer.nextMatch')} describe={false} class="contents">
+					<button type="button" class="viewer-tool" aria-label={t('viewer.nextMatch')} onclick={() => session?.find(query, true)}>
+						<iconify-icon icon={icons.chevronDown} width="18" height="18" class="block"></iconify-icon>
+					</button>
+				</Tooltip>
 			</div>
 		{:else}
-			<button type="button" class="viewer-tool" aria-label={t('viewer.find')} onclick={openSearch}>
-				<iconify-icon icon={icons.search} width="18" height="18" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.find')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.find')} onclick={openSearch}>
+					<iconify-icon icon={icons.search} width="18" height="18" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 		{/if}
 
 		<span class="mx-1 hidden h-5 w-px bg-fc-surface sm:block"></span>
 
 		<div class="flex items-center gap-1">
-			<button type="button" class="viewer-tool" aria-label={t('viewer.zoomOut')} onclick={() => session?.zoom(-1)}>
-				<iconify-icon icon={nuage.zoomOut} width="18" height="18" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.zoomOut')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.zoomOut')} onclick={() => session?.zoom(-1)}>
+					<iconify-icon icon={nuage.zoomOut} width="18" height="18" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 			<span class="w-12 text-center text-fc-xs font-medium tabular-nums">{Math.round(scale * 100)}%</span>
-			<button type="button" class="viewer-tool" aria-label={t('viewer.zoomIn')} onclick={() => session?.zoom(1)}>
-				<iconify-icon icon={nuage.zoomIn} width="18" height="18" class="block"></iconify-icon>
-			</button>
-			<button type="button" class="viewer-tool" aria-label={t('viewer.fitWidth')} onclick={() => session?.fitWidth()}>
-				<iconify-icon icon={nuage.fitWidth} width="18" height="18" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.zoomIn')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.zoomIn')} onclick={() => session?.zoom(1)}>
+					<iconify-icon icon={nuage.zoomIn} width="18" height="18" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
+			<Tooltip text={t('viewer.fitWidth')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.fitWidth')} onclick={() => session?.fitWidth()}>
+					<iconify-icon icon={nuage.fitWidth} width="18" height="18" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 		</div>
 	</div>
 

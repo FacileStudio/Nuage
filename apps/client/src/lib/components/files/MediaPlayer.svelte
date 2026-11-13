@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { fileIcon, nuage } from '$lib/icons';
 	import { formatDuration } from '$lib/format';
+	import { Tooltip } from '@facile/muse';
 	import { t } from '$lib/i18n/index.svelte';
 
 	let { url, kind, name }: { url: string; kind: 'audio' | 'video'; name: string } = $props();
@@ -93,30 +94,40 @@
 			</span>
 		</div>
 		<div class="flex items-center gap-1 text-fc-fg">
-			<button type="button" class="viewer-tool" aria-label={t('viewer.back10')} onclick={() => skip(-10)}>
-				<iconify-icon icon={nuage.back10} width="20" height="20" class="block"></iconify-icon>
-			</button>
-			<button
-				type="button"
-				class="mx-1 inline-flex size-11 shrink-0 items-center justify-center rounded-fc-pill bg-fc-accent text-fc-accent-fg transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
-				aria-label={paused ? t('viewer.play') : t('viewer.pause')}
-				onclick={toggle}
-			>
-				<iconify-icon icon={paused ? nuage.play : nuage.pause} width="20" height="20" class="block"></iconify-icon>
-			</button>
-			<button type="button" class="viewer-tool" aria-label={t('viewer.forward10')} onclick={() => skip(10)}>
-				<iconify-icon icon={nuage.forward10} width="20" height="20" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.back10')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.back10')} onclick={() => skip(-10)}>
+					<iconify-icon icon={nuage.back10} width="20" height="20" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
+			<Tooltip text={paused ? t('viewer.play') : t('viewer.pause')} describe={false} class="contents">
+				<button
+					type="button"
+					class="mx-1 inline-flex size-11 shrink-0 items-center justify-center rounded-fc-pill bg-fc-accent text-fc-accent-fg transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+					aria-label={paused ? t('viewer.play') : t('viewer.pause')}
+					onclick={toggle}
+				>
+					<iconify-icon icon={paused ? nuage.play : nuage.pause} width="20" height="20" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
+			<Tooltip text={t('viewer.forward10')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={t('viewer.forward10')} onclick={() => skip(10)}>
+					<iconify-icon icon={nuage.forward10} width="20" height="20" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 			<span class="ml-2 hidden shrink-0 whitespace-nowrap text-fc-xs text-fc-fg-muted tabular-nums sm:inline">
 				{formatDuration(currentTime)} / {formatDuration(duration)}
 			</span>
 			<div class="min-w-0 flex-1"></div>
-			<button type="button" class="viewer-tool w-auto px-2 text-fc-xs font-medium whitespace-nowrap tabular-nums" aria-label={t('viewer.speed')} onclick={cycleRate}>
-				{playbackRate}×
-			</button>
-			<button type="button" class="viewer-tool" aria-label={muted ? t('viewer.unmute') : t('viewer.mute')} onclick={() => (muted = !muted)}>
-				<iconify-icon icon={muted || volume === 0 ? nuage.muted : nuage.volume} width="20" height="20" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.speed')} describe={false} class="contents">
+				<button type="button" class="viewer-tool w-auto px-2 text-fc-xs font-medium whitespace-nowrap tabular-nums" aria-label={t('viewer.speed')} onclick={cycleRate}>
+					{playbackRate}×
+				</button>
+			</Tooltip>
+			<Tooltip text={muted ? t('viewer.unmute') : t('viewer.mute')} describe={false} class="contents">
+				<button type="button" class="viewer-tool" aria-label={muted ? t('viewer.unmute') : t('viewer.mute')} onclick={() => (muted = !muted)}>
+					<iconify-icon icon={muted || volume === 0 ? nuage.muted : nuage.volume} width="20" height="20" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 			<input
 				type="range"
 				min="0"
@@ -127,9 +138,11 @@
 				class="hidden w-20 accent-fc-accent sm:block"
 			/>
 			{#if kind === 'video'}
-				<button type="button" class="viewer-tool" aria-label={fullscreen ? t('viewer.exitFullscreen') : t('viewer.fullscreen')} onclick={toggleFullscreen}>
-					<iconify-icon icon={fullscreen ? nuage.exitFullscreen : nuage.fullscreen} width="20" height="20" class="block"></iconify-icon>
-				</button>
+				<Tooltip text={fullscreen ? t('viewer.exitFullscreen') : t('viewer.fullscreen')} describe={false} class="contents">
+					<button type="button" class="viewer-tool" aria-label={fullscreen ? t('viewer.exitFullscreen') : t('viewer.fullscreen')} onclick={toggleFullscreen}>
+						<iconify-icon icon={fullscreen ? nuage.exitFullscreen : nuage.fullscreen} width="20" height="20" class="block"></iconify-icon>
+					</button>
+				</Tooltip>
 			{/if}
 		</div>
 	</div>
@@ -169,14 +182,16 @@
 			class="max-h-full max-w-full rounded-fc-md"
 		></video>
 		{#if paused}
-			<button
-				type="button"
-				aria-label={t('viewer.play')}
-				onclick={toggle}
-				class="absolute inset-0 m-auto flex size-16 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-transform hover:scale-105"
-			>
-				<iconify-icon icon={nuage.play} width="28" height="28" class="block"></iconify-icon>
-			</button>
+			<Tooltip text={t('viewer.play')} describe={false} class="contents">
+				<button
+					type="button"
+					aria-label={t('viewer.play')}
+					onclick={toggle}
+					class="absolute inset-0 m-auto flex size-16 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-transform hover:scale-105"
+				>
+					<iconify-icon icon={nuage.play} width="28" height="28" class="block"></iconify-icon>
+				</button>
+			</Tooltip>
 		{/if}
 		<div
 			class="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] rounded-fc-lg bg-fc-component/90 px-3 pt-3 pb-1.5 shadow-lg backdrop-blur transition-opacity duration-300 {hideChrome
