@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card } from '@facile/muse';
+	import { Card, Tooltip } from '@facile/muse';
 	import { SvelteMap } from 'svelte/reactivity';
 	import type { Folder } from '$lib/backend';
 	import type { BrowserEntry } from '$lib/files/entries';
@@ -139,14 +139,16 @@
 			}}
 		/>
 	{:else}
-		<button
-			type="button"
-			aria-label={t('files.actionsFor', { name: entry.name })}
-			onclick={(e) => menuFromButton(e, entry)}
-			class="inline-flex size-8 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill text-fc-fg-muted transition hover:bg-fc-bg hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-		>
-			<iconify-icon icon={nuage.more} width="16" height="16" class="block"></iconify-icon>
-		</button>
+		<Tooltip text={t('files.actionsFor', { name: entry.name })} describe={false} class="contents">
+			<button
+				type="button"
+				aria-label={t('files.actionsFor', { name: entry.name })}
+				onclick={(e) => menuFromButton(e, entry)}
+				class="inline-flex size-8 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill text-fc-fg-muted transition hover:bg-fc-bg hover:text-fc-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+			>
+				<iconify-icon icon={nuage.more} width="16" height="16" class="block"></iconify-icon>
+			</button>
+		</Tooltip>
 	{/if}
 	</span>
 {/snippet}

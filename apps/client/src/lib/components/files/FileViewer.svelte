@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Button } from '@facile/muse';
+	import { Button, Tooltip } from '@facile/muse';
 	import { formatSize, relativeTime } from '$lib/format';
 	import { t } from '$lib/i18n/index.svelte';
 	import { fileIcon, fileTypeLabel, icons, nuage } from '$lib/icons';
@@ -65,9 +65,11 @@
 			class="flex h-full flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
 		>
 			<header class="flex items-center gap-3 bg-fc-component px-2 py-2 sm:px-4">
-				<button type="button" class="viewer-tool size-11" aria-label={t('viewer.close')} onclick={() => dialog?.close()}>
-					<iconify-icon icon={icons.close} width="20" height="20" class="block"></iconify-icon>
-				</button>
+				<Tooltip text={t('viewer.close')} describe={false} class="contents">
+					<button type="button" class="viewer-tool size-11" aria-label={t('viewer.close')} onclick={() => dialog?.close()}>
+						<iconify-icon icon={icons.close} width="20" height="20" class="block"></iconify-icon>
+					</button>
+				</Tooltip>
 				<span class="hidden size-9 shrink-0 items-center justify-center rounded-fc-sm bg-fc-surface text-fc-fg-muted sm:flex">
 					<iconify-icon icon={fileIcon(file.name, file.mime_type)} width="18" height="18" class="block"></iconify-icon>
 				</span>
@@ -83,14 +85,18 @@
 					<span class="hidden text-fc-xs text-fc-fg-muted tabular-nums md:block">{index + 1} / {files.length}</span>
 				{/if}
 				{#if onShare}
-					<button type="button" class="viewer-tool size-11" aria-label={t('viewer.share')} onclick={() => onShare(file)}>
-						<iconify-icon icon={nuage.share} width="20" height="20" class="block"></iconify-icon>
-					</button>
+					<Tooltip text={t('viewer.share')} describe={false} class="contents">
+						<button type="button" class="viewer-tool size-11" aria-label={t('viewer.share')} onclick={() => onShare(file)}>
+							<iconify-icon icon={nuage.share} width="20" height="20" class="block"></iconify-icon>
+						</button>
+					</Tooltip>
 				{/if}
 				<Button href={url} download={file.name} icon={icons.download} class="hidden sm:inline-flex">{t('viewer.download')}</Button>
-				<a href={url} download={file.name} class="viewer-tool size-11 sm:hidden" aria-label={t('viewer.download')}>
-					<iconify-icon icon={icons.download} width="20" height="20" class="block"></iconify-icon>
-				</a>
+				<Tooltip text={t('viewer.download')} describe={false} class="contents">
+					<a href={url} download={file.name} class="viewer-tool size-11 sm:hidden" aria-label={t('viewer.download')}>
+						<iconify-icon icon={icons.download} width="20" height="20" class="block"></iconify-icon>
+					</a>
+				</Tooltip>
 			</header>
 
 			<div
@@ -102,22 +108,26 @@
 				{/key}
 
 				{#if files.length > 1}
-					<button
-						type="button"
-						aria-label={t('viewer.previous')}
-						onclick={() => step(-1)}
-						class="absolute top-1/2 left-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
-					>
-						<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>
-					</button>
-					<button
-						type="button"
-						aria-label={t('viewer.next')}
-						onclick={() => step(1)}
-						class="absolute top-1/2 right-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
-					>
-						<iconify-icon icon={nuage.next} width="22" height="22" class="block"></iconify-icon>
-					</button>
+					<Tooltip text={t('viewer.previous')} describe={false} class="contents">
+						<button
+							type="button"
+							aria-label={t('viewer.previous')}
+							onclick={() => step(-1)}
+							class="absolute top-1/2 left-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
+						>
+							<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>
+						</button>
+					</Tooltip>
+					<Tooltip text={t('viewer.next')} describe={false} class="contents">
+						<button
+							type="button"
+							aria-label={t('viewer.next')}
+							onclick={() => step(1)}
+							class="absolute top-1/2 right-2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-fc-pill bg-fc-component/90 text-fc-fg shadow-lg backdrop-blur transition-colors hover:bg-fc-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring sm:flex"
+						>
+							<iconify-icon icon={nuage.next} width="22" height="22" class="block"></iconify-icon>
+						</button>
+					</Tooltip>
 				{/if}
 			</div>
 
@@ -126,13 +136,17 @@
 					aria-label={t('viewer.siblings')}
 					class="flex items-center justify-between bg-fc-component px-2 sm:hidden"
 				>
-					<button type="button" class="viewer-tool" aria-label={t('viewer.previous')} onclick={() => step(-1)}>
-						<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>
-					</button>
+					<Tooltip text={t('viewer.previous')} describe={false} class="contents">
+						<button type="button" class="viewer-tool" aria-label={t('viewer.previous')} onclick={() => step(-1)}>
+							<iconify-icon icon={nuage.previous} width="22" height="22" class="block"></iconify-icon>
+						</button>
+					</Tooltip>
 					<span class="text-fc-xs text-fc-fg-muted tabular-nums">{index + 1} / {files.length}</span>
-					<button type="button" class="viewer-tool" aria-label={t('viewer.next')} onclick={() => step(1)}>
-						<iconify-icon icon={nuage.next} width="22" height="22" class="block"></iconify-icon>
-					</button>
+					<Tooltip text={t('viewer.next')} describe={false} class="contents">
+						<button type="button" class="viewer-tool" aria-label={t('viewer.next')} onclick={() => step(1)}>
+							<iconify-icon icon={nuage.next} width="22" height="22" class="block"></iconify-icon>
+						</button>
+					</Tooltip>
 				</nav>
 			{/if}
 		</div>

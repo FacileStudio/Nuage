@@ -10,6 +10,7 @@
 		Input,
 		Modal,
 		Spinner,
+		Tooltip,
 		UploadProgress,
 		toast
 	} from '@facile/muse';
@@ -493,18 +494,20 @@
 
 				<div class="flex overflow-hidden rounded-fc-md bg-fc-surface">
 					{#each [{ mode: 'list', icon: nuage.list, label: t('files.viewList') }, { mode: 'grid', icon: nuage.grid, label: t('files.viewGrid') }] as option (option.mode)}
-						<button
-							type="button"
-							aria-label={option.label}
-							aria-pressed={viewMode === option.mode}
-							onclick={() => (viewMode = option.mode as 'grid' | 'list')}
-							class="flex size-9 [@media(pointer:coarse)]:size-11 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {viewMode ===
-							option.mode
-								? 'bg-fc-accent text-fc-accent-fg'
-								: 'text-fc-fg-muted hover:bg-fc-surface hover:text-fc-fg'}"
-						>
-							<iconify-icon icon={option.icon} width="16" height="16" class="block"></iconify-icon>
-						</button>
+						<Tooltip text={option.label} describe={false} class="contents">
+							<button
+								type="button"
+								aria-label={option.label}
+								aria-pressed={viewMode === option.mode}
+								onclick={() => (viewMode = option.mode as 'grid' | 'list')}
+								class="flex size-9 [@media(pointer:coarse)]:size-11 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {viewMode ===
+								option.mode
+									? 'bg-fc-accent text-fc-accent-fg'
+									: 'text-fc-fg-muted hover:bg-fc-surface hover:text-fc-fg'}"
+							>
+								<iconify-icon icon={option.icon} width="16" height="16" class="block"></iconify-icon>
+							</button>
+						</Tooltip>
 					{/each}
 				</div>
 			</div>

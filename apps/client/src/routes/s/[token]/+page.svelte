@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Button, Card, EmptyState, Spinner } from '@facile/muse';
+	import { Button, Card, EmptyState, Spinner, Tooltip } from '@facile/muse';
 	import {
 		backend,
 		type PublicFile,
@@ -135,14 +135,16 @@
 			>
 				{t('viewer.download')}
 			</Button>
-			<a
-				href={urlFor(file)}
-				download={file.name}
-				aria-label={t('public.downloadFile', { name: file.name })}
-				class="viewer-tool size-11 sm:hidden"
-			>
-				<iconify-icon icon={icons.download} width="20" height="20" class="block"></iconify-icon>
-			</a>
+			<Tooltip text={t('public.downloadFile', { name: file.name })} describe={false} class="contents">
+				<a
+					href={urlFor(file)}
+					download={file.name}
+					aria-label={t('public.downloadFile', { name: file.name })}
+					class="viewer-tool size-11 sm:hidden"
+				>
+					<iconify-icon icon={icons.download} width="20" height="20" class="block"></iconify-icon>
+				</a>
+			</Tooltip>
 		{/if}
 	</header>
 
@@ -260,15 +262,17 @@
 												</span>
 												<span class="block truncate text-fc-xs text-fc-fg-muted">{formatSize(file.size)}</span>
 											</div>
-											<a
-												href={urlFor(file)}
-												download={file.name}
-												aria-label={t('public.downloadFile', { name: file.name })}
-												class="viewer-tool size-11 text-fc-fg-muted hover:text-fc-fg"
-											>
-												<iconify-icon icon={icons.download} width="18" height="18" class="block"
-												></iconify-icon>
-											</a>
+											<Tooltip text={t('public.downloadFile', { name: file.name })} describe={false} class="contents">
+												<a
+													href={urlFor(file)}
+													download={file.name}
+													aria-label={t('public.downloadFile', { name: file.name })}
+													class="viewer-tool size-11 text-fc-fg-muted hover:text-fc-fg"
+												>
+													<iconify-icon icon={icons.download} width="18" height="18" class="block"
+													></iconify-icon>
+												</a>
+											</Tooltip>
 										</div>
 									</Card>
 								{/each}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DragMove, DropTarget } from '$lib/files/dnd.svelte';
 	import { icons, nuage } from '$lib/icons';
+	import { Tooltip } from '@facile/muse';
 	import { t } from '$lib/i18n/index.svelte';
 
 	let {
@@ -57,22 +58,23 @@
 </script>
 
 {#snippet up(parent: { id: number | null; name: string })}
-	<button
-		type="button"
-		aria-label={t('files.upTo', { name: nameOf(parent) })}
-		title={t('files.upToDrop', { name: nameOf(parent) })}
-		onclick={() => onNavigate(parent.id)}
-		class="mr-1 inline-flex size-9 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {isDropping(
-			parent.id
-		)
-			? 'bg-fc-accent text-fc-accent-fg'
-			: dnd.item
-				? 'bg-fc-accent/15 text-fc-fg'
-				: 'bg-fc-surface text-fc-fg-muted hover:text-fc-fg'}"
-		{...dragProps(parent.id, false, 'up')}
-	>
-		<iconify-icon icon={nuage.parent} width="18" height="18" class="block"></iconify-icon>
-	</button>
+	<Tooltip text={t('files.upToDrop', { name: nameOf(parent) })} class="contents">
+		<button
+			type="button"
+			aria-label={t('files.upTo', { name: nameOf(parent) })}
+			onclick={() => onNavigate(parent.id)}
+			class="mr-1 inline-flex size-9 [@media(pointer:coarse)]:size-11 shrink-0 items-center justify-center rounded-fc-pill transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring {isDropping(
+				parent.id
+			)
+				? 'bg-fc-accent text-fc-accent-fg'
+				: dnd.item
+					? 'bg-fc-accent/15 text-fc-fg'
+					: 'bg-fc-surface text-fc-fg-muted hover:text-fc-fg'}"
+			{...dragProps(parent.id, false, 'up')}
+		>
+			<iconify-icon icon={nuage.parent} width="18" height="18" class="block"></iconify-icon>
+		</button>
+	</Tooltip>
 {/snippet}
 
 <nav class="flex min-w-0 flex-wrap items-center gap-1 text-fc-sm" aria-label={t('files.breadcrumb')}>

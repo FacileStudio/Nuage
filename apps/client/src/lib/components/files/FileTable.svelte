@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Table } from '@facile/muse';
+	import { Table, Tooltip } from '@facile/muse';
 	import type { BrowserEntry } from '$lib/files/entries';
 	import type { DragMove } from '$lib/files/dnd.svelte';
 	import type { Selection } from '$lib/files/selection.svelte';
@@ -145,17 +145,19 @@
 				</td>
 				<td class="hidden text-fc-fg-muted md:table-cell">{formatDate(entry.date)}</td>
 				<td class="text-right">
-					<button
-						type="button"
-						aria-label={t('files.actionsFor', { name: entry.name })}
-						onclick={(e) => {
-							e.stopPropagation();
-							onMenu(e, entry);
-						}}
-						class="inline-flex size-8 [@media(pointer:coarse)]:size-11 items-center justify-center rounded-fc-md text-fc-fg-muted transition hover:bg-fc-surface hover:text-fc-fg [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
-					>
-						<iconify-icon icon={nuage.more} width="16" height="16" class="block"></iconify-icon>
-					</button>
+					<Tooltip text={t('files.actionsFor', { name: entry.name })} describe={false} class="contents">
+						<button
+							type="button"
+							aria-label={t('files.actionsFor', { name: entry.name })}
+							onclick={(e) => {
+								e.stopPropagation();
+								onMenu(e, entry);
+							}}
+							class="inline-flex size-8 [@media(pointer:coarse)]:size-11 items-center justify-center rounded-fc-md text-fc-fg-muted transition hover:bg-fc-surface hover:text-fc-fg [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fc-ring"
+						>
+							<iconify-icon icon={nuage.more} width="16" height="16" class="block"></iconify-icon>
+						</button>
+					</Tooltip>
 				</td>
 			</tr>
 		{/each}
