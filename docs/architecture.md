@@ -132,13 +132,18 @@ unlink anything outside `STORAGE_DIR/avatars`.
 `files` and `folders` carry a `facile_id`, the suite-wide external identifier, alongside the
 numeric primary key.
 
-`schemas.Migrate` wraps everything in one transaction holding
-`pg_advisory_xact_lock(4919)`, so concurrently starting instances serialize instead of
-racing. Inside it, `preMigrate` runs hand-written DDL that GORM cannot express — repairing
-the `api_tokens` primary key when it is still the token column, and dropping the legacy
-`shares.shared_with` column — then `AutoMigrate` over the sixteen models, then
-`ensureAdmin`, which promotes the earliest account when no administrator exists and does
-nothing once one does. Afterwards `usercolor.BackfillMissing` fills in absent user colors.
+The schema is the goose SQL in `apps/api/migrations/`, embedded in the binary and applied at
+boot by `tronc/migrate` under its own advisory lock. `00001_baseline.sql` is production's
+schema as GORM AutoMigrate built it, and a database that predates the migrations is stamped
+at version 1 on its first boot instead of running it. The porte tables and tronc/mcp's
+`mcp_actions` live in the baseline too; `TestPorteTablesMatchPorteSchema` and
+`TestMCPPendingSchemaIsInTheMigrations` fail when a library bump changes them.
+
+`schemas.Reconcile` then runs the data steps in one transaction holding
+`pg_advisory_xact_lock(4919)`: the avatar, media type and plan payer backfills, then
+`ensureAdmin`, which promotes the earliest account when no administrator exists, then the
+local identity re-key and the password and OIDC subject adoption. Afterwards
+`usercolor.BackfillMissing` fills in absent user colors.
 
 ## Sync
 

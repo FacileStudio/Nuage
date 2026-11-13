@@ -3,80 +3,66 @@ package schemas
 import (
 	"context"
 	stderrors "errors"
+	"log/slog"
 	"strings"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
 	"github.com/FacileStudio/Nuage/apps/api/internal/usercolor"
-	"github.com/FacileStudio/tronc/mcp"
+	"github.com/FacileStudio/Nuage/apps/api/migrations"
 
 	"gorm.io/gorm"
 )
 
-// migrationLockID namespaces the advisory lock that serialises schema
-// migration across concurrently starting instances.
-const migrationLockID = 4919
+// reconcileLockID namespaces the advisory lock that serialises the boot data
+// steps across concurrently starting instances. The schema itself is
+// serialised by tronc/migrate's own lock.
+const reconcileLockID = 4919
 
-// Migrate brings the schema up to date and then hands authentication to porte.
+// Migrate applies the migrations and then the boot data steps, with no OIDC
+// issuer. The tests build their schemas through it, so they run exactly the
+// SQL production runs.
 func Migrate(db *gorm.DB) error {
-	return MigrateWithIssuer(db, "")
+	return MigrateWithIssuer(context.Background(), db, "", slog.Default())
 }
 
-// MigrateWithIssuer is Migrate with the OIDC issuer, which the identity
-// backfill needs: porte matches an account on (provider, subject) and the
-// provider is the issuer, so backfilling with a placeholder would leave every
-// existing SSO user unmatched and quietly fall through to the email path.
-//
-// AdoptPorte runs inside the same advisory lock as the rest of the schema, so
-// two instances starting together do not both try to move the credentials.
-func MigrateWithIssuer(db *gorm.DB, issuer string) error {
-	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", migrationLockID).Error; err != nil {
+// MigrateWithIssuer applies the ordered migrations under migrations/ and then
+// Reconcile. The issuer is what the identity backfill needs: porte matches an
+// account on (provider, subject) and the provider is the issuer, so
+// backfilling with a placeholder would leave every existing SSO user
+// unmatched and quietly fall through to the email path.
+func MigrateWithIssuer(ctx context.Context, db *gorm.DB, issuer string, logger *slog.Logger) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	if err := migrations.Up(ctx, migrations.Config(sqlDB, logger)); err != nil {
+		return err
+	}
+	return Reconcile(ctx, db, issuer)
+}
+
+// Reconcile runs the idempotent data steps that ran at every boot before the
+// schema moved to migrations, in the same order. It changes rows, never the
+// schema: the avatar, media type and plan payer backfills, the first
+// administrator, and the credentials porte reads. They run in one transaction
+// under an advisory lock, so two instances starting together do not both move
+// the credentials; the colour backfill runs after it, as it always did.
+func Reconcile(ctx context.Context, db *gorm.DB, issuer string) error {
+	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", reconcileLockID).Error; err != nil {
 			return err
 		}
-		if err := migrateSchema(tx); err != nil {
+		if err := backfill(tx); err != nil {
+			return err
+		}
+		if err := ensureAdmin(tx); err != nil {
 			return err
 		}
 		return AdoptPorte(tx, issuer)
 	}); err != nil {
 		return err
 	}
-	return usercolor.BackfillMissing(context.Background(), db)
-}
-
-func migrateSchema(db *gorm.DB) error {
-	if err := preMigrate(db); err != nil {
-		return err
-	}
-	if err := db.AutoMigrate(
-		&User{},
-		&Space{},
-		&SpaceMember{},
-		&File{},
-		&Folder{},
-		&Share{},
-		&Setting{},
-		&FileVersion{},
-		&UploadSession{},
-		&UploadChunk{},
-		&UserQuota{},
-		&ActivityLog{},
-		&NookDelivery{},
-		&Tombstone{},
-		&EntitlementState{},
-		&DirectoryDeletionState{},
-		&RegisteredApp{},
-		&AppFolder{},
-		&AppObject{},
-	); err != nil {
-		return err
-	}
-	if err := db.Exec(mcp.PendingSchema).Error; err != nil {
-		return err
-	}
-	if err := backfill(db); err != nil {
-		return err
-	}
-	return ensureAdmin(db)
+	return usercolor.BackfillMissing(ctx, db)
 }
 
 // backfillAvatarUploadPath moves the uploaded avatars onto the column that now owns them,
@@ -175,52 +161,4 @@ func ensureAdmin(db *gorm.DB) error {
 		return err
 	}
 	return db.Model(&firstUser).Update("is_admin", true).Error
-}
-
-func preMigrate(db *gorm.DB) error {
-	if db.Migrator().HasTable("api_tokens") {
-		if err := db.Exec(`
-			DO $$ BEGIN
-				IF EXISTS (
-					SELECT 1 FROM information_schema.table_constraints
-					WHERE table_name = 'api_tokens'
-					AND constraint_type = 'PRIMARY KEY'
-					AND constraint_name IN (
-						SELECT constraint_name FROM information_schema.key_column_usage
-						WHERE table_name = 'api_tokens' AND column_name = 'token'
-					)
-				) THEN
-					ALTER TABLE api_tokens DROP CONSTRAINT IF EXISTS api_tokens_pkey;
-					IF NOT EXISTS (
-						SELECT 1 FROM information_schema.columns
-						WHERE table_name = 'api_tokens' AND column_name = 'id'
-					) THEN
-						ALTER TABLE api_tokens ADD COLUMN id BIGSERIAL PRIMARY KEY;
-					ELSE
-						ALTER TABLE api_tokens ADD PRIMARY KEY (id);
-					END IF;
-				END IF;
-			END $$;
-		`).Error; err != nil {
-			return err
-		}
-	}
-
-	if db.Migrator().HasTable("shares") {
-		if err := db.Exec(`
-			DO $$ BEGIN
-				IF EXISTS (
-					SELECT 1 FROM information_schema.columns
-					WHERE table_name = 'shares' AND column_name = 'shared_with'
-				) THEN
-					DROP INDEX IF EXISTS idx_shares_shared_with;
-					ALTER TABLE shares DROP COLUMN shared_with;
-				END IF;
-			END $$;
-		`).Error; err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

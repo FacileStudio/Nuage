@@ -112,8 +112,14 @@ whatever `TEST_*` variables are in your environment, and it skips when they are 
 
 Each `apps/api/modules/<name>/` exposes a `RegisterRoutes` function and splits into
 `handler.go`, `service.go`, and `types.go`. Shared plumbing lives in `apps/api/internal/`.
-GORM models live in `apps/api/schemas/`, with `schemas/migrate.go` owning both the
-`AutoMigrate` call and the hand-written DDL around it.
+GORM models live in `apps/api/schemas/` and are the query layer only. The schema is ordered
+goose SQL in `apps/api/migrations/`, applied at boot by `tronc/migrate`; `scripts/check.sh`
+fails on an `.AutoMigrate(` call outside a test file. To change the schema, add the next
+numbered file with `-- +goose Up` and `-- +goose Down`, update the struct by hand, and
+regenerate `apps/api/schema.sql` (a `pg_dump --schema-only` of a database built from the
+migrations, with the `SET`, `\restrict` and comment lines removed).
+`TestGORMModelsMatchTheMigratedSchema` fails when a struct names a column the migrations do
+not create.
 
 The client is Svelte 5 runes only — `$state`, `$props`, `$derived`, `$effect` — with
 TypeScript, and every API call goes through `src/lib/backend.ts`.
@@ -128,5 +134,6 @@ TypeScript, and every API call goes through `src/lib/backend.ts`.
 - **The sync cursor redelivers.** `server_time` is dated slightly in the past on purpose, so
   a client must apply changes idempotently by `id`. A test that asserts an exact change
   count over consecutive polls will flake.
-- **`ensureAdmin` runs on every migration.** On a fresh database the earliest account is
-  promoted to administrator, and once an administrator exists nothing happens.
+- **`ensureAdmin` runs on every boot.** It is one of the data steps in `schemas.Reconcile`.
+  On a fresh database the earliest account is promoted to administrator, and once an
+  administrator exists nothing happens.

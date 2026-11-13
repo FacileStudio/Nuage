@@ -71,6 +71,13 @@ for dir in $GO_MODULES; do
       s=1
     fi
 
+    automigrate="$(grep -rn --include='*.go' --exclude='*_test.go' --exclude-dir=vendor -E '\.AutoMigrate\(' . || true)"
+    if [ -n "$automigrate" ]; then
+      echo "AutoMigrate found; schema changes go in apps/api/migrations/:"
+      echo "$automigrate"
+      s=1
+    fi
+
     "$GO" vet ./... || s=1
     "$GO" test -p 1 -count=1 -timeout 10m $("$GO" list ./... | grep -v '/tests$') || s=1
     "$GO" test -p 1 -count=1 -timeout 40m ./tests || s=1

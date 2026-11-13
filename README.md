@@ -107,7 +107,7 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 ```
 apps/
   api/       Go backend — modules/ (auth, files, sharing, sync, webdav, ...),
-             schemas/ (GORM models and migrations), internal/, tests/ (integration)
+             migrations/ (goose SQL), schemas/ (GORM models), internal/, tests/ (integration)
   client/    SvelteKit frontend, also a reverse proxy for /api/*
 docs/        Architecture, configuration, development, deployment, API
 ```

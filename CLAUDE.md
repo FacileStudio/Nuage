@@ -90,7 +90,8 @@ Nuage/
         users/                     # user management, avatars
         webdav/                    # WebDAV server (Basic Auth with API tokens)
         docs/                      # API documentation endpoint
-      schemas/                     # GORM models + auto-migration
+      migrations/                  # ordered goose SQL, embedded and applied at boot
+      schemas/                     # GORM models (the query layer) + boot data steps
       tests/                       # integration tests
     client/
       src/
@@ -129,7 +130,7 @@ credentials.
 ## Conventions
 
 - API modules follow a consistent pattern: each module directory contains a handler, service, and route registration function (`RegisterRoutes`).
-- GORM models live in `apps/api/schemas/` with auto-migration in `schemas/migrate.go`.
+- **Migrations are ordered SQL** in `apps/api/migrations/`, applied at boot by `tronc/migrate`, then the idempotent data steps in `schemas.Reconcile`. AutoMigrate never runs (`scripts/check.sh` fails on it). Add a numbered file with Up and Down, update the GORM struct by hand, and regenerate `apps/api/schema.sql`. `docker run <image> migrate status` works without a shell. After a rollback to v0.17.x, delete ledger row 2 before releasing forward again (see `docs/deployment.md`).
 - The client uses Svelte 5 runes (`$state`, `$props`, `$derived`, `$effect`) with TypeScript enabled.
 - All API calls from the client go through `src/lib/backend.ts`.
 - **The UI is built from `@facile/muse`, and its `CHARTE.md` is the contract.** Reach for a muse

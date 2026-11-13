@@ -99,11 +99,20 @@ point, but it is not a free operation.
 
 ## Migrations
 
-There is no migration tool and no separate step. `schemas.Migrate` runs at boot inside one
-transaction holding `pg_advisory_xact_lock(4919)`, so several instances starting at once
-serialize instead of racing. It runs the hand-written `preMigrate` DDL, then `AutoMigrate`
-over sixteen models, then `ensureAdmin`, then backfills user colors. A failure returns
-before the listener binds.
+There is no separate step. At boot the binary applies the pending goose migrations in
+`apps/api/migrations/` through `tronc/migrate`, behind a Postgres advisory lock, then runs
+the idempotent data steps in `schemas.Reconcile`. A failure exits 1 before the listener
+binds, so the deploy fails instead of serving a half-migrated schema.
+
+The same runner answers without a shell: `docker run --rm <image> migrate status` (also `up`,
+`version` and `baseline <n>`) with the container's environment. A database built by
+AutoMigrate before v0.18.0 is stamped at version 1 on its first boot.
+
+**Rollback trap.** Reverting to v0.17.x brings AutoMigrate back, and AutoMigrate drops every
+default its struct tags do not declare, while `goose_db_version` still records version 2.
+Before deploying v0.18.0 or later again after such a rollback, run
+`DELETE FROM goose_db_version WHERE version_id = 2` so `00002_column_defaults.sql` runs
+again.
 
 ## Plans go-live
 

@@ -2,56 +2,10 @@ package schemas
 
 import (
 	"fmt"
-	"os"
 	"testing"
-	"time"
 
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
-
-// openTestDatabase hands back a connection scoped to a schema of its own, so these tests
-// can create and drop `users` without disturbing the integration suite sharing the
-// database. The backfill is written in PostgreSQL (regexp_replace, anchored), so testing
-// it anywhere else would test a different statement than the one that ships.
-//
-// A developer without Postgres still gets a usable suite; CI, where the
-// database is always there, would fail on the same condition rather than
-// skip silently.
-func openTestDatabase(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://nuage:nuage-internal-db@localhost:5432/nuage_test?sslmode=disable"
-	}
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gormlogger.Discard})
-	if err != nil {
-		if os.Getenv("CI") != "" {
-			t.Fatalf("integration test infrastructure required in CI: %v", err)
-		}
-		t.Skipf("skipping: database not available: %v", err)
-	}
-
-	schema := fmt.Sprintf("avatar_test_%d", time.Now().UnixNano())
-	if err := db.Exec("CREATE SCHEMA " + schema).Error; err != nil {
-		if os.Getenv("CI") != "" {
-			t.Fatalf("integration test infrastructure required in CI: %v", err)
-		}
-		t.Skipf("skipping: database not available: %v", err)
-	}
-	t.Cleanup(func() { db.Exec("DROP SCHEMA " + schema + " CASCADE") })
-
-	if err := db.Exec("SET search_path TO " + schema).Error; err != nil {
-		t.Fatalf("set search_path: %v", err)
-	}
-	if err := db.AutoMigrate(&User{}); err != nil {
-		t.Fatalf("prepare schema: %v", err)
-	}
-	return db
-}
 
 func TestAvatarPrecedence(t *testing.T) {
 	const porte = "https://porte.facile.studio/media/user-avatars/x.png"
@@ -184,9 +138,6 @@ func TestBackfillAvatarUploadPath(t *testing.T) {
 // account. Running it twice proves it is idempotent.
 func TestBackfillPictureURLs(t *testing.T) {
 	orm := openTestDatabase(t)
-	if err := orm.Exec(porteSchema).Error; err != nil {
-		t.Fatalf("porte schema: %v", err)
-	}
 
 	const issuer = "https://sso.facile.studio/"
 	rows := []pictureRow{

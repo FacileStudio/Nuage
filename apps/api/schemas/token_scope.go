@@ -14,14 +14,3 @@ type TokenScope struct {
 }
 
 func (TokenScope) TableName() string { return "api_token_scopes" }
-
-const tokenScopeSchema = `
-CREATE TABLE IF NOT EXISTS api_token_scopes (
-	session_id        bigint PRIMARY KEY REFERENCES porte_sessions(id) ON DELETE CASCADE,
-	app               text NOT NULL DEFAULT '',
-	space_facile_ids  jsonb NOT NULL DEFAULT '[]',
-	provision         boolean NOT NULL DEFAULT false,
-	created_at        timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE api_token_scopes ADD COLUMN IF NOT EXISTS provision boolean NOT NULL DEFAULT false;
-`

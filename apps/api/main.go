@@ -40,7 +40,6 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/modules/trash"
 	"github.com/FacileStudio/Nuage/apps/api/modules/users"
 	nuagewebdav "github.com/FacileStudio/Nuage/apps/api/modules/webdav"
-	"github.com/FacileStudio/Nuage/apps/api/schemas"
 
 	"github.com/FacileStudio/Journal/sdk/journal"
 	"github.com/FacileStudio/porte"
@@ -326,9 +325,19 @@ func run() int {
 		return 1
 	}
 
-	if err := schemas.MigrateWithIssuer(db, appEnv.IssuerForMigration()); err != nil {
-		appLogger.Error("failed to run migrations", slog.Any("error", err))
+	sqlDB, err := db.DB()
+	if err != nil {
+		appLogger.Error("failed to access database handle", slog.Any("error", err))
 		return 1
+	}
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			appLogger.Error("failed to close database", slog.Any("error", err))
+		}
+	}()
+
+	if exit, code := migrateOrAnswer(context.Background(), db, sqlDB, appEnv.IssuerForMigration(), appLogger); exit {
+		return code
 	}
 
 	if err := appregistry.Sync(context.Background(), db, appEnv.Apps); err != nil {
@@ -357,17 +366,6 @@ func run() int {
 		appLogger.Error("failed to ensure storage bucket", slog.Any("error", err))
 		return 1
 	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		appLogger.Error("failed to access database handle", slog.Any("error", err))
-		return 1
-	}
-	defer func() {
-		if err := sqlDB.Close(); err != nil {
-			appLogger.Error("failed to close database", slog.Any("error", err))
-		}
-	}()
 
 	notifier := nook.NewNotifier(db)
 	notifier.Start()

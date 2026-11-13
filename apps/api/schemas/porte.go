@@ -6,7 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// AdoptPorte moves Nuage's credentials onto porte's tables.
+// AdoptPorte keeps Nuage's credentials on porte's identity table. It changes
+// rows only: the porte tables themselves come from the migrations.
 //
 // issuer is the configured OIDC_ISSUER, and it has to be passed in because it
 // is half of the account matching key: porte finds an identity by (provider,
@@ -14,11 +15,11 @@ import (
 // or with a placeholder — would leave every existing SSO user unmatched, which
 // degrades silently to the email fallback rather than failing.
 //
-// An empty issuer skips only the identity backfill. The sessions, the API
-// tokens and the passwords still move, because they are what keeps people
-// signed in and able to sign in again.
+// An empty issuer skips only the identity backfill. The local re-key and the
+// passwords still move, because they are what keeps people able to sign in
+// again.
 func AdoptPorte(db *gorm.DB, issuer string) error {
-	statements := []string{porteSchema, tokenScopeSchema, carryLegacySessionsOver, carryAPITokensOver, adoptExistingPasswords}
+	statements := []string{rekeyLocalSubjects, adoptExistingPasswords}
 	for _, statement := range statements {
 		if err := db.Exec(statement).Error; err != nil {
 			return err
@@ -60,116 +61,15 @@ UPDATE users SET oidc_picture_url = ? || '/avatars/' || i.subject
    AND coalesce(users.oidc_picture_url, '') NOT LIKE ? || '/avatars/%';
 `
 
-// porteSchema is porte/pg's Schema with its porte_users table left out and the
-// foreign keys repointed at Nuage's own users.
-//
-// porte offers UserStore as the escape hatch for exactly this. This users row
-// carries the avatar columns, an upload path and the mailbox ownership every
-// account, folder and email hangs off; moving it would be a rewrite of
-// everything except authentication. The other three stores come from porte/pg
-// unchanged — they only ever touch the tables below.
-//
-// Kept verbatim from porte otherwise, statement for statement: pg's queries are
-// written against these names, and a divergence here surfaces as a runtime
-// error on the login path rather than at boot. That includes porte v0.3.0's
-// re-key of the local subject onto the user id — nothing here calls
-// portepg.EnsureSchema, so a migration living only in porte's own Schema would
-// never run against this database and every existing password login would
-// answer "invalid credentials" to the right password.
-const porteSchema = `
-CREATE TABLE IF NOT EXISTS porte_identities (
-	user_id         bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	provider        text NOT NULL,
-	subject         text NOT NULL,
-	password_hash   text NOT NULL DEFAULT '',
-	access_token    text NOT NULL DEFAULT '',
-	refresh_token   text NOT NULL DEFAULT '',
-	token_expiry    timestamptz,
-	roles           jsonb,
-	roles_synced_at timestamptz,
-	synced_at       timestamptz,
-	created_at      timestamptz DEFAULT now(),
-	PRIMARY KEY (provider, subject)
-);
-CREATE INDEX IF NOT EXISTS porte_identities_user_idx ON porte_identities (user_id);
-ALTER TABLE porte_identities ADD COLUMN IF NOT EXISTS created_at timestamptz;
-ALTER TABLE porte_identities ALTER COLUMN created_at SET DEFAULT now();
-
+// rekeyLocalSubjects is porte v0.3.0's re-key of the local subject onto the
+// user id. It lives in porte/pg's own Schema, which nothing here runs: Nuage's
+// porte tables are in its migrations, repointed at its own users. Without it
+// every account that adopted porte before v0.3.0 keeps an identity keyed on
+// its address, porte/local looks one up by account id, and the login form
+// answers "invalid credentials" to the right password.
+const rekeyLocalSubjects = `
 UPDATE porte_identities SET subject = user_id::text
  WHERE provider = 'local' AND subject <> user_id::text;
-
-CREATE TABLE IF NOT EXISTS porte_sessions (
-	id           bigserial PRIMARY KEY,
-	token_hash   text NOT NULL UNIQUE,
-	user_id      bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	label        text NOT NULL DEFAULT '',
-	created_at   timestamptz NOT NULL DEFAULT now(),
-	last_used_at timestamptz NOT NULL DEFAULT now(),
-	expires_at   timestamptz
-);
-CREATE INDEX IF NOT EXISTS porte_sessions_user_idx ON porte_sessions (user_id);
-CREATE INDEX IF NOT EXISTS porte_sessions_expiry_idx ON porte_sessions (expires_at)
-	WHERE expires_at IS NOT NULL;
-
-CREATE TABLE IF NOT EXISTS porte_login_codes (
-	code_hash   text PRIMARY KEY,
-	user_id     bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	expires_at  timestamptz NOT NULL,
-	consumed_at timestamptz
-);
-ALTER TABLE porte_login_codes ADD COLUMN IF NOT EXISTS consumed_at timestamptz;
-ALTER TABLE porte_login_codes ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT '',
-	ADD COLUMN IF NOT EXISTS subject text NOT NULL DEFAULT '';
-`
-
-// carryLegacySessionsOver moves the pre-porte sessions table across instead of
-// dropping it, so adopting porte does not sign every existing user out.
-//
-// Both tables store the SHA-256 hex of a 32-byte token and never the token
-// itself, so a row copied here keeps authenticating the credential already in
-// somebody's browser — and porte's AcceptLegacyCookie keeps reading it from
-// the `session` cookie this app has always set.
-//
-// last_used_at is stamped now rather than copied from created_at: porte
-// retires a browser session idle for seven days and the old table recorded no
-// use at all, so carrying created_at over would sign out everyone who last
-// signed in more than a week ago, on the deploy meant to keep them.
-const carryLegacySessionsOver = `
-DO $$
-BEGIN
-	IF to_regclass('sessions') IS NOT NULL THEN
-		INSERT INTO porte_sessions (token_hash, user_id, created_at, last_used_at, expires_at)
-		SELECT s.token, s.user_id, s.created_at, now(), s.expires_at
-		  FROM sessions s JOIN users u ON u.id = s.user_id
-		 WHERE s.expires_at > now()
-		ON CONFLICT (token_hash) DO NOTHING;
-		DROP TABLE sessions;
-	END IF;
-END
-$$;
-`
-
-// carryAPITokensOver folds the separate api_tokens table into porte's sessions
-// as labelled rows.
-//
-// porte.Session.Label exists for precisely this: what Nuage called an API
-// token is a session with a name on it and no expiry, which is one mechanism
-// more than the problem needs and a second branch in the authentication path.
-// A null expires_at never expires, and porte's idle window deliberately does
-// not apply to a labelled session, so a token wired into a script keeps
-// working.
-const carryAPITokensOver = `
-DO $$
-BEGIN
-	IF to_regclass('api_tokens') IS NOT NULL THEN
-		INSERT INTO porte_sessions (token_hash, user_id, label, created_at, last_used_at, expires_at)
-		SELECT t.token, t.user_id, COALESCE(NULLIF(t.name, ''), 'API token'), t.created_at, now(), NULL
-		  FROM api_tokens t JOIN users u ON u.id = t.user_id
-		ON CONFLICT (token_hash) DO NOTHING;
-		DROP TABLE api_tokens;
-	END IF;
-END
-$$;
 `
 
 // adoptExistingPasswords moves the argon2 hashes from users.password_hash into

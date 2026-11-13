@@ -72,9 +72,7 @@ func TestANewSignInCreatesAnAccountWithItsLocale(t *testing.T) {
 
 func TestTheStoreNamesEveryColumnItsInsertLeavesOut(t *testing.T) {
 	ts := setupTestServer(t)
-	unwritten := []string{"avatar_url", "avatar_source", "avatar_upload_path", "oidc_subject", "color",
-		"password_hash", "oidc_access_token", "oidc_refresh_token", "oidc_token_expiry", "profile_synced_at"}
-	assert.Equal(t, unwritten, userStore(ts.db).Unwritten())
+	assert.Equal(t, []string{"color", "oidc_subject"}, userStore(ts.db).Unwritten())
 }
 
 func TestANewSignInFillsEveryColumnAnOldAccountHas(t *testing.T) {

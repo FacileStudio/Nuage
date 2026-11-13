@@ -7,9 +7,6 @@ import (
 
 func TestBackfillMimeTypes(t *testing.T) {
 	orm := openTestDatabase(t)
-	if err := orm.AutoMigrate(&Space{}, &Folder{}, &File{}); err != nil {
-		t.Fatalf("prepare files: %v", err)
-	}
 	if err := orm.Exec(`INSERT INTO users (email, password_hash) VALUES ('mime@example.com', 'hash')`).Error; err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
