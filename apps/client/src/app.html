@@ -45,6 +45,16 @@
 				} catch (e) {}
 			})();
 		</script>
+		<script>
+			(function () {
+				if (location.hostname !== 'nuage.facile.studio' || location.pathname.indexOf('/s/') === 0) return;
+				var s = document.createElement('script');
+				s.async = true;
+				s.src = 'https://vision.facile.studio/s.js';
+				s.setAttribute('data-mask', '');
+				document.head.appendChild(s);
+			})();
+		</script>
 		%sveltekit.head%
 
 	</head>
