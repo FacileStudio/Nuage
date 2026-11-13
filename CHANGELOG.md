@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.18.4] - 2026-11-14
+
+### Added
+
+- Client: `app.html` loads Vision's tracker (`s.js` with `data-mask`) on `nuage.facile.studio` only, and never on a `/s/` share link, whose path carries the share token. The security config adds `https://vision.facile.studio` to `script-src`.
+
 ## [0.18.3] - 2026-11-13
 
 ### Changed
