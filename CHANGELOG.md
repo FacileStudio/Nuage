@@ -10,6 +10,8 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-13
+
 ### Changed
 
 - Database: the schema is ordered goose SQL under `apps/api/migrations/`, applied at boot by `tronc/migrate` v0.1.1 behind a Postgres advisory lock. GORM `AutoMigrate` and the hand-written `CREATE TABLE IF NOT EXISTS` for the porte tables, `api_token_scopes` and `mcp_actions` are gone from the boot path; the GORM structs stay as the query layer. `scripts/check.sh` fails on an `.AutoMigrate(` call outside a test file.
