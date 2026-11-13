@@ -10,6 +10,16 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.18.3] - 2026-11-13
+
+### Changed
+
+- Client: muse v0.21.0 (was v0.18.0). Icon-only controls in muse components now show a muse tooltip.
+
+### Fixed
+
+- Client: every icon-only control shows a muse tooltip: the file, image, PDF and media viewer toolbars, the row actions, the list/grid switch, the share page download links. The breadcrumb "up" button shows its drop hint in a muse tooltip instead of the native `title`.
+
 ## [0.18.1] - 2026-11-13
 
 ### Changed
