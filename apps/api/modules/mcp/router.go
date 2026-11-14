@@ -16,10 +16,7 @@ func RegisterRoutes(router chi.Router, service *Service) {
 // the /api router, for the signed-in person. A nil service, as in the docs
 // test, still mounts the routes.
 func RegisterPendingRoutes(router chi.Router, service *Service, authService middleware.Authenticator) {
-	router.Route("/mcp/pending", func(r chi.Router) {
-		r.Use(middleware.RequireAuth(authService))
-		service.pending().Routes(r)
-	})
+	service.pending().Mount(router, middleware.RequireAuth(authService))
 }
 
 // pending is the confirm page, nil on a nil service.

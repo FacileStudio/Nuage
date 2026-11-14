@@ -4,10 +4,10 @@ import (
 	"github.com/FacileStudio/Nuage/apps/api/internal/appregistry"
 	"github.com/FacileStudio/porte"
 
-	"crypto/sha256"
 	"fmt"
 
 	troncenv "github.com/FacileStudio/tronc/env"
+	mcpkit "github.com/FacileStudio/tronc/mcp"
 )
 
 // OIDCConfig holds the settings used to federate with the identity provider.
@@ -100,7 +100,7 @@ func Load() (Config, error) {
 		BulleURL:      troncenv.String("BULLE_URL", ""),
 	}
 	if cfg.PresignSecret != "" {
-		cfg.MCP = MCP{Resource: troncenv.String("MCP_RESOURCE", ""), StateKey: deriveStateKey(cfg.PresignSecret)}
+		cfg.MCP = MCP{Resource: troncenv.String("MCP_RESOURCE", ""), StateKey: mcpkit.StateKey("nuage", cfg.PresignSecret)}
 	}
 
 	if cfg.MinIO, err = loadMinIO(); err != nil {
@@ -215,11 +215,4 @@ func (c Config) IssuerForMigration() string {
 		return ""
 	}
 	return c.OIDC.Issuer
-}
-
-// deriveStateKey derives the MCP confirmation key from the presign secret,
-// namespaced so it collides with no other use of that secret.
-func deriveStateKey(secret string) []byte {
-	sum := sha256.Sum256([]byte("nuage-mcp-state:" + secret))
-	return sum[:]
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/FacileStudio/Nuage/apps/api/schemas"
+	"github.com/FacileStudio/porte"
 	mcpkit "github.com/FacileStudio/tronc/mcp"
 	"github.com/FacileStudio/tronc/mcp/mcptest"
 )
@@ -207,7 +208,8 @@ func TestMCPActorsFollowTheAPIRule(t *testing.T) {
 }
 
 // TestMCPConfirmPageMakesTheLink checks the no-elicitation path end to
-// end: the share waits, the person confirms in Nuage, and the link works.
+// end: the share waits, a bearer session is refused, the person confirms
+// from their browser session in Nuage, and the link works.
 func TestMCPConfirmPageMakesTheLink(t *testing.T) {
 	f := newMCPFixture(t)
 	file := f.upload(t, f.owner, "deck.txt", "slides", nil)
@@ -221,8 +223,19 @@ func TestMCPConfirmPageMakesTheLink(t *testing.T) {
 	}
 	id := pending.ConfirmURL[strings.LastIndex(pending.ConfirmURL, "=")+1:]
 	base := strings.TrimSuffix(f.resource, "/mcp")
+	bearerReq, _ := http.NewRequest(http.MethodPost, base+"/api/mcp/pending/"+id+"/confirm", bytes.NewReader(nil))
+	bearerReq.Header.Set("Authorization", "Bearer "+f.session)
+	bearerResp, err := http.DefaultClient.Do(bearerReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bearerResp.Body.Close()
+	if bearerResp.StatusCode != http.StatusForbidden || f.shares(file.ID) != 0 {
+		t.Fatalf("a bearer session must not confirm, got %d and %d links", bearerResp.StatusCode, f.shares(file.ID))
+	}
+	cookie := f.browserCookie(t)
 	listReq, _ := http.NewRequest(http.MethodGet, base+"/api/mcp/pending", nil)
-	listReq.Header.Set("Authorization", "Bearer "+f.session)
+	listReq.AddCookie(cookie)
 	listResp, err := http.DefaultClient.Do(listReq)
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +258,8 @@ func TestMCPConfirmPageMakesTheLink(t *testing.T) {
 		t.Fatalf("the confirm page must list the share with its file, got %d %+v", listResp.StatusCode, list)
 	}
 	req, _ := http.NewRequest(http.MethodPost, base+"/api/mcp/pending/"+id+"/confirm", bytes.NewReader(nil))
-	req.Header.Set("Authorization", "Bearer "+f.session)
+	req.AddCookie(cookie)
+	req.Header.Set(porte.CSRFHeaderName, "1")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

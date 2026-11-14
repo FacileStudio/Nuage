@@ -139,6 +139,21 @@ func newMCPFixtureOn(t *testing.T, addr string) *mcpFixture {
 	return f
 }
 
+// browserCookie is the owner's session cookie as a browser sign-in sets
+// it, the only credential the confirm page takes.
+func (f *mcpFixture) browserCookie(t *testing.T) *http.Cookie {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	if _, _, err := f.ts.sessions.IssueCookie(context.Background(), recorder, httptest.NewRequest(http.MethodGet, f.resource, nil), f.owner); err != nil {
+		t.Fatal(err)
+	}
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("a browser sign-in must set one cookie, got %d", len(cookies))
+	}
+	return cookies[0]
+}
+
 // token is a token for the owner with scopes, or both when none is given.
 func (f *mcpFixture) token(t testing.TB, scopes ...string) string {
 	if len(scopes) == 0 {

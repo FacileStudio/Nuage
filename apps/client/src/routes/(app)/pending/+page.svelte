@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { EmptyState, SecretField, Spinner, toast } from '@facile/muse';
-	import { backend, type PendingAction } from '$lib/backend';
+	import { Alert, Button, EmptyState, SecretField, Spinner, toast } from '@facile/muse';
+	import { ApiError, backend, type PendingAction } from '$lib/backend';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PendingCard from '$lib/components/PendingCard.svelte';
 	import { icons } from '$lib/icons';
@@ -12,6 +12,7 @@
 	let links = $state<{ id: string; name: string; url: string }[]>([]);
 	let loading = $state(true);
 	let busy = $state('');
+	let signInAgain = $state(false);
 
 	const focused = $derived(page.url.searchParams.get('action') ?? '');
 	const ordered = $derived([
@@ -21,13 +22,29 @@
 
 	onMount(load);
 
+	/**
+	 * A 403 means the API would not take this credential for a confirmation: a cookie from before
+	 * the browser-session mark, or a CLI or app session. The person signs in again in the browser.
+	 */
+	function refused(err: unknown): boolean {
+		signInAgain = err instanceof ApiError && err.status === 403;
+		return signInAgain;
+	}
+
+	/** Keeps this page for the return after the sign-in, as the app layout does. */
+	function keepReturn() {
+		try {
+			sessionStorage.setItem('nuage.return', page.url.pathname + page.url.search);
+		} catch {}
+	}
+
 	/** Loads the open actions. */
 	async function load() {
 		loading = true;
 		try {
 			actions = (await backend.listPending()).actions;
-		} catch {
-			toast.danger(t('pending.loadFailed'));
+		} catch (err) {
+			if (!refused(err)) toast.danger(t('pending.loadFailed'));
 		}
 		loading = false;
 	}
@@ -41,6 +58,10 @@
 			toast.success(t(action.kind === 'share' ? 'pending.shared' : 'pending.trashed'));
 			actions = actions.filter((item) => item.id !== action.id);
 		} catch (err) {
+			if (refused(err)) {
+				busy = '';
+				return;
+			}
 			toast.danger(err instanceof Error ? err.message : t('pending.failed'));
 			await load();
 		}
@@ -55,7 +76,7 @@
 			toast.success(t('pending.dismissed'));
 			actions = actions.filter((item) => item.id !== action.id);
 		} catch (err) {
-			toast.danger(err instanceof Error ? err.message : t('pending.failed'));
+			if (!refused(err)) toast.danger(err instanceof Error ? err.message : t('pending.failed'));
 		}
 		busy = '';
 	}
@@ -67,6 +88,15 @@
 
 <div class="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 md:px-8">
 	<PageHeader title={t('pending.heading')} description={t('pending.intro')} />
+
+	{#if signInAgain}
+		<Alert tone="warning" title={t('pending.signInAgain')}>
+			<div class="flex flex-col items-start gap-3">
+				<p>{t('pending.signInAgainBody')}</p>
+				<Button href="{backend.baseUrl}/auth/oidc" size="sm" onclick={keepReturn}>{t('pending.signIn')}</Button>
+			</div>
+		</Alert>
+	{/if}
 
 	{#each links as link (link.id)}
 		<SecretField label={`${t('pending.newLink')} · ${link.name}`} value={link.url} sensitive={false} />

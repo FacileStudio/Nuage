@@ -24,12 +24,6 @@ const (
 // errQuery is the refusal for an empty search.
 var errQuery = stderrors.New("query is required: give part of a name, such as invoice or .pdf")
 
-// position is the cursor of a paged tool: how many items earlier pages
-// returned.
-type position struct {
-	Offset int `json:"o"`
-}
-
 // listFolder is nuage_list_folder.
 func (t *toolset) listFolder(ctx context.Context, req *sdk.CallToolRequest, in listInput) (*sdk.CallToolResult, listOutput, error) {
 	userID, err := t.userOf(ctx, req)
@@ -40,25 +34,25 @@ func (t *toolset) listFolder(ctx context.Context, req *sdk.CallToolRequest, in l
 	if err != nil {
 		return nil, listOutput{}, err
 	}
-	var at position
-	if err := mcpkit.DecodeCursor(in.Cursor, &at); err != nil || at.Offset < 0 {
-		return nil, listOutput{}, mcpkit.ErrCursor
+	offset, err := mcpkit.Offset(in.Cursor)
+	if err != nil {
+		return nil, listOutput{}, err
 	}
 	out, items, err := t.open(ctx, userID, in, full)
 	if err != nil {
-		return nil, listOutput{}, failure(err, hintItem)
+		return nil, listOutput{}, mcpkit.Failure(err, hintItem)
 	}
-	if at.Offset > len(items) {
+	if offset > len(items) {
 		return nil, listOutput{}, mcpkit.ErrCursor
 	}
-	if out.FolderID == nil && out.SpaceID == nil && at.Offset == 0 {
+	if out.FolderID == nil && out.SpaceID == nil && offset == 0 {
 		list, err := t.spaces(ctx, userID)
 		if err != nil {
-			return nil, listOutput{}, failure(err, "")
+			return nil, listOutput{}, mcpkit.Failure(err, "")
 		}
 		out.Spaces = &list
 	}
-	return nil, pageOf(out, items, at.Offset, clamp(in.Limit, defaultListLimit, maxListLimit)), nil
+	return nil, pageOf(out, items, offset, clamp(in.Limit, defaultListLimit, maxListLimit)), nil
 }
 
 // open lists one folder, or a root, folders first then files, each by name.
@@ -117,10 +111,7 @@ func pageOf(out listOutput, items []item, offset, limit int) listOutput {
 		probe.Items, probe.Total, probe.NextCursor = rest[:n], len(items), "next-cursor-placeholder"
 		return mcpkit.EncodedSize(probe)
 	})
-	out.Items, out.Total = rest[:keep], len(items)
-	if offset+keep < len(items) {
-		out.NextCursor = mcpkit.EncodeCursor(position{Offset: offset + keep})
-	}
+	out.Items, out.Total, out.NextCursor = rest[:keep], len(items), mcpkit.Cursor(offset+keep, len(items))
 	return out
 }
 
@@ -153,11 +144,11 @@ func (t *toolset) search(ctx context.Context, req *sdk.CallToolRequest, in searc
 	limit := clamp(in.Limit, defaultSearchLimit, maxSearchLimit)
 	hits, err := t.Files.SearchNames(ctx, userID, in.Query, optional(in.SpaceID), limit+1)
 	if err != nil {
-		return nil, searchOutput{}, failure(err, "Call nuage_list_folder for the spaces you belong to.")
+		return nil, searchOutput{}, mcpkit.Failure(err, "Call nuage_list_folder for the spaces you belong to.")
 	}
 	items, err := t.hitItems(ctx, hits.Files, hits.Folders, in.Type, full)
 	if err != nil {
-		return nil, searchOutput{}, failure(err, "")
+		return nil, searchOutput{}, mcpkit.Failure(err, "")
 	}
 	out := searchOutput{Items: items[:min(limit, len(items))], More: len(items) > limit}
 	keep := mcpkit.FitCount(len(out.Items), func(n int) int {
