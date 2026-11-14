@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-11-14
+
+### Fixed
+
+- The landing's download section no longer scrolls the page sideways on narrow desktop windows: the CLI card now fits the column and long commands scroll inside their own box.
+
 ## [0.20.0] - 2026-11-14
 
 ### Changed
