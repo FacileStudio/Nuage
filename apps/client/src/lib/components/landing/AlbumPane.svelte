@@ -27,7 +27,7 @@
 	}: Props = $props();
 
 	const percent = $derived(Math.round((done / total) * 100));
-	const NAMES = ['54%', '68%', '46%', '62%', '50%', '58%'];
+	const names = $derived(t('landing.album.names').split(','));
 </script>
 
 <div class="ap-pane" class:ap-compact={compact}>
@@ -64,7 +64,7 @@
 			<div class="ap-tile" in:scale={{ start: 0.85, duration: 320 }} out:fade={{ duration: 260 }}>
 				<Photo scene={i} class="ap-photo" />
 				<div class="ap-meta">
-					<Bar w={NAMES[i]} />
+					<span class="truncate text-[12px] leading-[14px] font-bold">{names[i]}</span>
 					<Bar w="36%" />
 				</div>
 			</div>
@@ -214,8 +214,9 @@
 	.ap-meta {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
-		padding: 10px 12px;
+		gap: 5px;
+		min-width: 0;
+		padding: 8px 12px 10px;
 	}
 	.ap-empty {
 		position: absolute;

@@ -46,10 +46,10 @@ export const shell = {
 	'nav.spaces': ['Spaces', 'Espaces', 'Espacios', 'Bereiche'],
 	'login.title': ['Sign in — Nuage', 'Connexion — Nuage', 'Iniciar sesión — Nuage', 'Anmelden — Nuage'],
 	'login.tagline': [
-		'Your files. Your cloud.',
-		'Vos fichiers. Votre cloud.',
-		'Tus archivos. Tu nube.',
-		'Deine Dateien. Deine Cloud.'
+		'Your files everywhere, shared with a link.',
+		'Vos fichiers partout, partagés en un lien.',
+		'Tus archivos en todas partes, compartidos con un enlace.',
+		'Ihre Dateien überall, geteilt mit einem Link.'
 	],
 	'login.failed': [
 		'Sign-in failed. Try again.',
@@ -58,25 +58,19 @@ export const shell = {
 		'Die Anmeldung ist fehlgeschlagen. Versuche es erneut.'
 	],
 	'landing.heroTitle': [
-		'Your files.|Your cloud.',
-		'Vos fichiers.|Votre cloud.',
-		'Tus archivos.|Tu nube.',
-		'Deine Dateien.|Deine Cloud.'
+		'Your files, everywhere.|Shared in one link.',
+		'Vos fichiers, partout.|Partagés en un lien.',
+		'Tus archivos, en todas partes.|Compartidos con un enlace.',
+		'Ihre Dateien, überall.|Geteilt mit einem Link.'
 	],
 	'landing.heroText': [
-		'Store your files, sync them with your computer, share them with a link.',
-		'Stockez vos fichiers, synchronisez-les avec votre ordinateur, partagez-les par lien.',
-		'Guarda tus archivos, sincronízalos con tu ordenador y compártelos con un enlace.',
-		'Speichere deine Dateien, synchronisiere sie mit deinem Computer, teile sie per Link.'
+		'Keep your photos and documents, share them by link and work together in team folders.',
+		'Rangez vos photos et documents, partagez-les par lien et travaillez à plusieurs dans des dossiers d’équipe.',
+		'Guarda tus fotos y documentos, compártelos con un enlace y trabaja en equipo en carpetas compartidas.',
+		'Bewahren Sie Fotos und Dokumente auf, teilen Sie sie per Link und arbeiten Sie gemeinsam in Teamordnern.'
 	],
 	'landing.navFeatures': ['Features', 'Fonctionnalités', 'Funciones', 'Funktionen'],
 	'landing.navDownload': ['Download', 'Télécharger', 'Descargar', 'Download'],
-	'landing.downloadCta': [
-		'Get the sync client',
-		'Installer le client de synchro',
-		'Instala el cliente de sincronización',
-		'Sync-Client installieren'
-	],
 	'landing.demoLabel': [
 		'Holiday photos dropped into a folder upload to Nuage, then the album gets shared with a link.',
 		'Des photos de vacances glissées dans un dossier arrivent dans Nuage, puis l’album part en lien de partage.',
@@ -84,17 +78,23 @@ export const shell = {
 		'Urlaubsfotos landen per Drag-and-drop in Nuage, dann wird das Album per Link geteilt.'
 	],
 	'landing.featuresTitle': ['What Nuage does', 'Ce que fait Nuage', 'Qué hace Nuage', 'Was Nuage kann'],
-	'landing.feature.sync.title': [
-		'Sync a folder',
-		'Synchronisez un dossier',
-		'Sincroniza una carpeta',
-		'Einen Ordner synchronisieren'
+	'landing.featuresLine': [
+		'Everything you need to keep and share files, in your browser.',
+		'Tout pour ranger et partager vos fichiers, dans votre navigateur.',
+		'Todo para guardar y compartir tus archivos, en tu navegador.',
+		'Alles, um Dateien aufzubewahren und zu teilen, im Browser.'
 	],
-	'landing.feature.sync.text': [
-		'The nuage daemon keeps a folder on your computer in sync with each space.',
-		'Le démon nuage garde un dossier de votre ordinateur synchronisé avec chaque espace.',
-		'El demonio nuage mantiene una carpeta de tu ordenador sincronizada con cada espacio.',
-		'Der nuage-Daemon hält einen Ordner auf deinem Computer mit jedem Bereich synchron.'
+	'landing.feature.view.title': [
+		'See it before you download',
+		'Voyez avant de télécharger',
+		'Míralo antes de descargar',
+		'Ansehen vor dem Download'
+	],
+	'landing.feature.view.text': [
+		'Photos, videos and PDFs open right in the browser.',
+		'Photos, vidéos et PDF s’ouvrent directement dans le navigateur.',
+		'Fotos, vídeos y PDF se abren directamente en el navegador.',
+		'Fotos, Videos und PDFs öffnen sich direkt im Browser.'
 	],
 	'landing.feature.share.title': ['Share with a link', 'Partagez par lien', 'Comparte con un enlace', 'Per Link teilen'],
 	'landing.feature.share.text': [
@@ -110,23 +110,22 @@ export const shell = {
 		'Bereiche fürs Team'
 	],
 	'landing.feature.spaces.text': [
-		'Shared drives with members and roles.',
-		'Des disques partagés, avec membres et rôles.',
-		'Unidades compartidas con miembros y roles.',
-		'Geteilte Laufwerke mit Mitgliedern und Rollen.'
+		'Shared folders with members and roles.',
+		'Des dossiers partagés, avec membres et rôles.',
+		'Carpetas compartidas con miembros y roles.',
+		'Geteilte Ordner mit Mitgliedern und Rollen.'
 	],
-	'landing.feature.mount.title': ['Open it anywhere', 'Ouvrez-le partout', 'Ábrelo donde quieras', 'Überall öffnen'],
-	'landing.feature.mount.text': [
-		'Mount your drive over WebDAV, or reach it from any MCP client.',
-		'Montez votre disque en WebDAV, ou ouvrez-le depuis un client MCP.',
-		'Monta tu unidad por WebDAV o ábrela desde cualquier cliente MCP.',
-		'Binde dein Laufwerk per WebDAV ein oder öffne es in einem MCP-Client.'
+	'landing.feature.trash.title': [
+		'Nothing lost by mistake',
+		'Rien de perdu par erreur',
+		'Nada se pierde por error',
+		'Nichts geht aus Versehen verloren'
 	],
-	'landing.downloadTitle': [
-		'Sync from your computer',
-		'Synchronisez depuis votre ordinateur',
-		'Sincroniza desde tu ordenador',
-		'Vom Computer synchronisieren'
+	'landing.feature.trash.text': [
+		'Deleted files wait in the trash, ready to restore.',
+		'Les fichiers supprimés attendent dans la corbeille, prêts à revenir.',
+		'Los archivos eliminados esperan en la papelera, listos para restaurar.',
+		'Gelöschte Dateien warten im Papierkorb auf ihre Wiederherstellung.'
 	],
 	'landing.downloadText': [
 		'One binary for macOS and Linux. Run nuage login, then nuage start.',
@@ -136,19 +135,19 @@ export const shell = {
 	],
 	'downloads.title': ['Download · Nuage', 'Télécharger · Nuage', 'Descargar · Nuage', 'Download · Nuage'],
 	'downloads.description': [
-		'Install the nuage CLI and sync daemon on macOS or Linux.',
-		'Installez le CLI et le démon de synchro nuage sur macOS ou Linux.',
-		'Instala la CLI y el demonio de sincronización nuage en macOS o Linux.',
-		'Installiere die nuage-CLI und den Sync-Daemon unter macOS oder Linux.'
+		'Install the nuage command-line sync client on macOS or Linux.',
+		'Installez le client de synchro nuage en ligne de commande sur macOS ou Linux.',
+		'Instala el cliente de sincronización nuage en línea de comandos en macOS o Linux.',
+		'Installieren Sie den nuage-Sync-Client für die Kommandozeile unter macOS oder Linux.'
 	],
 	'downloads.heading': ['Download Nuage', 'Télécharger Nuage', 'Descargar Nuage', 'Nuage herunterladen'],
 	'landing.pricing': ['Pricing', 'Tarifs', 'Precios', 'Preise'],
 	'landing.ctaTitle': ['Ready to start?', 'Prêt à commencer ?', '¿Listo para empezar?', 'Bereit loszulegen?'],
 	'landing.ctaText': [
-		'Sign in with your Facile account to open your cloud.',
-		'Connectez-vous avec votre compte Facile pour ouvrir votre cloud.',
-		'Inicia sesión con tu cuenta de Facile para abrir tu nube.',
-		'Melde dich mit deinem Facile-Konto an, um deine Cloud zu öffnen.'
+		'Create a free account and get 5 GB to start.',
+		'Créez un compte gratuit et commencez avec 5 Go.',
+		'Crea una cuenta gratuita y empieza con 5 GB.',
+		'Erstellen Sie ein kostenloses Konto und starten Sie mit 5 GB.'
 	],
 	'quota.group': ['Storage usage', 'Utilisation du stockage', 'Uso del almacenamiento', 'Speichernutzung'],
 	'quota.of': [

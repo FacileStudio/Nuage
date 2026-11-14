@@ -2,37 +2,53 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import {
-		DownloadCta,
-		DownloadSection,
-		Icon,
+		FeatureSplit,
+		ForDevelopers,
+		LANDING_HEADING,
+		LandingCta,
 		LandingFooter,
 		LandingHeader,
 		PricingPlans,
 		SignInWithFacile,
-		icons
+		WorksWith,
+		icons,
+		type DeveloperRow,
+		type FeatureItem,
+		type WorksWithApp
 	} from '@facile/muse';
 	import { backend } from '$lib/backend';
 	import AlbumDemo from '$lib/components/landing/AlbumDemo.svelte';
 	import PhoneTile from '$lib/components/landing/PhoneTile.svelte';
 	import SpacesTile from '$lib/components/landing/SpacesTile.svelte';
-	import SyncTile from '$lib/components/landing/SyncTile.svelte';
-	import { CHECKSUMS_URL, CLI_COMMANDS, RELEASES_URL } from '$lib/downloads';
-	import { nuage } from '$lib/icons';
+	import AppsTile from '$lib/components/landing/AppsTile.svelte';
+	import { nuage, suite } from '$lib/icons';
 	import { rememberLocale, t } from '$lib/i18n/index.svelte';
 
 	let redirecting = $state(true);
 
 	const signInHref = `${backend.baseUrl}/auth/oidc`;
 	const heroLines = $derived(t('landing.heroTitle').split('|'));
-	const features = $derived([
-		{ icon: icons.refresh, title: t('landing.feature.sync.title'), body: t('landing.feature.sync.text') },
-		{ icon: icons.external, title: t('landing.feature.share.title'), body: t('landing.feature.share.text') },
-		{ icon: nuage.team, title: t('landing.feature.spaces.title'), body: t('landing.feature.spaces.text') },
-		{ icon: icons.folder, title: t('landing.feature.mount.title'), body: t('landing.feature.mount.text') }
+	const features = $derived<FeatureItem[]>([
+		{ icon: nuage.share, title: t('landing.feature.share.title'), text: t('landing.feature.share.text') },
+		{ icon: nuage.team, title: t('landing.feature.spaces.title'), text: t('landing.feature.spaces.text') },
+		{ icon: suite.eye, title: t('landing.feature.view.title'), text: t('landing.feature.view.text') },
+		{ icon: nuage.restore, title: t('landing.feature.trash.title'), text: t('landing.feature.trash.text') }
+	]);
+	const apps = $derived<WorksWithApp[]>([
+		{ name: 'Plume', icon: suite.plume, line: t('landing.with.plume'), href: 'https://plume.facile.studio' },
+		{ name: 'Ardoise', icon: suite.ardoise, line: t('landing.with.ardoise'), href: 'https://ardoise.facile.studio' },
+		{ name: 'Toile', icon: suite.toile, line: t('landing.with.toile'), href: 'https://toile.facile.studio' },
+		{ name: 'Bulle', icon: suite.bulle, line: t('landing.with.bulle'), href: 'https://bulle.facile.studio' }
+	]);
+	const developers = $derived<DeveloperRow[]>([
+		{ kind: 'cli', text: t('landing.dev.cli'), command: 'brew install facilestudio/tap/nuage', href: '/downloads' },
+		{ icon: suite.webdav, title: 'WebDAV', text: t('landing.dev.webdav') },
+		{ kind: 'api', text: t('landing.dev.api'), href: 'https://nuage.facile.studio/docs' },
+		{ kind: 'mcp', text: t('landing.dev.mcp') },
+		{ kind: 'source', text: t('landing.dev.source'), href: 'https://github.com/FacileStudio/Nuage' }
 	]);
 	const links = $derived([
 		{ href: '#features', label: t('landing.navFeatures') },
-		{ href: '#download', label: t('landing.navDownload') },
 		{ href: '#pricing', label: t('landing.pricing') }
 	]);
 	const columns = $derived([
@@ -40,7 +56,6 @@
 			title: 'Nuage',
 			links: [
 				{ href: '#features', label: t('landing.navFeatures') },
-				{ href: '/downloads', label: t('landing.navDownload') },
 				{ href: '#pricing', label: t('landing.pricing') }
 			]
 		},
@@ -63,6 +78,11 @@
 	});
 </script>
 
+<svelte:head>
+	<title>{t('landing.metaTitle')}</title>
+	<meta name="description" content={t('landing.metaDescription')} />
+</svelte:head>
+
 {#if !redirecting}
 	<div class="min-h-dvh bg-fc-page text-fc-fg">
 		<LandingHeader appName="Nuage" icon={nuage.brand} {links} skipHref="#main">
@@ -77,79 +97,51 @@
 					{heroLines[0]}<br />{heroLines[1]}
 				</h1>
 				<p class="mt-5 max-w-xl text-fc-lg text-fc-fg-muted">{t('landing.heroText')}</p>
-				<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-					<SignInWithFacile href={signInHref} size="lg" />
-					<DownloadCta
-						href="/#download"
-						platforms={['macos', 'linux']}
-						label={t('landing.downloadCta')}
-						class="h-12 min-h-12 flex-nowrap self-center px-6 py-0 text-fc-md"
-					/>
-				</div>
+				<LandingCta {signInHref} align="center" class="mt-8 w-full sm:w-auto" />
 				<div class="mt-12 w-full sm:mt-16"><AlbumDemo /></div>
 			</section>
 
 			<section class="relative mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
-				<h2 class="mb-10 text-center font-fc-title text-2xl font-bold tracking-tight text-fc-fg sm:text-3xl">
-					{t('landing.cardsTitle')}
-				</h2>
+				<h2 class="mb-10 text-center {LANDING_HEADING}">{t('landing.cardsTitle')}</h2>
 				<div class="grid gap-6 md:grid-cols-3">
 					<SpacesTile />
 					<PhoneTile />
-					<SyncTile />
+					<AppsTile />
 				</div>
 			</section>
 
-			<section
+			<FeatureSplit
 				id="features"
-				class="mx-auto grid max-w-5xl scroll-mt-20 gap-10 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16"
-			>
-				<h2 class="font-fc-title text-fc-2xl font-bold tracking-tight sm:text-fc-3xl">
-					{t('landing.featuresTitle')}
-				</h2>
-				<ul class="grid gap-x-10 gap-y-8 sm:grid-cols-2">
-					{#each features as feature (feature.title)}
-						<li class="flex gap-4">
-							<span class="flex size-10 shrink-0 items-center justify-center rounded-fc-md bg-fc-surface">
-								<Icon icon={feature.icon} size={20} />
-							</span>
-							<div>
-								<h3 class="text-fc-md font-bold">{feature.title}</h3>
-								<p class="mt-1 text-fc-sm text-fc-fg-muted">{feature.body}</p>
-							</div>
-						</li>
-					{/each}
-				</ul>
-			</section>
-
-			<section id="download" class="mx-auto max-w-4xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">
-				<div class="mb-8 text-center">
-					<h2 class="font-fc-title text-fc-2xl font-bold tracking-tight sm:text-fc-3xl">{t('landing.downloadTitle')}</h2>
-					<p class="mt-3 text-fc-fg-muted">{t('landing.downloadText')}</p>
-				</div>
-				<DownloadSection
-					mode="device"
-					allHref="/downloads"
-					commands={[...CLI_COMMANDS]}
-					releasesHref={RELEASES_URL}
-					checksumsHref={CHECKSUMS_URL}
-					headingLevel={3}
-				/>
-			</section>
+				class="mx-auto w-full max-w-5xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20"
+				title={t('landing.featuresTitle')}
+				description={t('landing.featuresLine')}
+				{features}
+			/>
 
 			<div class="hidden has-[section]:block">
 				<div id="pricing" class="mx-auto max-w-5xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">
-					<PricingPlans title={t('landing.pricing')} highlight={['nuage.storage_gb']} />
+					<PricingPlans
+						title={t('landing.pricing')}
+						headingClass={LANDING_HEADING}
+						highlight={['nuage.storage_gb', 'ai.access']}
+						highlightOnly
+						recommended="pro"
+						suiteHref="https://suite.facile.studio/#tarifs"
+					/>
 				</div>
 			</div>
 
+			<WorksWith class="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 sm:py-20" {apps} />
+
+			<div id="developers" class="mx-auto w-full max-w-5xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">
+				<ForDevelopers rows={developers} description={t('landing.dev.text')} />
+			</div>
 			<section class="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 sm:py-24">
-				<h2 class="font-fc-title text-fc-2xl font-bold tracking-tight sm:text-fc-3xl">{t('landing.ctaTitle')}</h2>
+				<h2 class={LANDING_HEADING}>{t('landing.ctaTitle')}</h2>
 				<p class="mt-3 text-fc-fg-muted">{t('landing.ctaText')}</p>
-				<div class="mt-8 flex justify-center">
-					<SignInWithFacile href={signInHref} size="lg" />
-				</div>
+				<LandingCta {signInHref} align="center" class="mt-8" />
 			</section>
+
 		</main>
 
 		<LandingFooter

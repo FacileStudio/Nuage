@@ -49,6 +49,16 @@ export const nuage = {
 	previous: 'mdi:chevron-left'
 } as const;
 
+/** The suite apps the landing names, with their catalog marks (muse `scripts/brand/apps.ts`). */
+export const suite = {
+	plume: 'solar:pen-new-square-bold-duotone',
+	ardoise: 'solar:bill-list-bold-duotone',
+	toile: 'solar:tablet-bold-duotone',
+	bulle: 'solar:smile-circle-bold-duotone',
+	webdav: 'solar:server-square-linear',
+	eye: 'solar:eye-linear'
+} as const;
+
 /** File-type glyphs, keyed by the family `fileIcon` resolves a MIME type into. */
 const FILE_TYPES = {
 	image: 'solar:gallery-linear',

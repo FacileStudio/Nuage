@@ -1,7 +1,7 @@
 {
   "name": "Nuage",
   "short_name": "Nuage",
-  "description": "The studio drive, connected to every tool through an S3-compatible API. Share files with no middleman.",
+  "description": "Keep your photos and documents, share them by link and work together in team folders. Free to start.",
   "icons": [
     {
       "src": "/icon-192.png",
