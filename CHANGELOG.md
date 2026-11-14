@@ -10,6 +10,16 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-11-14
+
+### Security
+
+- API: porte v0.20.1 and porte/mcpauth v0.3.1. porte v0.20.0 marked a browser session token with `b-`, which about 1 in 4096 random CLI or API tokens also start with, so such a session could confirm a pending MCP action on `/pending`. The mark is now `b~`, which a random token never contains.
+
+### Upgrade notes
+
+- Browser cookies issued by v0.20.0 or v0.20.1 stop counting as a browser session, so each person signs in once more before they can confirm an action.
+
 ## [0.20.1] - 2026-11-14
 
 ### Fixed
