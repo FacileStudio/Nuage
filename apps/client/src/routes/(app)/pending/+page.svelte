@@ -7,6 +7,7 @@
 	import PendingCard from '$lib/components/PendingCard.svelte';
 	import { icons } from '$lib/icons';
 	import { t } from '$lib/i18n/index.svelte';
+	import { refusesOwnSession } from '$lib/session-refusal';
 
 	let actions = $state<PendingAction[]>([]);
 	let links = $state<{ id: string; name: string; url: string }[]>([]);
@@ -23,12 +24,18 @@
 	onMount(load);
 
 	/**
-	 * A 403 means the API would not take this credential for a confirmation: a cookie from before
-	 * the browser-session mark, or a CLI or app session. The person signs in again in the browser.
+	 * porte's own-session refusal means the API would not take this credential for a confirmation:
+	 * a cookie from before the browser-session mark, or a CLI or app session. The person signs in
+	 * again in the browser. Any other 403 is the server's own answer and keeps its message.
 	 */
 	function refused(err: unknown): boolean {
-		signInAgain = err instanceof ApiError && err.status === 403;
+		signInAgain = refusesOwnSession(err);
 		return signInAgain;
+	}
+
+	/** The server's own words for any other 403, else the fallback text. */
+	function reason(err: unknown, fallback: string): string {
+		return err instanceof ApiError && err.status === 403 ? err.message : fallback;
 	}
 
 	/** Keeps this page for the return after the sign-in, as the app layout does. */
@@ -44,7 +51,7 @@
 		try {
 			actions = (await backend.listPending()).actions;
 		} catch (err) {
-			if (!refused(err)) toast.danger(t('pending.loadFailed'));
+			if (!refused(err)) toast.danger(reason(err, t('pending.loadFailed')));
 		}
 		loading = false;
 	}
