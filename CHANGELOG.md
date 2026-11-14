@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.22.3] - 2026-11-14
+
+### Changed
+
+- build(compose): `nuage-api` no longer sets `container_name`, so Dokploy can roll it with the docker zdt plugin (zero-downtime deploys). Compose DNS still answers to the service name. The service now carries the label `journal.app: nuage-api`, so its Journal app name is unchanged.
+
 ## [0.22.2] - 2026-11-14
 
 ### Fixed
