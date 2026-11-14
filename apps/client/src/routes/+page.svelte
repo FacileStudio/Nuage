@@ -110,7 +110,6 @@
 					releasesHref={RELEASES_URL}
 					checksumsHref={CHECKSUMS_URL}
 					headingLevel={3}
-					class="max-sm:items-center"
 				/>
 			</section>
 
