@@ -29,6 +29,7 @@ export const nuage = {
 	login: 'solar:login-3-linear',
 	lock: 'solar:lock-linear',
 	memberAdd: 'solar:user-plus-linear',
+	team: 'solar:users-group-rounded-linear',
 	personal: 'solar:user-circle-linear',
 	move: 'solar:move-to-folder-linear',
 	parent: 'solar:arrow-left-up-linear',

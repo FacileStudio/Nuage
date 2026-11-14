@@ -64,36 +64,75 @@ export const shell = {
 		'Deine Dateien.|Deine Cloud.'
 	],
 	'landing.heroText': [
-		'Nuage is a self-hosted file storage platform. Upload, organize into folders, share with a link — done.',
-		'Nuage est une plateforme de stockage de fichiers auto-hébergée. Déposez, rangez dans des dossiers, partagez par lien : c’est tout.',
-		'Nuage es una plataforma de almacenamiento de archivos autoalojada. Sube, organiza en carpetas y comparte con un enlace: así de simple.',
-		'Nuage ist eine selbst gehostete Plattform für Dateispeicher. Hochladen, in Ordnern ordnen, per Link teilen: fertig.'
+		'Store your files, sync them with your computer, share them with a link.',
+		'Stockez vos fichiers, synchronisez-les avec votre ordinateur, partagez-les par lien.',
+		'Guarda tus archivos, sincronízalos con tu ordenador y compártelos con un enlace.',
+		'Speichere deine Dateien, synchronisiere sie mit deinem Computer, teile sie per Link.'
 	],
-	'landing.feature.upload.title': ['Upload anything', 'Déposez tout', 'Sube lo que quieras', 'Alles hochladen'],
-	'landing.feature.upload.text': [
-		'Drag and drop files or click to upload. Any file type, any size.',
-		'Glissez-déposez vos fichiers ou cliquez pour les envoyer. Tous les types, toutes les tailles.',
-		'Arrastra y suelta archivos o haz clic para subirlos. Cualquier tipo, cualquier tamaño.',
-		'Dateien per Drag-and-drop oder Klick hochladen. Jeder Dateityp, jede Größe.'
+	'landing.navFeatures': ['Features', 'Fonctionnalités', 'Funciones', 'Funktionen'],
+	'landing.navDownload': ['Download', 'Télécharger', 'Descargar', 'Download'],
+	'landing.downloadCta': [
+		'Get the sync client',
+		'Installer le client de synchro',
+		'Instala el cliente de sincronización',
+		'Sync-Client installieren'
 	],
-	'landing.feature.folders.title': [
-		'Organize with folders',
-		'Rangez avec des dossiers',
-		'Organiza con carpetas',
-		'Mit Ordnern ordnen'
+	'landing.demoLabel': [
+		'A file saved on the computer syncs to Nuage, then gets shared with a link.',
+		'Un fichier enregistré sur l’ordinateur arrive dans Nuage, puis part en lien de partage.',
+		'Un archivo guardado en el ordenador se sincroniza con Nuage y se comparte con un enlace.',
+		'Eine auf dem Computer gespeicherte Datei landet in Nuage und wird per Link geteilt.'
 	],
-	'landing.feature.folders.text': [
-		'Create nested folders, move files around, keep everything tidy.',
-		'Créez des dossiers imbriqués, déplacez vos fichiers, gardez tout en ordre.',
-		'Crea carpetas anidadas, mueve archivos y mantén todo en orden.',
-		'Lege verschachtelte Ordner an, verschiebe Dateien und halte alles aufgeräumt.'
+	'landing.featuresTitle': ['What Nuage does', 'Ce que fait Nuage', 'Qué hace Nuage', 'Was Nuage kann'],
+	'landing.feature.sync.title': [
+		'Sync a folder',
+		'Synchronisez un dossier',
+		'Sincroniza una carpeta',
+		'Einen Ordner synchronisieren'
 	],
-	'landing.feature.hosted.title': ['Self-hosted', 'Auto-hébergé', 'Autoalojado', 'Selbst gehostet'],
-	'landing.feature.hosted.text': [
-		'Your files stay on your server. No third-party cloud, no data harvesting.',
-		'Vos fichiers restent sur votre serveur. Pas de cloud tiers, pas de collecte de données.',
-		'Tus archivos se quedan en tu servidor. Sin nube de terceros ni recopilación de datos.',
-		'Deine Dateien bleiben auf deinem Server. Keine Fremd-Cloud, kein Datensammeln.'
+	'landing.feature.sync.text': [
+		'The nuage daemon keeps a folder on your computer in sync with each space.',
+		'Le démon nuage garde un dossier de votre ordinateur synchronisé avec chaque espace.',
+		'El demonio nuage mantiene una carpeta de tu ordenador sincronizada con cada espacio.',
+		'Der nuage-Daemon hält einen Ordner auf deinem Computer mit jedem Bereich synchron.'
+	],
+	'landing.feature.share.title': ['Share with a link', 'Partagez par lien', 'Comparte con un enlace', 'Per Link teilen'],
+	'landing.feature.share.text': [
+		'Links for viewing or editing, with an optional expiry date.',
+		'Des liens en lecture ou en écriture, avec une date d’expiration si besoin.',
+		'Enlaces de lectura o edición, con fecha de caducidad opcional.',
+		'Links zum Ansehen oder Bearbeiten, auf Wunsch mit Ablaufdatum.'
+	],
+	'landing.feature.spaces.title': [
+		'Spaces for your team',
+		'Des espaces d’équipe',
+		'Espacios para tu equipo',
+		'Bereiche fürs Team'
+	],
+	'landing.feature.spaces.text': [
+		'Shared drives with members and roles.',
+		'Des disques partagés, avec membres et rôles.',
+		'Unidades compartidas con miembros y roles.',
+		'Geteilte Laufwerke mit Mitgliedern und Rollen.'
+	],
+	'landing.feature.mount.title': ['Open it anywhere', 'Ouvrez-le partout', 'Ábrelo donde quieras', 'Überall öffnen'],
+	'landing.feature.mount.text': [
+		'Mount your drive over WebDAV, or reach it from any MCP client.',
+		'Montez votre disque en WebDAV, ou ouvrez-le depuis un client MCP.',
+		'Monta tu unidad por WebDAV o ábrela desde cualquier cliente MCP.',
+		'Binde dein Laufwerk per WebDAV ein oder öffne es in einem MCP-Client.'
+	],
+	'landing.downloadTitle': [
+		'Sync from your computer',
+		'Synchronisez depuis votre ordinateur',
+		'Sincroniza desde tu ordenador',
+		'Vom Computer synchronisieren'
+	],
+	'landing.downloadText': [
+		'One binary for macOS and Linux. Run nuage login, then nuage start.',
+		'Un seul binaire pour macOS et Linux. Lancez nuage login, puis nuage start.',
+		'Un solo binario para macOS y Linux. Ejecuta nuage login y luego nuage start.',
+		'Ein Binary für macOS und Linux. Führe nuage login aus, dann nuage start.'
 	],
 	'landing.pricing': ['Pricing', 'Tarifs', 'Precios', 'Preise'],
 	'landing.ctaTitle': ['Ready to start?', 'Prêt à commencer ?', '¿Listo para empezar?', 'Bereit loszulegen?'],
