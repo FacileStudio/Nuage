@@ -71,6 +71,13 @@
 		{/each}
 	</div>
 
+	{#if done === 0 && !overlay}
+		<div class="ap-empty" transition:fade={{ duration: 200 }}>
+			<Icon icon={icons.upload} size={24} />
+			<span class="ap-here">{t('files.emptyTitle')}</span>
+		</div>
+	{/if}
+
 	{#if overlay}
 		<div class="ap-drop" transition:fade={{ duration: 160 }}>
 			<Icon icon={icons.upload} size={28} />
@@ -209,6 +216,18 @@
 		flex-direction: column;
 		gap: 6px;
 		padding: 10px 12px;
+	}
+	.ap-empty {
+		position: absolute;
+		inset: 120px 16px 16px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 8px;
+		padding-bottom: 40px;
+		color: var(--color-fc-fg-muted);
+		pointer-events: none;
 	}
 	.ap-drop {
 		position: absolute;

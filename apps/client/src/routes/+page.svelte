@@ -26,9 +26,9 @@
 	const heroLines = $derived(t('landing.heroTitle').split('|'));
 	const features = $derived([
 		{ icon: icons.refresh, title: t('landing.feature.sync.title'), body: t('landing.feature.sync.text') },
-		{ icon: nuage.link, title: t('landing.feature.share.title'), body: t('landing.feature.share.text') },
+		{ icon: icons.external, title: t('landing.feature.share.title'), body: t('landing.feature.share.text') },
 		{ icon: nuage.team, title: t('landing.feature.spaces.title'), body: t('landing.feature.spaces.text') },
-		{ icon: nuage.folderOpen, title: t('landing.feature.mount.title'), body: t('landing.feature.mount.text') }
+		{ icon: icons.folder, title: t('landing.feature.mount.title'), body: t('landing.feature.mount.text') }
 	]);
 	const links = $derived([
 		{ href: '#features', label: t('landing.navFeatures') },
@@ -100,21 +100,26 @@
 				</div>
 			</section>
 
-			<section id="features" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">
-				<h2 class="text-center font-fc-title text-fc-2xl font-bold tracking-tight sm:text-fc-3xl">
+			<section
+				id="features"
+				class="mx-auto grid max-w-5xl scroll-mt-20 gap-10 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16"
+			>
+				<h2 class="font-fc-title text-fc-2xl font-bold tracking-tight sm:text-fc-3xl">
 					{t('landing.featuresTitle')}
 				</h2>
-				<div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-					{#each features as feature (feature.icon)}
-						<div class="rounded-fc-lg bg-fc-component p-6">
-							<span class="flex size-10 items-center justify-center rounded-fc-md bg-fc-surface">
+				<ul class="grid gap-x-10 gap-y-8 sm:grid-cols-2">
+					{#each features as feature (feature.title)}
+						<li class="flex gap-4">
+							<span class="flex size-10 shrink-0 items-center justify-center rounded-fc-md bg-fc-surface">
 								<Icon icon={feature.icon} size={20} />
 							</span>
-							<h3 class="mt-4 text-fc-md font-bold">{feature.title}</h3>
-							<p class="mt-1.5 text-fc-sm text-fc-fg-muted">{feature.body}</p>
-						</div>
+							<div>
+								<h3 class="text-fc-md font-bold">{feature.title}</h3>
+								<p class="mt-1 text-fc-sm text-fc-fg-muted">{feature.body}</p>
+							</div>
+						</li>
 					{/each}
-				</div>
+				</ul>
 			</section>
 
 			<section id="download" class="mx-auto max-w-4xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">

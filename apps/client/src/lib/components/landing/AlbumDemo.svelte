@@ -36,18 +36,19 @@
 	}
 
 	function reset() {
-		stack.visible = false;
 		overlay = false;
 		uploading = false;
 		done = 0;
 		dialog = false;
 		week = false;
 		copied = false;
-		cursor.visible = false;
 		home();
+		stack.visible = true;
+		cursor.visible = true;
 	}
 
 	function poster() {
+		stack.visible = false;
 		done = total;
 		copied = true;
 	}
@@ -59,24 +60,21 @@
 	}
 
 	async function script(act: Act) {
-		home();
-		await act.wait(600);
-		stack.visible = true;
-		cursor.visible = true;
-		await act.wait(600);
-		const drop = act.point(grid, 0.5, 0.22);
+		reset();
+		await act.wait(900);
+		const drop = act.point(grid, 0.5, 0.3);
 		stack.x = drop.x;
 		stack.y = drop.y;
 		await act.move(cursor, drop, 700);
 		overlay = true;
-		await act.wait(500);
+		await act.wait(450);
 		await act.click(cursor, () => {
 			stack.visible = false;
 			overlay = false;
 			uploading = true;
 		});
-		await act.count(total, (v) => (done = v), 420);
-		await act.wait(500);
+		await act.count(total, (v) => (done = v), 380);
+		await act.wait(400);
 		uploading = false;
 		await act.wait(300);
 		await press(act, shareButton, () => (dialog = true));
@@ -87,12 +85,16 @@
 			dialog = false;
 			copied = true;
 		});
-		await act.wait(2200);
+		await act.wait(2400);
+		cursor.visible = false;
+		await act.wait(350);
 		copied = false;
 		done = 0;
-		cursor.visible = false;
 		home();
-		await act.wait(900);
+		await act.wait(950);
+		stack.visible = true;
+		cursor.visible = true;
+		await act.wait(300);
 	}
 </script>
 
@@ -130,7 +132,7 @@
 >
 	{#snippet children({ compact })}
 		{#if compact}
-			<span class="ad-from" style="left:250px;top:400px" bind:this={from}></span>
+			<span class="ad-from" style="left:262px;top:270px" bind:this={from}></span>
 			<Window style="top:12px;left:12px;width:334px;height:464px">
 				{@render body(true)}
 			</Window>
