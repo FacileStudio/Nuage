@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/mimetype"
+	"github.com/FacileStudio/tronc/errors"
 	mcpkit "github.com/FacileStudio/tronc/mcp"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -83,7 +84,7 @@ func (t *toolset) saveFile(ctx context.Context, req *sdk.CallToolRequest, in sav
 	mimeType := savedType(name, text, mimetype.Resolve(name, ""))
 	f, created, err := t.Files.Upload(ctx, userID, name, mimeType, int64(len(data)), bytes.NewReader(data), folderID, spaceID)
 	if err != nil {
-		return nil, writeOutput{}, mcpkit.Failure(err, hintItem)
+		return nil, writeOutput{}, storageFull(err, "nothing was saved")
 	}
 	out := writeOutput{Status: "created", Item: fileItem(*f, "", false)}
 	switch {
@@ -107,9 +108,24 @@ func (t *toolset) replace(ctx context.Context, userID, fileID int64, data []byte
 	mimeType := savedType(current.Name, text, mimetype.Resolve(current.Name, current.MimeType))
 	f, err := t.Files.Replace(ctx, userID, fileID, bytes.NewReader(data), int64(len(data)), mimeType)
 	if err != nil {
-		return nil, writeOutput{}, mcpkit.Failure(err, hintItem)
+		return nil, writeOutput{}, storageFull(err, "the file was not replaced and keeps its previous content")
 	}
 	return nil, writeOutput{Status: "replaced", Item: fileItem(*f, "", false), Note: "The previous content is kept as a version in Nuage."}, nil
+}
+
+// storageFull is mcpkit.Failure that, for a full storage plan, says what
+// was left untouched and offers freeing space or upgrading, with the upgrade
+// page only when a client may show it.
+func storageFull(err error, outcome string) error {
+	var limit mcpkit.PlanLimit
+	if !stderrors.As(err, &limit) {
+		return mcpkit.Failure(err, hintItem)
+	}
+	message := "The user's storage plan is full, so " + outcome + ". Tell the user to free some space or upgrade"
+	if _, link := limit.PlanLimit(); errors.SafeUpgradeURL(link) {
+		message += " at " + link
+	}
+	return stderrors.New(message + ".")
 }
 
 // createFolder is nuage_create_folder. A folder of that name already in
