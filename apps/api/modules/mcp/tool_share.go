@@ -34,16 +34,16 @@ func (t *toolset) createShare(ctx context.Context, req *sdk.CallToolRequest, in 
 	}
 	file, folder, err := t.itemOf(ctx, userID, in.Type, in.ID, false)
 	if err != nil {
-		return nil, actionOutput{}, failure(err, hintItem)
+		return nil, actionOutput{}, mcpkit.Failure(err, hintItem)
 	}
 	result, outcome, err := t.confirm.Request(ctx, req, kindShare, shareTarget(in.Type, in.ID, in.ExpiresInDays), shareQuestion(file, folder, in.ExpiresInDays))
 	if err != nil {
-		return nil, actionOutput{}, failure(err, hintItem)
+		return nil, actionOutput{}, mcpkit.Failure(err, hintItem)
 	}
 	if result != nil {
 		return result, actionOutput{}, nil
 	}
-	return nil, actionOutput{Status: outcome.Status, Type: in.Type, ID: in.ID, ConfirmURL: outcome.ConfirmURL, Message: waiting}, nil
+	return nil, actionOutput{Status: outcome.Status, Type: in.Type, ID: in.ID, ConfirmURL: outcome.ConfirmURL, Message: outcome.Message}, nil
 }
 
 // resumeShare handles the retry that carries the person's answer, and
@@ -55,7 +55,7 @@ func (t *toolset) resumeShare(ctx context.Context, req *sdk.CallToolRequest) (*s
 	}
 	outcome, err := t.confirm.Resume(ctx, req, kindShare)
 	if err != nil {
-		return nil, actionOutput{}, failure(err, "Call nuage_create_share again to ask the user afresh.")
+		return nil, actionOutput{}, mcpkit.Failure(err, "Call nuage_create_share again to ask the user afresh.")
 	}
 	if outcome.Status == mcpkit.StatusDeclined {
 		return nil, actionOutput{Status: mcpkit.StatusDeclined, Message: "The user declined. No link was made."}, nil
@@ -63,7 +63,7 @@ func (t *toolset) resumeShare(ctx context.Context, req *sdk.CallToolRequest) (*s
 	r, _ := refOf(outcome.Action)
 	made, err := t.linkFor(ctx, userID, r, outcome.Action.CreatedAt)
 	if err != nil {
-		return nil, actionOutput{}, failure(err, hintShare)
+		return nil, actionOutput{}, mcpkit.Failure(err, hintShare)
 	}
 	return nil, actionOutput{Status: "shared", Type: r.kind, ID: r.id, Share: made, Message: "The user confirmed. Give them share.url."}, nil
 }
@@ -121,7 +121,7 @@ func (t *toolset) revokeShare(ctx context.Context, req *sdk.CallToolRequest, in 
 		return nil, actionOutput{}, err
 	}
 	if err := t.Sharing.Revoke(ctx, userID, in.ShareID); err != nil {
-		return nil, actionOutput{}, failure(err, hintShare)
+		return nil, actionOutput{}, mcpkit.Failure(err, hintShare)
 	}
 	return nil, actionOutput{Status: "revoked", ID: in.ShareID, Message: "The link no longer works."}, nil
 }
@@ -132,18 +132,18 @@ func (t *toolset) listShares(ctx context.Context, req *sdk.CallToolRequest, in s
 	if err != nil {
 		return nil, sharesOutput{}, err
 	}
-	var at position
-	if err := mcpkit.DecodeCursor(in.Cursor, &at); err != nil || at.Offset < 0 {
-		return nil, sharesOutput{}, mcpkit.ErrCursor
+	offset, err := mcpkit.Offset(in.Cursor)
+	if err != nil {
+		return nil, sharesOutput{}, err
 	}
 	list, err := t.Sharing.ListMine(ctx, userID)
 	if err != nil {
-		return nil, sharesOutput{}, failure(err, "")
+		return nil, sharesOutput{}, mcpkit.Failure(err, "")
 	}
-	if at.Offset > len(list) {
+	if offset > len(list) {
 		return nil, sharesOutput{}, mcpkit.ErrCursor
 	}
-	rest := list[at.Offset:min(at.Offset+clamp(in.Limit, defaultListLimit, maxListLimit), len(list))]
+	rest := list[offset:min(offset+clamp(in.Limit, defaultListLimit, maxListLimit), len(list))]
 	shares := make([]share, len(rest))
 	for i, s := range rest {
 		shares[i] = t.shareOf(s)
@@ -151,9 +151,5 @@ func (t *toolset) listShares(ctx context.Context, req *sdk.CallToolRequest, in s
 	keep := mcpkit.FitCount(len(shares), func(n int) int {
 		return mcpkit.EncodedSize(sharesOutput{Shares: shares[:n], Total: len(list), NextCursor: "next-cursor-placeholder"})
 	})
-	out := sharesOutput{Shares: shares[:keep], Total: len(list)}
-	if at.Offset+keep < len(list) {
-		out.NextCursor = mcpkit.EncodeCursor(position{Offset: at.Offset + keep})
-	}
-	return nil, out, nil
+	return nil, sharesOutput{Shares: shares[:keep], Total: len(list), NextCursor: mcpkit.Cursor(offset+keep, len(list))}, nil
 }

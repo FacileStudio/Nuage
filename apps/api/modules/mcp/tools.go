@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/FacileStudio/porte/forfait"
 	"github.com/FacileStudio/porte/mcpauth"
 	mcpkit "github.com/FacileStudio/tronc/mcp"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -68,19 +67,6 @@ func (t *toolset) userOf(ctx context.Context, req *sdk.CallToolRequest) (int64, 
 		return 0, errOtherActor
 	}
 	return identity.UserID, nil
-}
-
-// failure is mcpkit.Failure that also explains a full storage plan.
-func failure(err error, hint string) error {
-	var full *forfait.LimitError
-	if stderrors.As(err, &full) {
-		message := "The user's storage plan is full, so nothing was saved. Tell the user to free some space or upgrade"
-		if full.UpgradeURL != "" {
-			message += " at " + full.UpgradeURL
-		}
-		return stderrors.New(message + ".")
-	}
-	return mcpkit.Failure(err, hint)
 }
 
 // optional turns an id argument into a pointer, nil for 0.

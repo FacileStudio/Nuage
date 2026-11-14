@@ -28,7 +28,7 @@ func (t *toolset) readFile(ctx context.Context, req *sdk.CallToolRequest, in rea
 	}
 	body, f, err := t.Files.Open(ctx, userID, in.FileID)
 	if err != nil {
-		return nil, readOutput{}, failure(err, hintItem)
+		return nil, readOutput{}, mcpkit.Failure(err, hintItem)
 	}
 	defer func() { _ = body.Close() }()
 	out := readOutput{FileID: f.ID, Name: f.Name, MimeType: f.MimeType, Size: f.Size, Offset: in.Offset}

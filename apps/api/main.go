@@ -54,6 +54,7 @@ import (
 	"github.com/FacileStudio/tronc/httpjson"
 	"github.com/FacileStudio/tronc/httpx"
 	"github.com/FacileStudio/tronc/logger"
+	mcpkit "github.com/FacileStudio/tronc/mcp"
 	troncmiddleware "github.com/FacileStudio/tronc/middleware"
 	"github.com/FacileStudio/tronc/spa"
 
@@ -527,6 +528,9 @@ func run() int {
 	}
 	if deletions != nil {
 		go deletions.Run(shutdownSignal)
+	}
+	if mcpService != nil {
+		go mcpkit.KeepPruned(shutdownSignal, mcpkit.PostgresPending{DB: sqlDB}, 0, 0, appLogger)
 	}
 
 	appLogger.Info("server starting", slog.String("addr", addr))
