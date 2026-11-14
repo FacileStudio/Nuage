@@ -10,6 +10,23 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-14
+
+### Changed
+
+- API: tronc v0.23.1, porte v0.20.0, porte/mcpauth v0.3.0 and porte/forfait v0.1.3. The MCP server uses the tronc kit for its state key (byte-identical), list pagers, waiting texts, plan errors and the hourly prune of finished actions.
+- API: `nuage_save_file` on a full storage plan says nothing was saved, or that the file was not replaced and keeps its content, and offers freeing space or upgrading. The upgrade link is shown only when it is a safe URL.
+
+### Fixed
+
+- API: only the browser session cookie can list, confirm or dismiss a pending MCP action on `/pending`. A bearer token, a CLI, device or mobile session, or an API key now gets 403. With tronc v0.23.1, a confirmation asked by one OAuth client is never reused by another.
+- Client: when the confirm page is refused, it asks the person to sign in again in this browser instead of showing the raw error.
+
+### Upgrade notes
+
+- Each person signs in once in the browser before they can confirm an action.
+- A `nuage_list_folder` or `nuage_list_shares` cursor issued before the deploy is refused once; the model starts the listing again.
+
 ## [0.19.0] - 2026-11-14
 
 ### Added
