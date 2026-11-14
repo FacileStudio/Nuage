@@ -39,7 +39,6 @@ services:
     - '9000'
     - '9001'
   nuage-api:
-    container_name: nuage-api
     build:
       context: .
       dockerfile: Dockerfile
@@ -50,6 +49,7 @@ services:
     - default
     - dokploy-network
     labels:
+      journal.app: nuage-api
       traefik.enable: 'true'
       traefik.docker.network: dokploy-network
       traefik.http.routers.nuage-web.rule: Host(`nuage.facile.studio`)
