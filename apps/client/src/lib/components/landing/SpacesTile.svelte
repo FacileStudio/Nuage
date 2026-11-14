@@ -1,16 +1,31 @@
 <script lang="ts">
-	import { Bar, Stage, Tile, grow, type Act } from '@facile/mise-en-scene';
+	import { flip } from 'svelte/animate';
+	import { fade } from 'svelte/transition';
+	import { Bar, Stage, Tile, type Act } from '@facile/mise-en-scene';
 	import { Avatar, Icon, icons } from '@facile/muse';
 	import { fileIcon } from '$lib/icons';
 	import { t } from '$lib/i18n/index.svelte';
 
 	const MEMBERS = ['Léa Martin', 'Sam Okafor', 'Inès Roy'];
+	const TONES: Record<string, string> = {
+		'Léa Martin': 'bg-(--color-fc-chart-3) text-white',
+		'Sam Okafor': 'bg-(--color-fc-chart-2) text-white',
+		'Inès Roy': 'bg-(--color-fc-chart-5) text-white'
+	};
+	const FOLDERS = ['56%', '44%', '62%'];
 	const ARRIVALS = [
 		{ file: 'pitch-deck.pdf', by: 'Sam Okafor' },
 		{ file: 'logo-final.png', by: 'Inès Roy' }
 	];
 
 	let arrived = $state(0);
+
+	const rows = $derived([
+		...ARRIVALS.slice(0, arrived)
+			.reverse()
+			.map((row) => ({ key: row.file, ...row, w: '' })),
+		...FOLDERS.map((w) => ({ key: w, file: '', by: '', w }))
+	].slice(0, 3));
 
 	function reset() {
 		arrived = 0;
@@ -38,25 +53,28 @@
 					<span class="min-w-0 flex-1 truncate text-fc-sm font-bold text-fc-fg">{t('landing.card.spaces.name')}</span>
 					<span class="flex -space-x-1.5">
 						{#each MEMBERS as name (name)}
-							<span class="sp-ring rounded-fc-pill"><Avatar {name} size="sm" class="size-6 text-[10px]" /></span>
+							<span class="sp-ring rounded-fc-pill"><Avatar {name} size="sm" class="size-6 text-[10px] {TONES[name]}" /></span>
 						{/each}
 					</span>
 				</div>
-				{#each ARRIVALS.slice(0, arrived).reverse() as row (row.file)}
-					<div class="pb-1" transition:grow={{ duration: 380 }}>
-						<div class="flex h-9 items-center gap-2.5 rounded-fc-md bg-fc-surface px-2.5">
-							<Icon icon={fileIcon(row.file)} size={16} class="shrink-0 text-fc-fg-muted" />
-							<span class="min-w-0 flex-1 truncate text-fc-xs font-bold text-fc-fg">{row.file}</span>
-							<Avatar name={row.by} size="sm" class="size-5 text-[9px]" />
+				<div class="flex flex-col gap-1">
+					{#each rows as row (row.key)}
+						<div animate:flip={{ duration: 360 }} in:fade={{ duration: 260 }} out:fade={{ duration: 160 }}>
+							{#if row.file}
+								<div class="flex h-9 items-center gap-2.5 rounded-fc-md bg-fc-surface px-2.5">
+									<Icon icon={fileIcon(row.file)} size={16} class="shrink-0 text-fc-fg-muted" />
+									<span class="min-w-0 flex-1 truncate text-fc-xs font-bold text-fc-fg">{row.file}</span>
+									<Avatar name={row.by} size="sm" class="size-5 text-[9px] {TONES[row.by]}" />
+								</div>
+							{:else}
+								<div class="flex h-9 items-center gap-2.5 px-2.5">
+									<Icon icon={icons.folder} size={16} class="shrink-0 text-fc-fg-muted" />
+									<Bar w={row.w} />
+								</div>
+							{/if}
 						</div>
-					</div>
-				{/each}
-				{#each ['56%', '44%', '62%'] as w (w)}
-					<div class="flex h-9 shrink-0 items-center gap-2.5 px-2.5">
-						<Icon icon={icons.folder} size={16} class="shrink-0 text-fc-fg-muted" />
-						<Bar {w} />
-					</div>
-				{/each}
+					{/each}
+				</div>
 			</div>
 		{/snippet}
 	</Stage>

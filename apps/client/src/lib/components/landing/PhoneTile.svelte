@@ -38,19 +38,20 @@
 <Tile title={t('landing.card.phone.title')} body={t('landing.card.phone.body')}>
 	<Stage width={320} height={240} {script} {reset} poster={() => (viewing = 1)}>
 		{#snippet children()}
-			<div class="ph-phone absolute top-3 left-1/2 h-[196px] w-[132px] -translate-x-1/2 rounded-[22px] bg-fc-inverse p-1.5">
-				<div class="relative flex h-full flex-col gap-2 overflow-hidden rounded-[17px] bg-fc-page px-2 pt-3">
-					<div class="flex items-center gap-1 text-[9px] font-bold text-fc-fg">
+			<div class="ph-phone absolute top-2 left-1/2 h-[224px] w-[108px] -translate-x-1/2 rounded-[20px] bg-fc-inverse p-[5px]">
+				<div class="relative flex h-full flex-col gap-2 overflow-hidden rounded-[15px] bg-fc-page px-1.5 pt-5">
+					<span class="absolute top-1.5 left-1/2 h-[7px] w-8 -translate-x-1/2 rounded-full bg-fc-inverse"></span>
+					<div class="flex items-center gap-1 px-0.5 text-[8px] font-bold text-fc-fg">
 						<Icon icon={nuage.brand} size={11} />
 						<span class="truncate">{t('landing.album.folder')}</span>
 					</div>
-					<div class="grid grid-cols-2 gap-1.5">
+					<div class="grid grid-cols-2 gap-1">
 						{#each SCENES as scene, i (i)}
-							<div class="relative rounded-[5px] bg-fc-component p-1 pb-1.5">
+							<div class="relative rounded-[4px] bg-fc-component p-[3px] pb-1">
 								<Photo {scene} class="rounded-[3px]" />
 								<div class="mt-1 flex items-center justify-between text-fc-fg-muted">
-									<span class="h-1 w-6 rounded-full bg-fc-fg/15"></span>
-									<Icon icon={icons.download} size={8} />
+									<span class="h-1 w-5 rounded-full bg-fc-fg/15"></span>
+									<Icon icon={icons.download} size={7} />
 								</div>
 								{#if tap === i}
 									<span class="ph-tap" transition:fade={{ duration: 160 }}></span>

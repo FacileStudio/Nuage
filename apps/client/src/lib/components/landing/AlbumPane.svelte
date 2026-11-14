@@ -183,6 +183,8 @@
 	.ap-grid {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
+		align-content: start;
+		align-items: start;
 		gap: 12px;
 		min-height: 290px;
 	}
@@ -214,8 +216,9 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: center;
+		justify-content: flex-end;
 		gap: 8px;
+		padding-bottom: 40px;
 		border-radius: var(--radius-fc-lg);
 		background: color-mix(in oklab, var(--color-fc-accent) 10%, transparent);
 		font-weight: 600;
