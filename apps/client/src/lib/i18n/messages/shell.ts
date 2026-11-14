@@ -78,10 +78,10 @@ export const shell = {
 		'Sync-Client installieren'
 	],
 	'landing.demoLabel': [
-		'A file saved on the computer syncs to Nuage, then gets shared with a link.',
-		'Un fichier enregistré sur l’ordinateur arrive dans Nuage, puis part en lien de partage.',
-		'Un archivo guardado en el ordenador se sincroniza con Nuage y se comparte con un enlace.',
-		'Eine auf dem Computer gespeicherte Datei landet in Nuage und wird per Link geteilt.'
+		'Holiday photos dropped into a folder upload to Nuage, then the album gets shared with a link.',
+		'Des photos de vacances glissées dans un dossier arrivent dans Nuage, puis l’album part en lien de partage.',
+		'Unas fotos de vacaciones arrastradas a una carpeta se suben a Nuage y el álbum se comparte con un enlace.',
+		'Urlaubsfotos landen per Drag-and-drop in Nuage, dann wird das Album per Link geteilt.'
 	],
 	'landing.featuresTitle': ['What Nuage does', 'Ce que fait Nuage', 'Qué hace Nuage', 'Was Nuage kann'],
 	'landing.feature.sync.title': [

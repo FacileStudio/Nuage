@@ -12,7 +12,10 @@
 		icons
 	} from '@facile/muse';
 	import { backend } from '$lib/backend';
-	import SyncDemo from '$lib/components/landing/SyncDemo.svelte';
+	import AlbumDemo from '$lib/components/landing/AlbumDemo.svelte';
+	import PhoneTile from '$lib/components/landing/PhoneTile.svelte';
+	import SpacesTile from '$lib/components/landing/SpacesTile.svelte';
+	import SyncTile from '$lib/components/landing/SyncTile.svelte';
 	import { CHECKSUMS_URL, CLI_COMMANDS, RELEASES_URL } from '$lib/downloads';
 	import { nuage } from '$lib/icons';
 	import { rememberLocale, t } from '$lib/i18n/index.svelte';
@@ -83,7 +86,18 @@
 						class="h-12 min-h-12 flex-nowrap self-center px-6 py-0 text-fc-md"
 					/>
 				</div>
-				<div class="mt-12 w-full sm:mt-16"><SyncDemo /></div>
+				<div class="mt-12 w-full sm:mt-16"><AlbumDemo /></div>
+			</section>
+
+			<section class="relative mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
+				<h2 class="mb-10 text-center font-fc-title text-2xl font-bold tracking-tight text-fc-fg sm:text-3xl">
+					{t('landing.cardsTitle')}
+				</h2>
+				<div class="grid gap-6 md:grid-cols-3">
+					<SpacesTile />
+					<PhoneTile />
+					<SyncTile />
+				</div>
 			</section>
 
 			<section id="features" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">

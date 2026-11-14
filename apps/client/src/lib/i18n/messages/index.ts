@@ -2,6 +2,7 @@ import type { Catalogs, Message } from '@facile/muse';
 import { activity } from './activity';
 import { files } from './files';
 import { ideas } from './ideas';
+import { landing } from './landing';
 import { members } from './members';
 import { pages } from './pages';
 import { pending } from './pending';
@@ -16,6 +17,7 @@ import type { Row } from '../row';
 
 const rows = {
 	...shell,
+	...landing,
 	...files,
 	...share,
 	...viewer,
