@@ -10,6 +10,13 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-11-14
+
+### Fixed
+
+- The landing hero opens on the photos ready to drop and an empty-folder hint, and ends with the cursor fading out in place, so the window is never blank and the cursor never drifts out of it.
+- The features section is a heading beside a list instead of a second grid of cards, and its share and folder icons render.
+
 ## [0.21.1] - 2026-11-14
 
 ### Fixed
