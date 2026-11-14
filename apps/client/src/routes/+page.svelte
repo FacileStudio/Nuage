@@ -32,6 +32,17 @@
 		{ href: '#download', label: t('landing.navDownload') },
 		{ href: '#pricing', label: t('landing.pricing') }
 	]);
+	const columns = $derived([
+		{
+			title: 'Nuage',
+			links: [
+				{ href: '#features', label: t('landing.navFeatures') },
+				{ href: '/downloads', label: t('landing.navDownload') },
+				{ href: '#pricing', label: t('landing.pricing') }
+			]
+		},
+		{ title: 'Facile', links: [{ href: 'https://facile.studio', label: 'facile.studio', external: true }] }
+	]);
 
 	/**
 	 * This is where the SSO callback lands: OIDC_SUCCESS_URL is the app's origin, and porte hands
@@ -119,6 +130,7 @@
 			appName="Nuage"
 			icon={nuage.brand}
 			tagline={t('login.tagline')}
+			{columns}
 			legal={{ onLocaleChange: rememberLocale }}
 		/>
 	</div>

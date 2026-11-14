@@ -134,6 +134,14 @@ export const shell = {
 		'Un solo binario para macOS y Linux. Ejecuta nuage login y luego nuage start.',
 		'Ein Binary für macOS und Linux. Führe nuage login aus, dann nuage start.'
 	],
+	'downloads.title': ['Download · Nuage', 'Télécharger · Nuage', 'Descargar · Nuage', 'Download · Nuage'],
+	'downloads.description': [
+		'Install the nuage CLI and sync daemon on macOS or Linux.',
+		'Installez le CLI et le démon de synchro nuage sur macOS ou Linux.',
+		'Instala la CLI y el demonio de sincronización nuage en macOS o Linux.',
+		'Installiere die nuage-CLI und den Sync-Daemon unter macOS oder Linux.'
+	],
+	'downloads.heading': ['Download Nuage', 'Télécharger Nuage', 'Descargar Nuage', 'Nuage herunterladen'],
 	'landing.pricing': ['Pricing', 'Tarifs', 'Precios', 'Preise'],
 	'landing.ctaTitle': ['Ready to start?', 'Prêt à commencer ?', '¿Listo para empezar?', 'Bereit loszulegen?'],
 	'landing.ctaText': [
