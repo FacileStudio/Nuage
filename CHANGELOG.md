@@ -10,6 +10,13 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.20.4] - 2026-11-14
+
+### Fixed
+
+- The landing hero shows Sign in with Facile and Get the sync client side by side at the same height.
+- The landing demo centres the files window and overlaps the terminal on its lower-left corner, instead of leaving the terminal floating on its own.
+
 ## [0.20.3] - 2026-11-14
 
 ### Fixed
