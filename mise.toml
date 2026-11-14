@@ -1,5 +1,5 @@
 [tools]
-go = "1.26"
+go = "1.26.11"
 lefthook = "2.1.12"
 
 [tasks.install]
