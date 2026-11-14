@@ -10,6 +10,21 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-14
+
+### Added
+
+- Client: the landing page shows a mise-en-scene demo: the `nuage` daemon uploads a file, which then appears in Files and is shared with a link.
+- Client: a public `/downloads` page lists every way to install the `nuage` CLI (install script, Homebrew, `facile install nuage`), with links to the releases and checksums. The landing's download section shows only the visitor's device: the CLI commands on a desktop, an "All downloads" link on a phone.
+
+### Changed
+
+- Client: muse v0.23.0 (was v0.21.0), so the app inherits Magnetik for titles and body and the landing footer is left-aligned on phones. Headings use `font-bold`. The landing copy is shorter, with four feature blocks.
+
+### Removed
+
+- Client: the unused `@fontsource-variable/inter` dependency.
+
 ## [0.18.5] - 2026-11-14
 
 ### Fixed
