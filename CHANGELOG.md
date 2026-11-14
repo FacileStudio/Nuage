@@ -10,6 +10,14 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-11-14
+
+### Fixed
+
+- The landing hero keeps photo cards at their own height while the upload runs, and the drop hint no longer sits under the dragged photos.
+- The team card keeps its rows inside the panel, slides new files in instead of pushing rows down, and colours each member's avatar.
+- The phone card shows a phone with a real phone ratio, whole inside the card.
+
 ## [0.21.0] - 2026-11-14
 
 ### Added
