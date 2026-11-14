@@ -80,7 +80,7 @@
 
 <Stage
 	width={960}
-	height={520}
+	height={516}
 	compact={{ below: 640, width: 358, height: 570 }}
 	{script}
 	{reset}
@@ -94,8 +94,7 @@
 				<SyncFiles compact {uploaded} {menu} {copied} bind:moreButton bind:shareItem />
 			</Window>
 		{:else}
-			{@render terminal('top:182px;left:32px;width:300px;height:96px')}
-			<Window style="top:24px;left:356px;width:556px;height:412px">
+			<Window style="top:12px;left:160px;width:640px;height:412px">
 				{#snippet sidebar()}
 					<div class="sd-nav">
 						<div class="sd-brand">
@@ -113,6 +112,7 @@
 				{/snippet}
 				<SyncFiles compact={false} {uploaded} {menu} {copied} bind:moreButton bind:shareItem />
 			</Window>
+			{@render terminal('top:372px;left:96px;width:300px;height:96px')}
 		{/if}
 		<Cursor {cursor} />
 	{/snippet}

@@ -74,9 +74,14 @@
 					{heroLines[0]}<br />{heroLines[1]}
 				</h1>
 				<p class="mt-5 max-w-xl text-fc-lg text-fc-fg-muted">{t('landing.heroText')}</p>
-				<div class="mt-8 flex flex-col items-center gap-3">
+				<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
 					<SignInWithFacile href={signInHref} size="lg" />
-					<DownloadCta href="/#download" platforms={['macos', 'linux']} label={t('landing.downloadCta')} />
+					<DownloadCta
+						href="/#download"
+						platforms={['macos', 'linux']}
+						label={t('landing.downloadCta')}
+						class="h-12 min-h-12 flex-nowrap self-center px-6 py-0 text-fc-md"
+					/>
 				</div>
 				<div class="mt-12 w-full sm:mt-16"><SyncDemo /></div>
 			</section>
