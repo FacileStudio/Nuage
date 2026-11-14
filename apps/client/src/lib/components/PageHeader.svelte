@@ -17,7 +17,7 @@
      (CHARTE §4). Same anatomy as muse's own `SettingsSection`. -->
 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 	<div class="flex min-w-0 flex-col gap-1">
-		<h1 class="text-fc-2xl font-semibold text-fc-fg">{title}</h1>
+		<h1 class="text-fc-2xl font-bold text-fc-fg">{title}</h1>
 		{#if description}
 			<p class="text-fc-sm text-fc-fg-muted">{description}</p>
 		{/if}

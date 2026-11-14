@@ -219,7 +219,7 @@
 			></iconify-icon>
 		</div>
 		<div class="min-w-0">
-			<p class="truncate text-fc-lg font-semibold text-fc-fg" title={name}>{name}</p>
+			<p class="truncate text-fc-lg font-bold text-fc-fg" title={name}>{name}</p>
 			<p class="text-fc-sm text-fc-fg-muted">{paused ? t('viewer.paused') : t('viewer.playing')}</p>
 		</div>
 		<audio

@@ -125,7 +125,7 @@
 			<section class="flex flex-col gap-4">
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div class="flex flex-col gap-1">
-						<h2 class="text-fc-lg font-semibold text-fc-fg">{t('space.membersHeading')}</h2>
+						<h2 class="text-fc-lg font-bold text-fc-fg">{t('space.membersHeading')}</h2>
 						<p class="text-fc-sm text-fc-fg-muted">{t('space.membersCount', { count: members.length })}</p>
 					</div>
 					{#if isOwnerOrAdmin && !linked}
@@ -157,7 +157,7 @@
 			</section>
 
 			<section class="flex flex-col gap-4">
-				<h2 class="text-fc-lg font-semibold text-fc-fg">{t('space.about')}</h2>
+				<h2 class="text-fc-lg font-bold text-fc-fg">{t('space.about')}</h2>
 				<Card class="flex items-center gap-2 text-fc-sm text-fc-fg-muted">
 					<iconify-icon icon={icons.calendar} width="16" height="16" class="block shrink-0"></iconify-icon>
 					<span>{t('space.created', { date: formatDate(space.created_at) })}</span>

@@ -87,7 +87,7 @@
 {#snippet brand()}
 	<span class="flex shrink-0 items-center gap-2">
 		<iconify-icon icon={nuage.brand} width="24" height="24" class="block text-fc-fg"></iconify-icon>
-		<span class="font-fc-title text-fc-xl font-semibold tracking-tight text-fc-fg max-sm:sr-only">
+		<span class="font-fc-title text-fc-xl font-bold tracking-tight text-fc-fg max-sm:sr-only">
 			Nuage
 		</span>
 	</span>
@@ -122,7 +122,7 @@
 			{@const file = share.file}
 			<span class="hidden h-6 w-px shrink-0 bg-fc-surface sm:block"></span>
 			<div class="min-w-0 flex-1">
-				<h1 class="truncate text-fc-sm font-semibold sm:text-fc-md" title={file.name}>{file.name}</h1>
+				<h1 class="truncate text-fc-sm font-bold sm:text-fc-md" title={file.name}>{file.name}</h1>
 				<p class="truncate text-fc-xs text-fc-fg-muted">
 					{fileTypeLabel(file.name, file.mime_type)} · {formatSize(file.size)}
 				</p>

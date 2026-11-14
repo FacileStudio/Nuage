@@ -29,7 +29,7 @@
 			></iconify-icon>
 		</span>
 		<div class="flex min-w-0 flex-col gap-1">
-			<p class="text-fc-lg font-semibold break-all text-fc-fg">{file.name}</p>
+			<p class="text-fc-lg font-bold break-all text-fc-fg">{file.name}</p>
 			<p class="text-fc-sm text-fc-fg-muted">
 				{fileTypeLabel(file.name, file.mime_type)} · {t('viewer.noPreview')}
 			</p>

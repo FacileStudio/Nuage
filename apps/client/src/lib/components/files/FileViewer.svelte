@@ -74,7 +74,7 @@
 					<iconify-icon icon={fileIcon(file.name, file.mime_type)} width="18" height="18" class="block"></iconify-icon>
 				</span>
 				<div class="min-w-0 flex-1">
-					<h2 class="truncate text-fc-sm font-semibold sm:text-fc-md" title={file.name}>{file.name}</h2>
+					<h2 class="truncate text-fc-sm font-bold sm:text-fc-md" title={file.name}>{file.name}</h2>
 					<p class="truncate text-fc-xs text-fc-fg-muted">
 						{fileTypeLabel(file.name, file.mime_type)} · {formatSize(file.size)}{file.updated_at
 							? ` · ${relativeTime(file.updated_at)}`

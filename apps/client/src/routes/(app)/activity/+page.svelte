@@ -155,7 +155,7 @@
 		<div class="flex flex-col gap-10">
 			{#each grouped as group (group.heading)}
 				<section class="flex flex-col gap-4">
-					<h2 class="text-fc-lg font-semibold text-fc-fg">{group.heading}</h2>
+					<h2 class="text-fc-lg font-bold text-fc-fg">{group.heading}</h2>
 					<div class="flex flex-col gap-2">
 						{#each group.items as entry (entry.id)}
 							{@const event = describe(entry.event_type)}
