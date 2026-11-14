@@ -10,6 +10,17 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-14
+
+### Added
+
+- The landing has a "One cloud for everyone" section with three demo cards: team spaces, a shared album opened on a phone, and the sync client in a terminal.
+
+### Changed
+
+- The landing hero demo now shows holiday photos dropped into a folder, uploading into a photo grid, then the album shared with a link that expires in 7 days. The terminal left the hero.
+- Client: @facile/mise-en-scene v0.2.2.
+
 ## [0.20.4] - 2026-11-14
 
 ### Fixed
