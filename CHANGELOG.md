@@ -10,6 +10,18 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-14
+
+### Changed
+
+- The landing speaks to everyday users: the new slogan and subtitle in four languages, "Create a free account" as the main button with sign-in beside it, real file names in the hero album, and a title, description, manifest and link preview that no longer call Nuage an S3-compatible studio drive.
+- The third demo card shows a contract signed in Plume landing in Nuage instead of a terminal, and the phone card opens a photo and slides through three of them.
+- The features list covers sharing, team spaces, previews and the trash. The sync client, WebDAV, the API, the MCP server and the source code moved into one "For developers" block near the bottom, and the hero no longer links to the terminal installer.
+
+### Added
+
+- A "Works with the rest of the suite" block (Plume, Ardoise, Toile, Bulle) and a pricing block that shows only storage and AI per plan, with "one subscription covers every Facile app".
+
 ## [0.21.2] - 2026-11-14
 
 ### Fixed
