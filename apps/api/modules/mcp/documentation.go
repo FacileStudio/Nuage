@@ -14,7 +14,8 @@ var Documentation = apiref.Module{
 	Name: "mcp",
 	Description: "Sensitive actions MCP clients asked for, waiting for the person to confirm them: moving a file or " +
 		"folder to the trash, and creating a public link. A client that cannot ask the person itself hands them a " +
-		"link to the pending page, which uses these routes. The MCP endpoint is POST /mcp, outside /api.",
+		"link to the pending page, which uses these routes. Only the person's own browser session cookie reaches " +
+		"them: a bearer token, a CLI or app session and an API key get 403. The MCP endpoint is POST /mcp, outside /api.",
 	Routes: pendingRoutes(),
 }
 

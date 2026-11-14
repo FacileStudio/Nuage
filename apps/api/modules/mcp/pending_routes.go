@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/FacileStudio/Nuage/apps/api/internal/authcontext"
-	"github.com/FacileStudio/porte"
+	"github.com/FacileStudio/porte/mcpauth"
 	"github.com/FacileStudio/tronc/errors"
 	mcpkit "github.com/FacileStudio/tronc/mcp"
 )
@@ -14,16 +14,16 @@ import (
 const webActor = "nuage-web"
 
 // pendingUser is the signed-in person of a confirm page request. Only the
-// person's own session passes: a delegated token or a restricted API token
+// person's own browser session passes (mcpauth.RequireOwnSession): a bearer
+// of any kind, a CLI or mobile session, an API token or a delegated token
 // must never confirm what an agent asked for.
 func pendingUser(r *http.Request) (string, error) {
-	authenticated, ok := porte.From(r.Context())
-	identity, found := authcontext.IdentityFromContext(r.Context())
-	if !ok || !found {
-		return "", errors.Unauthorized("missing auth")
+	if _, err := mcpauth.RequireOwnSession(r); err != nil {
+		return "", err
 	}
-	if authenticated.SessionID == 0 || authenticated.Actor != "" {
-		return "", mcpkit.ErrDelegated
+	identity, found := authcontext.IdentityFromContext(r.Context())
+	if !found {
+		return "", errors.Unauthorized("missing auth")
 	}
 	return identity.UserID, nil
 }
