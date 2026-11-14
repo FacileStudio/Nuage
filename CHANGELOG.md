@@ -10,6 +10,18 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-11-14
+
+### Fixed
+
+- The hero album no longer flashes "This folder is empty" while the photos fade out at the end of the loop or between the drop and the first upload.
+- The "Link copied." toast sits under the app window instead of covering the second row of photos, on phones and on desktop.
+
+### Changed
+
+- The "For developers" block links to the Suite self-hosting page, in the visitor's language.
+- muse v0.25.1 and the regenerated link preview image with the current description.
+
 ## [0.22.0] - 2026-11-14
 
 ### Changed
