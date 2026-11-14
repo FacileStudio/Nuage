@@ -80,5 +80,18 @@ export const pending = {
 		'Impossible de charger les actions en attente',
 		'No se pudieron cargar las acciones pendientes',
 		'Ausstehende Aktionen konnten nicht geladen werden'
-	]
+	],
+	'pending.signInAgain': [
+		'Sign in again to confirm',
+		'Reconnectez-vous pour confirmer',
+		'Vuelve a iniciar sesión para confirmar',
+		'Melden Sie sich erneut an, um zu bestätigen'
+	],
+	'pending.signInAgainBody': [
+		'Only a sign-in made in this browser can confirm what an AI client asked for. Sign in again here. The mobile and desktop apps cannot confirm these actions.',
+		'Seule une connexion faite dans ce navigateur peut confirmer ce qu’un client IA a demandé. Reconnectez-vous ici. Les applications mobile et de bureau ne peuvent pas confirmer ces actions.',
+		'Solo un inicio de sesión hecho en este navegador puede confirmar lo que pidió un cliente de IA. Vuelve a iniciar sesión aquí. Las aplicaciones móvil y de escritorio no pueden confirmar estas acciones.',
+		'Nur eine Anmeldung in diesem Browser kann bestätigen, worum ein KI-Client gebeten hat. Melden Sie sich hier erneut an. Die Mobil- und Desktop-Apps können diese Aktionen nicht bestätigen.'
+	],
+	'pending.signIn': ['Sign in again', 'Se reconnecter', 'Iniciar sesión de nuevo', 'Erneut anmelden']
 } satisfies Record<string, Row>;
