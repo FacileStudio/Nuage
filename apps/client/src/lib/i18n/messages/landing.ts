@@ -110,6 +110,12 @@ export const landing = {
 		'Abre tus archivos desde cualquier cliente MCP en /mcp.',
 		'Öffnen Sie Ihre Dateien aus jedem MCP-Client unter /mcp.'
 	],
+	'landing.dev.selfHost': [
+		'https://suite.facile.studio/en/auto-hebergement',
+		'https://suite.facile.studio/auto-hebergement',
+		'https://suite.facile.studio/es/auto-hebergement',
+		'https://suite.facile.studio/de/auto-hebergement'
+	],
 	'landing.dev.source': [
 		'The code is open, your data stays yours.',
 		'Code ouvert, vos données restent les vôtres.',

@@ -71,8 +71,8 @@
 		{/each}
 	</div>
 
-	{#if done === 0 && !overlay}
-		<div class="ap-empty" transition:fade={{ duration: 200 }}>
+	{#if done === 0 && !overlay && !uploading}
+		<div class="ap-empty" in:fade={{ duration: 200, delay: 320 }} out:fade={{ duration: 200 }}>
 			<Icon icon={icons.upload} size={24} />
 			<span class="ap-here">{t('files.emptyTitle')}</span>
 		</div>

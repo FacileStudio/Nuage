@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fade, fly, scale } from 'svelte/transition';
+	import { fade, scale } from 'svelte/transition';
 	import { Roll } from '@facile/mise-en-scene';
 	import { Icon, icons } from '@facile/muse';
 	import { nuage } from '$lib/icons';
@@ -8,12 +8,11 @@
 	interface Props {
 		open: boolean;
 		week: boolean;
-		copied: boolean;
 		expiry?: HTMLElement;
 		create?: HTMLElement;
 	}
 
-	let { open, week, copied, expiry = $bindable(), create = $bindable() }: Props = $props();
+	let { open, week, expiry = $bindable(), create = $bindable() }: Props = $props();
 </script>
 
 {#if open}
@@ -34,13 +33,6 @@
 				</span>
 			</div>
 		</div>
-	</div>
-{/if}
-
-{#if copied}
-	<div class="as-toast" transition:fly={{ y: 12, duration: 320 }}>
-		<Icon icon={nuage.link} size={16} />
-		<span>{t('shared.copied')}</span>
 	</div>
 {/if}
 
@@ -119,23 +111,5 @@
 	.as-primary {
 		background: var(--color-fc-accent);
 		color: var(--color-fc-accent-fg);
-	}
-	.as-toast {
-		position: absolute;
-		bottom: 20px;
-		left: 50%;
-		z-index: 4;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 10px 16px;
-		border-radius: 999px;
-		background: var(--color-fc-inverse);
-		color: var(--color-fc-on-inverse);
-		font-family: var(--font-fc-body);
-		font-size: 13px;
-		white-space: nowrap;
-		translate: -50% 0;
-		box-shadow: 0 12px 28px -10px rgb(0 0 0 / 0.35);
 	}
 </style>

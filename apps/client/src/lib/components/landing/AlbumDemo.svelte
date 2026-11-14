@@ -5,6 +5,7 @@
 	import { nuage } from '$lib/icons';
 	import AlbumPane from './AlbumPane.svelte';
 	import AlbumShare from './AlbumShare.svelte';
+	import AlbumToast from './AlbumToast.svelte';
 	import Photo from './Photo.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 
@@ -117,7 +118,7 @@
 {#snippet body(compact: boolean)}
 	<div class="ad-body">
 		<AlbumPane {compact} {total} {done} {uploading} {overlay} bind:grid bind:shareButton />
-		<AlbumShare open={dialog} {week} {copied} bind:expiry bind:create />
+		<AlbumShare open={dialog} {week} bind:expiry bind:create />
 	</div>
 {/snippet}
 
@@ -152,6 +153,7 @@
 			<Photo scene={0} class="ad-card ad-card-3" />
 			<span class="ad-count">{total}</span>
 		</div>
+		<AlbumToast show={copied} />
 		<Cursor {cursor} />
 	{/snippet}
 </Stage>

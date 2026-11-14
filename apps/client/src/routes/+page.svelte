@@ -134,7 +134,7 @@
 			<WorksWith class="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 sm:py-20" {apps} />
 
 			<div id="developers" class="mx-auto w-full max-w-5xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">
-				<ForDevelopers rows={developers} description={t('landing.dev.text')} />
+				<ForDevelopers rows={developers} description={t('landing.dev.text')} selfHostHref={t('landing.dev.selfHost')} />
 			</div>
 			<section class="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 sm:py-24">
 				<h2 class={LANDING_HEADING}>{t('landing.ctaTitle')}</h2>
