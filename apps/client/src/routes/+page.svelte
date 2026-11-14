@@ -104,10 +104,13 @@
 					<p class="mt-3 text-fc-fg-muted">{t('landing.downloadText')}</p>
 				</div>
 				<DownloadSection
+					mode="device"
+					allHref="/downloads"
 					commands={[...CLI_COMMANDS]}
 					releasesHref={RELEASES_URL}
 					checksumsHref={CHECKSUMS_URL}
 					headingLevel={3}
+					class="max-sm:items-center"
 				/>
 			</section>
 
