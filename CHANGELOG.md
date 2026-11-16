@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.22.4] - 2026-11-16
+
+### Security
+
+- The client loads the Vision tracker from its own origin at `/vision-tracker.js` instead of `https://vision.facile.studio/s.js`, and the production CSP no longer allows that origin in `script-src`. A script served by another app no longer runs inside Nuage's signed-in session.
+
 ## [0.22.3] - 2026-11-14
 
 ### Changed
