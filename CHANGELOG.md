@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.22.5] - 2026-11-16
+
+### Changed
+
+- Bump muse to v0.32.0: tabs and segmented option cards match button height (36px, 44px on touch).
+
 ## [0.22.4] - 2026-11-16
 
 ### Security
