@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.22.7] - 2026-11-17
+
+### Fixed
+
+- Grid thumbnails now render images up to 100 MB and 64 megapixels. The old 30 MB and 40 MP caps answered 404 for large PNGs.
+
 ## [0.22.6] - 2026-11-17
 
 ### Changed

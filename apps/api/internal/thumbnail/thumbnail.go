@@ -21,9 +21,9 @@ import (
 
 const (
 	// MaxPixels is the largest source, in pixels, that Render will decode.
-	MaxPixels = 40_000_000
+	MaxPixels = 64_000_000
 	// MaxBytes is the largest source, in bytes, that Render will read.
-	MaxBytes = 30 << 20
+	MaxBytes = 100 << 20
 	// Quality is the JPEG quality thumbnails are encoded at.
 	Quality = 80
 )
