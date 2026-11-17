@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.22.6] - 2026-11-17
+
+### Changed
+
+- Vision tracker v0.15.0: sends bot-detection flags and a first-gesture engagement beacon.
+
 ## [0.22.5] - 2026-11-16
 
 ### Changed
