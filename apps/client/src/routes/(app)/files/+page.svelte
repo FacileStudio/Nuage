@@ -40,7 +40,8 @@
 	let folders = $state<Folder[]>([]);
 	let breadcrumbs = $state<{ id: number | null; name: string }[]>([{ id: null, name: '' }]);
 	let currentFolderId = $state<number | null>(null);
-	let viewMode = $state<'grid' | 'list'>('list');
+	const VIEW_KEY = 'nuage.view_mode';
+	let viewMode = $state<'grid' | 'list'>(localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid');
 	let loading = $state(true);
 	let searchQuery = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -499,7 +500,10 @@
 								type="button"
 								aria-label={option.label}
 								aria-pressed={viewMode === option.mode}
-								onclick={() => (viewMode = option.mode as 'grid' | 'list')}
+								onclick={() => {
+									viewMode = option.mode as 'grid' | 'list';
+									localStorage.setItem(VIEW_KEY, viewMode);
+								}}
 								class="flex size-9 [@media(pointer:coarse)]:size-11 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fc-ring {viewMode ===
 								option.mode
 									? 'bg-fc-accent text-fc-accent-fg'

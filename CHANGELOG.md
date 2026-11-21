@@ -10,6 +10,12 @@ tag records what shipped rather than triggering the deploy.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-21
+
+### Changed
+
+- The file browser opens in grid view by default and remembers the last grid or list choice in this browser.
+
 ## [0.22.7] - 2026-11-17
 
 ### Fixed
